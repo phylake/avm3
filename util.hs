@@ -6,6 +6,7 @@ import Data.Int
 import Data.List (intercalate)
 import Data.Word
 import Numeric (showHex)
+import System.Directory
 import TFish
 import qualified Data.ByteString as DB
 import qualified Data.ByteString.Lazy as DBL
@@ -152,6 +153,28 @@ fromU29 (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
         lsb3 = (w3 .&. 0x7f) `shiftL` 14
         lsb2 = (w2 .&. 0x7f) `shiftL` 7
         lsb1 =  w1 {- NO mask. see spec -}
+
+allDirs :: FilePath -> ([FilePath] -> IO a) -> IO a
+allDirs dir f = do
+    rawDirs <- filterIO doesDirectoryExist $ getDirectoryContents dir
+    let realDirs = drop 2 $ reverse rawDirs {- remove ./ and ../ -}
+    f realDirs
+
+allFiles :: FilePath -> ([FilePath] -> IO a) -> IO a
+allFiles dir f = do
+    files <- filterIO doesFileExist $ getDirectoryContents dir
+    f files
+
+filterIO :: (a -> IO Bool) -> IO [a] -> IO [a]
+filterIO f ioAs = do
+    as <- ioAs
+    case as of
+        [] -> return []
+        (x:xs) -> do
+            tf <- f x
+            if tf
+                then filterIO f (return xs) >>= (\xs' -> return $ x:xs')
+                else filterIO f (return xs)
 
 forN :: (Ord n, Num n, Monad m)
      => (a -> m a)

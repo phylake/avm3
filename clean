@@ -1,2 +1,4 @@
+#!/bin/bash
+
 find ./ -path "*.hi" | xargs rm $1
 find ./ -path "*.o" | xargs rm $1
