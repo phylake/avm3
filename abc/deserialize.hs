@@ -14,17 +14,6 @@ import qualified Data.ByteString.Lazy as DBL
 
 type ByteString = DBL.ByteString
 
-extractAbc = do
-    args <- getArgs
-    let file = head args
-    let (name, _) = span (\c -> c /= '.') file
-    bs <- DBL.readFile file
-    let (Swf_DoABC w32 str abc) = getDoAbc $ SWF.fromByteString bs
-    DBL.writeFile (name ++ ".abc") abc
-    where
-        getDoAbc (Right ((Swf_DoABC a b c):swfs)) = Swf_DoABC a b c
-        getDoAbc (Right (swf:swfs)) = getDoAbc $ Right swfs
-
 testFile = do
     bs <- DBL.readFile "Test.abc"
     let (minor, bs') = fromU16 bs
