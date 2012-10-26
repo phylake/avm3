@@ -1,6 +1,17 @@
+# mac
+.DS_Store
+
+# haskell
 dist
 cabal-dev
 *.o
 *.hi
 *.chi
 *.chs.h
+*.prof
+
+# misc
+*.sublime-workspace
+*.pdf
+*.swf
+*.abc
