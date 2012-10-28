@@ -11,13 +11,14 @@ import Util
 import TFish
 import SWF.Deserialize as SWF hiding (testFile)
 import qualified Data.ByteString.Lazy as DBL
+import qualified Data.ByteString.Lazy.Char8 as DBLC
 
 type ByteString = DBL.ByteString
 
 testFile = do
     bs <- DBL.readFile "Test.abc"
-    let (minor, bs') = fromU16 bs
-    let (major, bs'') = fromU16 bs'
+    let (minor, bs') = fromU16LE bs
+    let (major, bs'') = fromU16LE bs'
     putStrLn $ "major: " ++ show major
     putStrLn $ "minor: " ++ show minor
     let constantPool = parseConstantPool (defaultPool, bs'')
@@ -25,45 +26,52 @@ testFile = do
 
 parseConstantPool :: (ConstantPool, ByteString)
                   -> (ConstantPool, ByteString)
---parseConstantPool = parseCommon parseDoubles .
-parseConstantPool = parseCommon parseCpUints .
-{-parseConstantPool =-} parseCommon parseCpInts
+parseConstantPool = parseCommon parseCpString .
+{-parseConstantPool =-} parseCommon parseCpDouble .
+{-parseConstantPool =-} parseCommon parseCpUint .
+{-parseConstantPool =-} parseCommon parseCpInt
 
-parseCpInts :: ByteString
-            -> ConstantPool
-            -> ConstantPool
-parseCpInts bs pool = cpIntsF pool (++ints bs)
-    where
-        ints :: ByteString -> [Int32]
-        ints bs = allBytes fromS32_vl [] bs
+parseCpInt :: (ConstantPool, ByteString)
+           -> (ConstantPool, ByteString)
+parseCpInt (pool, bs) =
+    let (i32, bs') = fromS32LE_vl bs in
+    (cpIntsF pool (++[i32]), bs')
 
-parseCpUints :: ByteString
-            -> ConstantPool
-            -> ConstantPool
-parseCpUints bs pool = cpUintsF pool (++uints bs)
-    where
-        uints :: ByteString -> [Word32]
-        uints bs = allBytes fromU32_vl [] bs
+parseCpUint :: (ConstantPool, ByteString)
+            -> (ConstantPool, ByteString)
+parseCpUint (pool, bs) =
+    let (u32, bs') = fromU32LE_vl bs in
+    (cpUintsF pool (++[u32]), bs')
 
-parseDoubles :: ByteString
-            -> ConstantPool
-            -> ConstantPool
-parseDoubles bs pool = cpDoublesF pool (++doubles bs)
-    where
-        doubles :: ByteString -> [Double]
-        doubles bs = allBytes fromDouble [] bs
+parseCpDouble :: (ConstantPool, ByteString)
+              -> (ConstantPool, ByteString)
+parseCpDouble (pool, bs) =
+    let (double, bs') = fromDoubleLE bs in
+    (cpDoublesF pool (++[double]), bs')
 
-parseCommon :: (ByteString -> a -> a)
+parseCpString :: (ConstantPool, ByteString)
+              -> (ConstantPool, ByteString)
+parseCpString (pool, bs) =
+    let (str, bs') = parseStringInfo bs in
+    (cpStringsF pool (++[str]), bs')
+
+parseStringInfo :: DBL.ByteString -> (String, DBL.ByteString)
+parseStringInfo bs =
+    let (u30, bs') = fromU30LE_vl bs in
+    let (half1, half2) = DBL.splitAt (fromIntegral u30) bs' in
+    (DBLC.unpack half1, half2)
+ 
+parseCommon :: ((a, ByteString) -> (a, ByteString))
             -> (a, ByteString)
             -> (a, ByteString)
 parseCommon f (pool, bs) =
-    let (u30, bs') = fromU30_vl bs in
-    {- minor input validation such that bs aren't splitAt u30 == 1 -}
-    let notOne = fromIntegral $ (u30 <||> 1) - 1 in
-    let (half1, half2) = DBL.splitAt notOne bs' in
-    if DBL.null half1
-        then (pool, half2)
-        else (f half1 pool, half2)
+    let (u30, bs') = fromU30LE_vl bs in
+    {-
+      all constant pools fields already have a length of 1 but the u30
+      represents the total length so a raw u30 of 1 isn't valid
+    -}
+    let u30' = fromIntegral $ (u30 <||> 1) - 1 in
+    forN' f (pool, bs') u30'
 
 -- 4.3
 data ConstantPool = ConstantPool {

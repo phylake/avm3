@@ -26,14 +26,6 @@ stringToHex str = map showHex' $ DB.unpack $ DBC.pack str
 stringToHexRe :: String -> IO ()
 stringToHexRe str = putStrLn $ intercalate "\\s?" $ stringToHex str
 
-allBytes :: (DBL.ByteString -> (a, DBL.ByteString))
-         -> [a] -- initial data
-         -> DBL.ByteString
-         -> [a] -- initial ++ accumulated
-allBytes f acc bs = if DBL.null bs
-    then acc
-    else let (one, bs') = f bs in allBytes f (acc ++ [one]) bs'
-
 --nWords :: Int64 -> DBL.ByteString -> ([Word8], DBL.ByteString)
 nWords n bs = (DBL.unpack $ DBL.take n bs, DBL.drop n bs)
 
@@ -51,6 +43,9 @@ fromU32LE bs = let (ws, bs') = nWords 4 bs in (toWord32LE ws, bs')
 
 fromDouble :: DBL.ByteString -> (Double, DBL.ByteString)
 fromDouble bs = let (ws, bs') = nWords 8 bs in (toDouble ws, bs')
+
+fromDoubleLE :: DBL.ByteString -> (Double, DBL.ByteString)
+fromDoubleLE bs = let (ws, bs') = nWords 8 bs in (toDouble $ reverse ws, bs')
 
 toWord16 :: [Word8] -> Word16
 toWord16 ws = foldl' foldWords 0 (take 2 ws)
@@ -75,34 +70,41 @@ toDouble = wordToDouble . toWord64
 
 {- variable length integers -}
 
-fromU32_vl :: DBL.ByteString -> (Word32, DBL.ByteString)
-fromU32_vl bs = let (w64, bs') = varLenUintBSL bs in (fromIntegral w64, bs')
+fromU32LE_vl :: DBL.ByteString -> (Word32, DBL.ByteString)
+fromU32LE_vl bs = let (w64, bs') = varLenUintBSL bs in (fromIntegral w64, bs')
 
-fromU30_vl :: DBL.ByteString -> (Word32, DBL.ByteString)
-fromU30_vl bs = let (w32, bs') = fromU32_vl bs in (w32 .&. 0x3fffffff, bs')
+fromU30LE_vl :: DBL.ByteString -> (Word32, DBL.ByteString)
+fromU30LE_vl bs = let (w32, bs') = fromU32LE_vl bs in (w32 .&. 0x3fffffff, bs')
 
-{- TODO little-endian -}
-fromS32_vl :: DBL.ByteString -> (Int32, DBL.ByteString)
-fromS32_vl bs =
+fromS32LE_vl :: DBL.ByteString -> (Int32, DBL.ByteString)
+fromS32LE_vl bs =
     let (unpackThese, bs') = DBL.splitAt (varIntLenBSL bs) bs in
-    (fromIntegral . impl $ DBL.unpack unpackThese, bs')
+    (fromIntegral . fromS32LE_vl_impl $ map fromIntegral $ DBL.unpack unpackThese, bs')
     where
-        highByte w l = sign .|. byte0
+        fromS32LE_vl_impl :: [Word32] -> Word32
+        fromS32LE_vl_impl (w1:[]) = sign .|. w1'
             where
-                sign  = (w .&. 0x40) `shiftL` 25
-                byte0 = (w .&. 0x3f) `shiftL` l
+                sign = (w1 .&. 0x40) `shiftL` 25
+                w1'  = (w1 .&. 0x3f) `shiftL` 0
+        fromS32LE_vl_impl (w2:w1:[]) = sign .|. w1' .|. w2'
+            where
+                sign = (w1 .&. 0x40) `shiftL` 25
+                w1'  = (w1 .&. 0x3f) `shiftL` 7
+                w2'  = (w2 .&. 0x7f) `shiftL` 0
+        fromS32LE_vl_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
+            where
+                sign = (w1 .&. 0x40) `shiftL` 25
+                w1'  = (w1 .&. 0x3f) `shiftL` 14
+                w2'  = (w2 .&. 0x7f) `shiftL` 7
+                w3'  = (w3 .&. 0x7f) `shiftL` 0
+        fromS32LE_vl_impl (w4:w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3' .|. w4'
+            where
+                sign = (w1 .&. 0x40) `shiftL` 25
+                w1'  = (w1 .&. 0x3f) `shiftL` 21
+                w2'  = (w2 .&. 0x7f) `shiftL` 14
+                w3'  = (w3 .&. 0x7f) `shiftL` 7
+                w4'  = (w4 .&. 0x7f) `shiftL` 0
 
-        impl (w1:[]) = highByte w1 0
-        impl (w2:w1:[]) = highByte w2 7 .|. w1
-        impl (w3:w2:w1:[]) = highByte w3 14 .|. byte1 .|. byte0
-            where
-                byte1 = (w2 .&. 0x7f) `shiftL` 7
-                byte0 =  w1
-        impl (w4:w3:w2:w1:[]) = highByte w4 27 .|. byte2 .|. byte1 .|. byte0
-            where
-                byte2 = (w3 .&. 0x7f) `shiftL` 14
-                byte1 = (w2 .&. 0x7f) `shiftL` 7
-                byte0 =  w1
 
 foldl' f acc []     = acc
 foldl' f acc (x:xs) = let acc' = acc `f` x 
@@ -184,6 +186,10 @@ forN :: (Ord n, Num n, Monad m)
 forN f m n
     | n > 0     = return m >>= f >>= \m' -> forN f m' (n-1)
     | otherwise = return m
+
+forN' f a n
+    | n > 0 = forN' f (f a) (n-1)
+    | otherwise = a
 
 t21 = fst
 t22 = snd
