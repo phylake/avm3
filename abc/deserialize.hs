@@ -24,223 +24,267 @@ testFile = do
     let (major, bs'') = fromU16LE bs'
     putStrLn $ "major: " ++ show major
     putStrLn $ "minor: " ++ show minor
-    let constantPool = parseConstantPool (defaultPool, bs'')
-    putStrLn $ show constantPool
+    let t = parseAbc (defaultAbc, bs'')
+    putStrLn $ show t
 
-parseCommon :: ((a, ByteString) -> (a, ByteString))
+parseCommon :: Bool
+            -> ((a, ByteString) -> (a, ByteString))
             -> (a, ByteString)
             -> (a, ByteString)
-parseCommon f (pool, bs) =
+parseCommon hasOne f (abc, bs) =
     let (u30, bs') = fromU30LE_vl bs in
-    {-
-      all constant pools fields already have a length of 1 but the u30
-      represents the total length so a raw u30 of 1 isn't valid
-    -}
-    let u30' = fromIntegral $ (u30 <||> 1) - 1 in
-    forN' f (pool, bs') u30'
+    if hasOne
+                              {- make sure 0 and 1 == 0 -}
+        then let u30' = fromIntegral $ (u30 <||> 1) - 1 in
+            forN' f (abc, bs') u30'
+        else let u30' = fromIntegral u30 in
+            forN' f (abc, bs') u30'
+    
 
--- 4.3
-data ConstantPool = ConstantPool {
-                                   cpInts :: [Int32]
-                                 , cpUints :: [Word32]
-                                 , cpDoubles :: [Double]
-                                 , cpStrings :: [String]
-                                 , cpNsInfo :: [NSInfo]
-                                 , cpNsSet :: [NSSet]
-                                 , cpMultiname :: [Multiname]
-                                 }
-                                 deriving (Show)
+{-
+    4.2
+    Abc
+-}
+data Abc = Abc {
+                 abcInts :: ![Int32]
+               , abcUints :: ![Word32]
+               , abcDoubles :: ![Double]
+               , abcStrings :: ![String]
+               , abcNsInfo :: ![NSInfo]
+               , abcNsSet :: ![NSSet]
+               , abcMultinames :: ![Multiname]
+               , abcMethodSigs :: ![MethodSignature]
+               --, abcInstances :: [Int]
+               --, abcClasses :: [Int]
+               --, abcScripts :: [Int]
+               --, abcMethodBodies :: [Int]
+               }
+               deriving (Show)
 
-defaultPool :: ConstantPool
-defaultPool = ConstantPool [0] [0] [0] [""] [NSInfo_Any] [] []
+{-
 
-cpIntsIdx :: (Integral a) => ConstantPool -> a -> Int32
-cpIntsIdx cp w = cpInts cp !! fromIntegral w
+Multinames and NSSet have a default I just don't know what it is
+see abc-decode.es
 
-cpIntsF :: ConstantPool -> ([Int32] -> [Int32]) -> ConstantPool
-cpIntsF cp f = cpIntsR (f $ cpInts cp) cp
+-}
+defaultAbc :: Abc
+defaultAbc = Abc [0] [0] [0] [""] [NSInfo_Any] [] [] []
 
-cpIntsR :: [Int32] -> ConstantPool -> ConstantPool
-cpIntsR value cp = ConstantPool
+abcIntsIdx :: (Integral a) => Abc -> a -> Int32
+abcIntsIdx cp w = abcInts cp !! fromIntegral w
+
+abcIntsF :: Abc -> ([Int32] -> [Int32]) -> Abc
+abcIntsF cp f = abcIntsR (f $ abcInts cp) cp
+
+abcIntsR :: [Int32] -> Abc -> Abc
+abcIntsR value cp = Abc
     value
-    (cpUints cp)
-    (cpDoubles cp)
-    (cpStrings cp)
-    (cpNsInfo cp)
-    (cpNsSet cp)
-    (cpMultiname cp)
+    (abcUints cp)
+    (abcDoubles cp)
+    (abcStrings cp)
+    (abcNsInfo cp)
+    (abcNsSet cp)
+    (abcMultinames cp)
+    (abcMethodSigs cp)
 
-cpUintsIdx :: (Integral a) => ConstantPool -> a -> Word32
-cpUintsIdx cp w = cpUints cp !! fromIntegral w
+abcUintsIdx :: (Integral a) => Abc -> a -> Word32
+abcUintsIdx cp w = abcUints cp !! fromIntegral w
 
-cpUintsF :: ConstantPool -> ([Word32] -> [Word32]) -> ConstantPool
-cpUintsF cp f = cpUintsR (f $ cpUints cp) cp
+abcUintsF :: Abc -> ([Word32] -> [Word32]) -> Abc
+abcUintsF cp f = abcUintsR (f $ abcUints cp) cp
 
-cpUintsR :: [Word32] -> ConstantPool -> ConstantPool
-cpUintsR value cp = ConstantPool
-    (cpInts cp)
+abcUintsR :: [Word32] -> Abc -> Abc
+abcUintsR value cp = Abc
+    (abcInts cp)
     value
-    (cpDoubles cp)
-    (cpStrings cp)
-    (cpNsInfo cp)
-    (cpNsSet cp)
-    (cpMultiname cp)
+    (abcDoubles cp)
+    (abcStrings cp)
+    (abcNsInfo cp)
+    (abcNsSet cp)
+    (abcMultinames cp)
+    (abcMethodSigs cp)
 
-cpDoublesIdx :: (Integral a) => ConstantPool -> a -> Double
-cpDoublesIdx cp w = cpDoubles cp !! fromIntegral w
+abcDoublesIdx :: (Integral a) => Abc -> a -> Double
+abcDoublesIdx cp w = abcDoubles cp !! fromIntegral w
 
-cpDoublesF :: ConstantPool -> ([Double] -> [Double]) -> ConstantPool
-cpDoublesF cp f = cpDoublesR (f $ cpDoubles cp) cp
+abcDoublesF :: Abc -> ([Double] -> [Double]) -> Abc
+abcDoublesF cp f = abcDoublesR (f $ abcDoubles cp) cp
 
-cpDoublesR :: [Double] -> ConstantPool -> ConstantPool
-cpDoublesR value cp = ConstantPool
-    (cpInts cp)
-    (cpUints cp)
+abcDoublesR :: [Double] -> Abc -> Abc
+abcDoublesR value cp = Abc
+    (abcInts cp)
+    (abcUints cp)
     value
-    (cpStrings cp)
-    (cpNsInfo cp)
-    (cpNsSet cp)
-    (cpMultiname cp)
+    (abcStrings cp)
+    (abcNsInfo cp)
+    (abcNsSet cp)
+    (abcMultinames cp)
+    (abcMethodSigs cp)
 
-cpStringsIdx :: (Integral a) => ConstantPool -> a -> String
-cpStringsIdx cp w = cpStrings cp !! fromIntegral w
+abcStringsIdx :: (Integral a) => Abc -> a -> String
+abcStringsIdx cp w = abcStrings cp !! fromIntegral w
 
-cpStringsF :: ConstantPool -> ([String] -> [String]) -> ConstantPool
-cpStringsF cp f = cpStringsR (f $ cpStrings cp) cp
+abcStringsF :: Abc -> ([String] -> [String]) -> Abc
+abcStringsF cp f = abcStringsR (f $ abcStrings cp) cp
 
-cpStringsR :: [String] -> ConstantPool -> ConstantPool
-cpStringsR value cp = ConstantPool
-    (cpInts cp)
-    (cpUints cp)
-    (cpDoubles cp)
+abcStringsR :: [String] -> Abc -> Abc
+abcStringsR value cp = Abc
+    (abcInts cp)
+    (abcUints cp)
+    (abcDoubles cp)
     value
-    (cpNsInfo cp)
-    (cpNsSet cp)
-    (cpMultiname cp)
+    (abcNsInfo cp)
+    (abcNsSet cp)
+    (abcMultinames cp)
+    (abcMethodSigs cp)
 
-cpNsInfoIdx :: (Integral a) => ConstantPool -> a -> NSInfo
-cpNsInfoIdx cp w = cpNsInfo cp !! fromIntegral w
+abcNsInfoIdx :: (Integral a) => Abc -> a -> NSInfo
+abcNsInfoIdx cp w = abcNsInfo cp !! fromIntegral w
 
-cpNsInfoF :: ConstantPool -> ([NSInfo] -> [NSInfo]) -> ConstantPool
-cpNsInfoF cp f = cpNsInfoR (f $ cpNsInfo cp) cp
+abcNsInfoF :: Abc -> ([NSInfo] -> [NSInfo]) -> Abc
+abcNsInfoF cp f = abcNsInfoR (f $ abcNsInfo cp) cp
 
-cpNsInfoR :: [NSInfo] -> ConstantPool -> ConstantPool
-cpNsInfoR value cp = ConstantPool
-    (cpInts cp)
-    (cpUints cp)
-    (cpDoubles cp)
-    (cpStrings cp)
+abcNsInfoR :: [NSInfo] -> Abc -> Abc
+abcNsInfoR value cp = Abc
+    (abcInts cp)
+    (abcUints cp)
+    (abcDoubles cp)
+    (abcStrings cp)
     value
-    (cpNsSet cp)
-    (cpMultiname cp)
+    (abcNsSet cp)
+    (abcMultinames cp)
+    (abcMethodSigs cp)
 
-cpNsSetIdx :: (Integral a) => ConstantPool -> a -> NSSet
-cpNsSetIdx cp w = cpNsSet cp !! fromIntegral w
+abcNsSetIdx :: (Integral a) => Abc -> a -> NSSet
+abcNsSetIdx cp w = abcNsSet cp !! fromIntegral w
 
-cpNsSetF :: ConstantPool -> ([NSSet] -> [NSSet]) -> ConstantPool
-cpNsSetF cp f = cpNsSetR (f $ cpNsSet cp) cp
+abcNsSetF :: Abc -> ([NSSet] -> [NSSet]) -> Abc
+abcNsSetF cp f = abcNsSetR (f $ abcNsSet cp) cp
 
-cpNsSetR :: [NSSet] -> ConstantPool -> ConstantPool
-cpNsSetR value cp = ConstantPool
-    (cpInts cp)
-    (cpUints cp)
-    (cpDoubles cp)
-    (cpStrings cp)
-    (cpNsInfo cp)
+abcNsSetR :: [NSSet] -> Abc -> Abc
+abcNsSetR value cp = Abc
+    (abcInts cp)
+    (abcUints cp)
+    (abcDoubles cp)
+    (abcStrings cp)
+    (abcNsInfo cp)
     value
-    (cpMultiname cp)
+    (abcMultinames cp)
+    (abcMethodSigs cp)
 
-cpMultinameIdx :: (Integral a) => ConstantPool -> a -> Multiname
-cpMultinameIdx cp w = cpMultiname cp !! fromIntegral w
+abcMultinameIdx :: (Integral a) => Abc -> a -> Multiname
+abcMultinameIdx cp w = abcMultinames cp !! fromIntegral w
 
-cpMultinameF :: ConstantPool -> ([Multiname] -> [Multiname]) -> ConstantPool
-cpMultinameF cp f = cpMultinameR (f $ cpMultiname cp) cp
+abcMultinameF :: Abc -> ([Multiname] -> [Multiname]) -> Abc
+abcMultinameF cp f = abcMultinameR (f $ abcMultinames cp) cp
 
-cpMultinameR :: [Multiname] -> ConstantPool -> ConstantPool
-cpMultinameR value cp = ConstantPool
-    (cpInts cp)
-    (cpUints cp)
-    (cpDoubles cp)
-    (cpStrings cp)
-    (cpNsInfo cp)
-    (cpNsSet cp)
+abcMultinameR :: [Multiname] -> Abc -> Abc
+abcMultinameR value cp = Abc
+    (abcInts cp)
+    (abcUints cp)
+    (abcDoubles cp)
+    (abcStrings cp)
+    (abcNsInfo cp)
+    (abcNsSet cp)
+    value
+    (abcMethodSigs cp)
+
+abcMethodSigsIdx :: (Integral a) => Abc -> a -> MethodSignature
+abcMethodSigsIdx cp w = abcMethodSigs cp !! fromIntegral w
+
+abcMethodSigsF :: Abc -> ([MethodSignature] -> [MethodSignature]) -> Abc
+abcMethodSigsF cp f = abcMethodSigsR (f $ abcMethodSigs cp) cp
+
+abcMethodSigsR :: [MethodSignature] -> Abc -> Abc
+abcMethodSigsR value cp = Abc
+    (abcInts cp)
+    (abcUints cp)
+    (abcDoubles cp)
+    (abcStrings cp)
+    (abcNsInfo cp)
+    (abcNsSet cp)
+    (abcMultinames cp)
     value
 
-parseConstantPool :: (ConstantPool, ByteString)
-                  -> (ConstantPool, ByteString)
-parseConstantPool = parseCommon parseCpMultiname .
-                    parseCommon parseCpNsSet .
-                    parseCommon parseCpNsInfo .
-                    parseCommon parseCpString .
-                    parseCommon parseCpDouble .
-                    parseCommon parseCpUint .
-                    parseCommon parseCpInt
+parseAbc :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbc = parseCommon False parseAbcMethodSignature .
+           parseCommon True parseAbcMultiname .
+           parseCommon True parseAbcNsSet .
+           parseCommon True parseAbcNsInfo .
+           parseCommon True parseAbcString .
+           parseCommon True parseAbcDouble .
+           parseCommon True parseAbcUint .
+           parseCommon True parseAbcInt
 
-parseCpInt :: (ConstantPool, ByteString)
-           -> (ConstantPool, ByteString)
-parseCpInt (pool, bs) =
+parseAbcInt :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbcInt (abc, bs) =
     let (i32, bs') = fromS32LE_vl bs in
-    (cpIntsF pool (++[i32]), bs')
+    (abcIntsF abc (++[i32]), bs')
 
-parseCpUint :: (ConstantPool, ByteString)
-            -> (ConstantPool, ByteString)
-parseCpUint (pool, bs) =
+parseAbcUint :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbcUint (abc, bs) =
     let (u32, bs') = fromU32LE_vl bs in
-    (cpUintsF pool (++[u32]), bs')
+    (abcUintsF abc (++[u32]), bs')
 
-parseCpDouble :: (ConstantPool, ByteString)
-              -> (ConstantPool, ByteString)
-parseCpDouble (pool, bs) =
+parseAbcDouble :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbcDouble (abc, bs) =
     let (double, bs') = fromDoubleLE bs in
-    (cpDoublesF pool (++[double]), bs')
+    (abcDoublesF abc (++[double]), bs')
 
-parseCpString :: (ConstantPool, ByteString)
-              -> (ConstantPool, ByteString)
-parseCpString (pool, bs) =
+parseAbcString :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbcString (abc, bs) =
     let (str, bs') = parseStringInfo bs in
-    (cpStringsF pool (++[str]), bs')
+    (abcStringsF abc (++[str]), bs')
 
-parseCpNsInfo :: (ConstantPool, ByteString)
-              -> (ConstantPool, ByteString)
-parseCpNsInfo (pool, bs) =
-    let (ns, bs') = parseNSInfo pool bs in
-    (cpNsInfoF pool (++[ns]), bs')
+parseAbcNsInfo :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbcNsInfo (abc, bs) =
+    let (ns, bs') = parseNSInfo abc bs in
+    (abcNsInfoF abc (++[ns]), bs')
 
-parseCpNsSet :: (ConstantPool, ByteString)
-             -> (ConstantPool, ByteString)
-parseCpNsSet (pool, bs) =
-    let (ns, bs') = parseNSSet pool bs in
-    (cpNsSetF pool (++[ns]), bs')
+parseAbcNsSet :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbcNsSet (abc, bs) =
+    let (ns, bs') = parseNSSet abc bs in
+    (abcNsSetF abc (++[ns]), bs')
 
-parseCpMultiname :: (ConstantPool, ByteString)
-                 -> (ConstantPool, ByteString)
-parseCpMultiname (pool, bs) =
-    let (multinames, bs') = parseMultiname pool bs in
-    (cpMultinameF pool (++[multinames]), bs')
+parseAbcMultiname :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbcMultiname (abc, bs) =
+    let (multinames, bs') = parseMultiname abc bs in
+    (abcMultinameF abc (++[multinames]), bs')
 
--- 4.4
+parseAbcMethodSignature :: (Abc, ByteString) -> (Abc, ByteString)
+parseAbcMethodSignature (abc, bs) =
+    let (ms, bs') = parseMethodSignature abc bs in
+    (abcMethodSigsF abc (++[ms]), bs')
+
+{-
+    4.4
+    String
+-}
 parseStringInfo :: DBL.ByteString -> (String, DBL.ByteString)
 parseStringInfo bs =
     let (u30, bs') = fromU30LE_vl bs in
     let (half1, half2) = DBL.splitAt (fromIntegral u30) bs' in
     (DBLC.unpack half1, half2)
 
--- 4.4.1
-data NSInfo = {- 0x08 -} NSInfo_Namespace String
-            | {- 0x16 -} NSInfo_PackageNamespace String
-            | {- 0x17 -} NSInfo_PackageInternalNs String
-            | {- 0x18 -} NSInfo_ProtectedNamespace String
-            | {- 0x19 -} NSInfo_ExplicitNamespace String
-            | {- 0x1A -} NSInfo_StaticProtectedNs String
-            | {- 0x05 -} NSInfo_PrivateNs String
-            | {- 0x05 -} NSInfo_Any {- *. see 4.4.4 QName -}
+{-
+    4.4.1
+    Namespace
+-}
+data NSInfo = {- 0x08 -} NSInfo_Namespace !String
+            | {- 0x16 -} NSInfo_PackageNamespace !String
+            | {- 0x17 -} NSInfo_PackageInternalNs !String
+            | {- 0x18 -} NSInfo_ProtectedNamespace !String
+            | {- 0x19 -} NSInfo_ExplicitNamespace !String
+            | {- 0x1A -} NSInfo_StaticProtectedNs !String
+            | {- 0x05 -} NSInfo_PrivateNs !String
+            |            NSInfo_Any {- '*' see 4.4.4 QName -}
             deriving (Show)
 
-parseNSInfo :: ConstantPool -> DBL.ByteString -> (NSInfo, DBL.ByteString)
-parseNSInfo pool bs =
+parseNSInfo :: Abc -> DBL.ByteString -> (NSInfo, DBL.ByteString)
+parseNSInfo abc bs =
     let ((w:[]), bs') = nWords 1 bs in
     let (idx, bs'') = fromU30LE_vl bs' in
-    let ns = parseNSInfoImpl w $ cpStringsIdx pool idx in
+    let ns = parseNSInfoImpl w $ abcStringsIdx abc idx in
     (ns, bs'')
     where
         parseNSInfoImpl w str
@@ -252,42 +296,49 @@ parseNSInfo pool bs =
             | w == 0x1A = NSInfo_StaticProtectedNs str
             | w == 0x05 = NSInfo_PrivateNs str
 
--- 4.4.2
+{-
+    4.4.2
+    Namespace set
+-}
 type NSSet = [NSInfo]
 
-parseNSSet :: ConstantPool -> DBL.ByteString -> (NSSet, DBL.ByteString)
-parseNSSet pool bs =
+parseNSSet :: Abc -> DBL.ByteString -> (NSSet, DBL.ByteString)
+parseNSSet abc bs =
     let (count, bs') = fromU30LE_vl bs in
-    let (_, set, bs'') = forN' parseNSSetImpl (pool, [], bs') count in
+    let (_, set, bs'') = forN' parseNSSetImpl (abc, [], bs') count in
     (set, bs'')
 
-parseNSSetImpl :: (ConstantPool, NSSet, DBL.ByteString)
-               -> (ConstantPool, NSSet, DBL.ByteString)
-parseNSSetImpl (pool, ns, bs) =
+parseNSSetImpl :: (Abc, NSSet, DBL.ByteString)
+               -> (Abc, NSSet, DBL.ByteString)
+parseNSSetImpl (abc, ns, bs) =
     let (idx, bs') = fromU30LE_vl bs in
-    let nsInfo = cpNsInfoIdx pool idx in
-    (pool, ns ++ [nsInfo], bs')
+    let nsInfo = abcNsInfoIdx abc idx in
+    (abc, ns ++ [nsInfo], bs')
 
--- 4.4.3
-data Multiname = {- 0x07 -} Multiname_QName NSInfo String
-               | {- 0x0D -} Multiname_QNameA NSInfo String
-               | {- 0x0F -} Multiname_RTQName String
-               | {- 0x10 -} Multiname_RTQNameA String
+{-
+    4.4.3
+    Multiname
+-}
+data Multiname = {- 0x07 -} Multiname_QName !NSInfo !String
+               | {- 0x0D -} Multiname_QNameA !NSInfo !String
+               | {- 0x0F -} Multiname_RTQName !String
+               | {- 0x10 -} Multiname_RTQNameA !String
                | {- 0x11 -} Multiname_RTQNameL
                | {- 0x12 -} Multiname_RTQNameLA
-               | {- 0x09 -} Multiname_Multiname String NSSet
-               | {- 0x0E -} Multiname_MultinameA String NSSet
-               | {- 0x1B -} Multiname_MultinameL NSSet
-               | {- 0x1C -} Multiname_MultinameLA NSSet
+               | {- 0x09 -} Multiname_Multiname !String !NSSet
+               | {- 0x0E -} Multiname_MultinameA !String !NSSet
+               | {- 0x1B -} Multiname_MultinameL !NSSet
+               | {- 0x1C -} Multiname_MultinameLA !NSSet
+               |            Multiname_Any
                deriving (Show)
 
-parseMultiname :: ConstantPool -> DBL.ByteString -> (Multiname, DBL.ByteString)
-parseMultiname pool bs =
+parseMultiname :: Abc -> DBL.ByteString -> (Multiname, DBL.ByteString)
+parseMultiname abc bs =
     let ((w:[]), bs') = nWords 1 bs in
-    parseMultinameImpl w pool bs'
+    parseMultinameImpl w abc bs'
 
 parseMultinameImpl :: Word8
-                   -> (ConstantPool
+                   -> (Abc
                     -> DBL.ByteString
                     -> (Multiname, DBL.ByteString))
 parseMultinameImpl w
@@ -303,28 +354,73 @@ parseMultinameImpl w
     | w == 0x1C = parseMultinameML Multiname_MultinameLA
 
 parseMultinameQ :: (NSInfo -> String -> Multiname)
-                -> ConstantPool
+                -> Abc
                 -> DBL.ByteString
                 -> (Multiname, DBL.ByteString)
-parseMultinameQ f pool bs = undefined
+parseMultinameQ f abc bs =
+    let (nsIdx, bs') = fromU30LE_vl bs in
+    let (nameIdx, bs'') = fromU30LE_vl bs' in
+    let ns = abcNsInfoIdx abc nsIdx in
+    let name = abcStringsIdx abc nameIdx in
+    (f ns name, bs'')
 
 parseMultinameRTQ :: (String -> Multiname)
-                  -> ConstantPool
+                  -> Abc
                   -> DBL.ByteString
                   -> (Multiname, DBL.ByteString)
-parseMultinameRTQ f pool bs = undefined
+parseMultinameRTQ f abc bs =
+    let (nameIdx, bs') = fromU30LE_vl bs in
+    let name = abcStringsIdx abc nameIdx in
+    (f name, bs')
 
 parseMultinameM :: (String -> NSSet -> Multiname)
-                -> ConstantPool
+                -> Abc
                 -> DBL.ByteString
                 -> (Multiname, DBL.ByteString)
-parseMultinameM f pool bs = undefined
+parseMultinameM f abc bs =
+    let (nameIdx, bs') = fromU30LE_vl bs in
+    let (setIdx, bs'') = fromU30LE_vl bs' in
+    let name = abcStringsIdx abc nameIdx in
+    let set = abcNsSetIdx abc setIdx in
+    (f name set, bs'')
 
 parseMultinameML :: (NSSet -> Multiname)
-                 -> ConstantPool
+                 -> Abc
                  -> DBL.ByteString
                  -> (Multiname, DBL.ByteString)
-parseMultinameML f pool bs = undefined
+parseMultinameML f abc bs =
+    let (setIdx, bs') = fromU30LE_vl bs in
+    let set = abcNsSetIdx abc setIdx in
+    (f set, bs')
+
+{-
+    4.5
+    Method signature
+-}
+data MethodSignature = MethodSignature {
+                                         returnType :: Multiname
+                                       , paramType :: [Int]
+                                       , name :: Int
+                                       , flags :: Word8
+                                       , optionInfo :: Maybe OptionInfo
+                                       , paramInfo :: Maybe [String]
+                                       }
+                                       deriving (Show)
+
+parseMethodSignature :: Abc -> DBL.ByteString -> (MethodSignature, DBL.ByteString)
+parseMethodSignature abc bs0 =
+    let (paramCount, bs1) = fromU30LE_vl bs0 in
+    let (returnType, bs2) = fromU30LE_vl bs1 in
+    let (pTypes, bs3) = forN' paramCountF ([], bs2) $ fromIntegral paramCount in
+    (MethodSignature Multiname_Any [] 0 0 Nothing Nothing, bs0)
+    where
+        paramCountF :: ([Word32], DBL.ByteString) -> ([Word32], DBL.ByteString)
+        paramCountF (ws, bs) = 
+            let (u30, bs') = fromU30LE_vl bs in (ws ++ [u30], bs')
+{-
+    4.5.1
+    Optional parameters
+-}
 
 -- 4.5.1
 data CPC = {- 0x01 -} CPC_Utf8
@@ -377,15 +473,6 @@ const METHOD_IgnoreRest           = 0x10;
 const METHOD_Native               = 0x20;
 const METHOD_Setsdxns             = 0x40;
 const METHOD_HasParamNames        = 0x80;-}
-
-data MethodInfo = MethodInfo {
-                               returnType :: Int
-                             , paramType :: [Int]
-                             , name :: Int
-                             , flags :: Int
-                             , optionInfo :: OptionInfo
-                             --, paramInfo :: ParamInfo
-                             }
 
 -- 4.8
 data TraitsInfo = TraitsInfo {
