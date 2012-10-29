@@ -1,9 +1,11 @@
 module Util where
 
+import Control.Applicative ((<$>))
 import Data.Binary.IEEE754 (wordToDouble)
 import Data.Bits
 import Data.Int
 import Data.List (intercalate)
+import Data.Monoid (mappend)
 import Data.Word
 import Numeric (showHex)
 import System.Directory
@@ -156,27 +158,44 @@ fromU29 (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
         lsb2 = (w2 .&. 0x7f) `shiftL` 7
         lsb1 =  w1 {- NO mask. see spec -}
 
-allDirs :: FilePath -> ([FilePath] -> IO a) -> IO a
-allDirs dir f = do
-    rawDirs <- filterIO doesDirectoryExist $ getDirectoryContents dir
-    let realDirs = drop 2 $ reverse rawDirs {- remove ./ and ../ -}
-    f realDirs
+recurseDirs :: String -> IO [FilePath]
+recurseDirs dir = do
+    subRelPaths <- map (\path -> dir ++ "/" ++ path) <$> getDirectoryContents dir
+    subDirs <- filterM doesDirectoryExist $ return subRelPaths
+    let subDirs' = drop 2 subDirs -- remove ./ and ../
+    let ioFilePath = map recurseDirs subDirs'
+    if null ioFilePath
+        then return subDirs'
+        else do
+            ioDirs <- foldl1 foldF ioFilePath
+            return $ subDirs' `mappend` ioDirs
 
-allFiles :: FilePath -> ([FilePath] -> IO a) -> IO a
-allFiles dir f = do
-    files <- filterIO doesFileExist $ getDirectoryContents dir
-    f files
+-- Use with a folding function to fold [m [1], m [2]] into m [1, 2]
+foldF :: Monad m => m [a] -> m [a] -> m [a]
+foldF acc io = do
+    list <- acc
+    next <- io
+    return $ list ++ next
 
-filterIO :: (a -> IO Bool) -> IO [a] -> IO [a]
-filterIO f ioAs = do
-    as <- ioAs
+allDirs :: FilePath -> IO [FilePath]
+allDirs dir = do
+    rawDirs <- filterM doesDirectoryExist $ getDirectoryContents dir
+    let dirs = drop 2 rawDirs {- remove ./ and ../ -}
+    return dirs
+
+allFiles :: FilePath -> IO [FilePath]
+allFiles dir = filterM doesFileExist $ getDirectoryContents dir
+
+filterM :: Monad m => (a -> m Bool) -> m [a] -> m [a]
+filterM f mAs = do
+    as <- mAs
     case as of
         [] -> return []
         (x:xs) -> do
             tf <- f x
             if tf
-                then filterIO f (return xs) >>= (\xs' -> return $ x:xs')
-                else filterIO f (return xs)
+                then filterM f (return xs) >>= (\xs' -> return $ x:xs')
+                else filterM f (return xs)
 
 forN :: (Ord n, Num n, Monad m)
      => (a -> m a)
