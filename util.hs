@@ -177,7 +177,7 @@ recurseDirs baseDir = do
 allDirs :: FilePath -> IO [FilePath]
 allDirs dir = do
     rawDirs <- getDirectoryContents dir >>= filterM doesDirectoryExist
-    let dirs = drop 2 rawDirs {- remove ./ and ../ -}
+    let dirs = filter (`notElem` [".", ".."]) rawDirs {- remove ./ and ../ -}
     return dirs
 
 allFiles :: FilePath -> IO [FilePath]
