@@ -39,21 +39,21 @@ parseCommon hasOne f (abc, bs) =
             forN' f (abc, bs') u30'
         else let u30' = fromIntegral u30 in
             forN' f (abc, bs') u30'
-    
+
 
 {-
     4.2
     Abc
 -}
 data Abc = Abc {
-                 abcInts :: ![Int32]
-               , abcUints :: ![Word32]
-               , abcDoubles :: ![Double]
-               , abcStrings :: ![String]
-               , abcNsInfo :: ![NSInfo]
-               , abcNsSet :: ![NSSet]
-               , abcMultinames :: ![Multiname]
-               , abcMethodSigs :: ![MethodSignature]
+                 abcInts :: [Int32]
+               , abcUints :: [Word32]
+               , abcDoubles :: [Double]
+               , abcStrings :: [String]
+               , abcNsInfo :: [NSInfo]
+               , abcNsSet :: [NSSet]
+               , abcMultinames :: [Multiname]
+               , abcMethodSigs :: [MethodSignature]
                --, abcInstances :: [Int]
                --, abcClasses :: [Int]
                --, abcScripts :: [Int]
@@ -270,13 +270,13 @@ parseStringInfo bs =
     4.4.1
     Namespace
 -}
-data NSInfo = {- 0x08 -} NSInfo_Namespace !String
-            | {- 0x16 -} NSInfo_PackageNamespace !String
-            | {- 0x17 -} NSInfo_PackageInternalNs !String
-            | {- 0x18 -} NSInfo_ProtectedNamespace !String
-            | {- 0x19 -} NSInfo_ExplicitNamespace !String
-            | {- 0x1A -} NSInfo_StaticProtectedNs !String
-            | {- 0x05 -} NSInfo_PrivateNs !String
+data NSInfo = {- 0x08 -} NSInfo_Namespace String
+            | {- 0x16 -} NSInfo_PackageNamespace String
+            | {- 0x17 -} NSInfo_PackageInternalNs String
+            | {- 0x18 -} NSInfo_ProtectedNamespace String
+            | {- 0x19 -} NSInfo_ExplicitNamespace String
+            | {- 0x1A -} NSInfo_StaticProtectedNs String
+            | {- 0x05 -} NSInfo_PrivateNs String
             |            NSInfo_Any {- '*' see 4.4.4 QName -}
             deriving (Show)
 
@@ -319,16 +319,16 @@ parseNSSetImpl (abc, ns, bs) =
     4.4.3
     Multiname
 -}
-data Multiname = {- 0x07 -} Multiname_QName !NSInfo !String
-               | {- 0x0D -} Multiname_QNameA !NSInfo !String
-               | {- 0x0F -} Multiname_RTQName !String
-               | {- 0x10 -} Multiname_RTQNameA !String
+data Multiname = {- 0x07 -} Multiname_QName NSInfo String
+               | {- 0x0D -} Multiname_QNameA NSInfo String
+               | {- 0x0F -} Multiname_RTQName String
+               | {- 0x10 -} Multiname_RTQNameA String
                | {- 0x11 -} Multiname_RTQNameL
                | {- 0x12 -} Multiname_RTQNameLA
-               | {- 0x09 -} Multiname_Multiname !String !NSSet
-               | {- 0x0E -} Multiname_MultinameA !String !NSSet
-               | {- 0x1B -} Multiname_MultinameL !NSSet
-               | {- 0x1C -} Multiname_MultinameLA !NSSet
+               | {- 0x09 -} Multiname_Multiname String NSSet
+               | {- 0x0E -} Multiname_MultinameA String NSSet
+               | {- 0x1B -} Multiname_MultinameL NSSet
+               | {- 0x1C -} Multiname_MultinameLA NSSet
                |            Multiname_Any
                deriving (Show)
 
@@ -415,7 +415,7 @@ parseMethodSignature abc bs0 =
     (MethodSignature Multiname_Any [] 0 0 Nothing Nothing, bs0)
     where
         paramCountF :: ([Word32], DBL.ByteString) -> ([Word32], DBL.ByteString)
-        paramCountF (ws, bs) = 
+        paramCountF (ws, bs) =
             let (u30, bs') = fromU30LE_vl bs in (ws ++ [u30], bs')
 {-
     4.5.1
