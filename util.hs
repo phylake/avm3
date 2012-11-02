@@ -30,7 +30,7 @@ stringToHex str = map showHex' $ DB.unpack $ DBC.pack str
 stringToHexRe :: String -> IO ()
 stringToHexRe str = putStrLn $ intercalate "\\s?" $ stringToHex str
 
---nWords :: Int64 -> DBL.ByteString -> ([Word8], DBL.ByteString)
+nWords :: Int64 -> DBL.ByteString -> ([Word8], DBL.ByteString)
 nWords n bs = (DBL.unpack $ DBL.take n bs, DBL.drop n bs)
 
 fromU16 :: DBL.ByteString -> (Word16, DBL.ByteString)
@@ -177,7 +177,7 @@ recurseDirs baseDir = do
 allDirs :: FilePath -> IO [FilePath]
 allDirs dir = do
     rawDirs <- getDirectoryContents dir >>= filterM doesDirectoryExist
-    let dirs = filter (`notElem` [".", ".."]) rawDirs {- remove ./ and ../ -}
+    let dirs = filter (`notElem` [".", ".."]) rawDirs -- remove ./ and ../
     return dirs
 
 allFiles :: FilePath -> IO [FilePath]
