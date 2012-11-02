@@ -4,9 +4,10 @@ import ABC.Util
 import Data.Int
 import Data.Word
 import qualified Data.ByteString.Lazy as DBL
+import qualified Data.HashTable.IO as H
 
 type ByteString = DBL.ByteString
---type HashTable k v = H.BasicHashTable k v
+type HashTable k v = H.BasicHashTable k v
 
 type OptionDetail = (Int, Int)
 type OptionInfo = [OptionDetail]
@@ -180,13 +181,13 @@ abcMethodSigsR value cp = Abc
     4.4.1
     Namespace
 -}
-data NSInfo = {- 0x08 -} NSInfo_Namespace String
-            | {- 0x16 -} NSInfo_PackageNamespace String
-            | {- 0x17 -} NSInfo_PackageInternalNs String
-            | {- 0x18 -} NSInfo_ProtectedNamespace String
-            | {- 0x19 -} NSInfo_ExplicitNamespace String
-            | {- 0x1A -} NSInfo_StaticProtectedNs String
-            | {- 0x05 -} NSInfo_PrivateNs String
+data NSInfo = {- 0x08 -} NSInfo_Namespace Word32
+            | {- 0x16 -} NSInfo_PackageNamespace Word32
+            | {- 0x17 -} NSInfo_PackageInternalNs Word32
+            | {- 0x18 -} NSInfo_ProtectedNamespace Word32
+            | {- 0x19 -} NSInfo_ExplicitNamespace Word32
+            | {- 0x1A -} NSInfo_StaticProtectedNs Word32
+            | {- 0x05 -} NSInfo_PrivateNs Word32
             |            NSInfo_Any {- '*' see 4.4.4 QName -}
             deriving (Show)
 
@@ -194,22 +195,22 @@ data NSInfo = {- 0x08 -} NSInfo_Namespace String
     4.4.2
     Namespace set
 -}
-type NSSet = [NSInfo]
+type NSSet = [Word32]
 
 {-
     4.4.3
     Multiname
 -}
-data Multiname = {- 0x07 -} Multiname_QName NSInfo String
-               | {- 0x0D -} Multiname_QNameA NSInfo String
-               | {- 0x0F -} Multiname_RTQName String
-               | {- 0x10 -} Multiname_RTQNameA String
+data Multiname = {- 0x07 -} Multiname_QName Word32 {- NSInfo -} Word32 {-String-}
+               | {- 0x0D -} Multiname_QNameA Word32 {- NSInfo -} Word32 {-String-}
+               | {- 0x0F -} Multiname_RTQName Word32 {-String-}
+               | {- 0x10 -} Multiname_RTQNameA Word32 {-String-}
                | {- 0x11 -} Multiname_RTQNameL
                | {- 0x12 -} Multiname_RTQNameLA
-               | {- 0x09 -} Multiname_Multiname String NSSet
-               | {- 0x0E -} Multiname_MultinameA String NSSet
-               | {- 0x1B -} Multiname_MultinameL NSSet
-               | {- 0x1C -} Multiname_MultinameLA NSSet
+               | {- 0x09 -} Multiname_Multiname Word32 {-String-} Word32 {-NSSet-}
+               | {- 0x0E -} Multiname_MultinameA Word32 {-String-} Word32 {-NSSet-}
+               | {- 0x1B -} Multiname_MultinameL Word32 {-NSSet-}
+               | {- 0x1C -} Multiname_MultinameLA Word32 {-NSSet-}
                |            Multiname_Any
                deriving (Show)
 

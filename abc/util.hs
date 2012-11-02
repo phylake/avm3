@@ -1,16 +1,4 @@
-module ABC.Util
-    (
-      nWordsT
-    , fromU16
-    , fromU16LE
-    , fromU32
-    , fromU32LE
-    , fromDouble
-    , fromDoubleLE
-    , fromU32LE_vl
-    , fromU30LE_vl
-    , fromS32LE_vl
-    ) where
+module ABC.Util where
 
 import Control.Monad.State
 import Data.ByteString.Lazy (ByteString)
