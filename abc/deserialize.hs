@@ -1,4 +1,4 @@
-module ABC.Deserialize where
+module ABC.Deserialize (parseAbc) where
 
 {-# LANGUAGE BangPatterns #-}
 
@@ -28,15 +28,6 @@ import qualified Data.ByteString.Lazy as DBL
 import qualified Data.ByteString.Lazy.Char8 as DBLC
 import qualified Data.HashTable.IO as H
 
-data Abcs = Abc_Int32 [Int32]
-          | Abc_Word32 [Word32]
-          | Abc_Double [Double]
-          | Abc_String [String]
-          | Abc_NSInfo [NSInfo]
-          | Abc_NSSet [NSSet]
-          | Abc_Multiname [Multiname]
-          | Abc_MethodSignature [MethodSignature]
-
 putStrLn2 :: String -> IO ()
 putStrLn2 = liftIO . putStrLn
 
@@ -45,22 +36,22 @@ putStrLn2 = liftIO . putStrLn
 
 -- newtype StateT s m a = StateT { runStateT :: s -> m (a, s) }
 
-testFile = DBL.readFile "abc/Test.abc" >>= runStateT testFileM
+testFile = DBL.readFile "abc/Test.abc" >>= runStateT parseAbc
 
---testFileM :: StateT DBL.ByteString IO (HashTable String Abcs)
-testFileM :: StateT DBL.ByteString IO Abc
-testFileM = do
+--parseAbc :: StateT DBL.ByteString IO (HashTable String Abcs)
+parseAbc :: StateT DBL.ByteString IO Abc
+parseAbc = do
     minor <- fromU16LE
     major <- fromU16LE
 
-    ints       <- parseCommon True fromS32LE_vl
-    uints      <- parseCommon True fromU32LE_vl
-    doubles    <- parseCommon True fromDoubleLE
-    strings    <- parseCommon True parseStringInfo
-    nsinfos    <- parseCommon True parseNSInfo
-    nssets     <- parseCommon True parseNSSet
-    multinames <- parseCommon True parseMultiname
-    signatures <- parseCommon False parseMethodSignature
+    ints       <- common True fromS32LE_vl
+    uints      <- common True fromU32LE_vl
+    doubles    <- common True fromDoubleLE
+    strings    <- common True stringInfo
+    nsinfos    <- common True nsInfo
+    nssets     <- common True nsSet
+    multinames <- common True multiname
+    signatures <- common False methodSignature
     return Abc {
           abcInts       = 0:ints
         , abcUints      = 0:uints
@@ -72,21 +63,21 @@ testFileM = do
         , abcMethodSigs = signatures
     }
 
-parseCommon :: Bool
-            -> StateT DBL.ByteString IO a
-            -> StateT DBL.ByteString IO [a]
-parseCommon hasOne f = do
+common :: Bool
+       -> StateT DBL.ByteString IO a
+       -> StateT DBL.ByteString IO [a]
+common hasOne f = do
     u30 <- fromU30LE_vl
     let u30' = if hasOne -- make sure 0 and 1 == 0
         then fromIntegral $ (u30 <||> 1) - 1
         else fromIntegral u30
-    forNState u30' f
+    forNState f u30'
 
-forNState :: Int -> StateT s IO a -> StateT s IO [a]
-forNState n f = if n > 0
+forNState :: StateT s IO a -> Int -> StateT s IO [a]
+forNState f n = if n > 0
     then do
         x <- f
-        xs <- forNState (n-1) f
+        xs <- forNState f (n-1)
         return $ x:xs
     else do return []
 
@@ -95,8 +86,8 @@ forNState n f = if n > 0
     String
 -}
 
-parseStringInfo :: StateT DBL.ByteString IO String
-parseStringInfo = do
+stringInfo :: StateT DBL.ByteString IO String
+stringInfo = do
     u30 <- fromU30LE_vl
     string <- StateT $ return . DBL.splitAt (fromIntegral u30)
     return $ DBLC.unpack string
@@ -105,8 +96,8 @@ parseStringInfo = do
     4.4.1
     Namespace
 -}
-parseNSInfo :: StateT DBL.ByteString IO NSInfo
-parseNSInfo = do
+nsInfo :: StateT DBL.ByteString IO NSInfo
+nsInfo = do
     (w:[]) <- nWordsT 1
     idx <- fromU30LE_vl
     return $ parseNSInfoImpl w idx
@@ -124,17 +115,15 @@ parseNSInfo = do
     4.4.2
     Namespace set
 -}
-parseNSSet :: StateT DBL.ByteString IO NSSet
-parseNSSet = do
-    count <- fromU30LE_vl
-    forNState (fromIntegral count) fromU30LE_vl
+nsSet :: StateT DBL.ByteString IO NSSet
+nsSet = fromU30LE_vl >>= forNState fromU30LE_vl . fromIntegral
 
 {-
     4.4.3
     Multiname
 -}
-parseMultiname :: StateT DBL.ByteString IO Multiname
-parseMultiname = do
+multiname :: StateT DBL.ByteString IO Multiname
+multiname = do
     (w:[]) <- nWordsT 1
     parseMultinameImpl w
 
@@ -163,19 +152,106 @@ parseMultinameDouble f = do
     4.5
     Method signature
 -}
-parseMethodSignature :: StateT DBL.ByteString IO MethodSignature
-parseMethodSignature = do
+methodSignature :: StateT DBL.ByteString IO MethodSignature
+methodSignature = do
     paramCount <- fromU30LE_vl
     returnType <- fromU30LE_vl
-    pTypes <- forNState (fromIntegral paramCount) fromU30LE_vl
+    paramTypes <- forNState fromU30LE_vl $ fromIntegral paramCount
     name <- fromU30LE_vl
-    (w:[]) <- nWordsT 1
-    return $ MethodSignature Multiname_Any [] 0 0 Nothing Nothing
-    --(MethodSignature Multiname_Any [] 0 0 Nothing Nothing, bs0)
-    
+    (flags:[]) <- nWordsT 1
+    optionInfo <- if (flags .&. msflag_HAS_OPTIONAL == 1)
+        then parseOptionalParams
+        else return Nothing
+    paramNames <- if (flags .&. msflag_HAS_PARAM_NAMES == 1)
+        then parseParamNames
+        else return Nothing
+    return MethodSignature {
+         returnType = returnType
+       , paramTypes = paramTypes
+       , name = name
+       , flags = flags
+       , optionInfo = optionInfo
+       , paramNames = paramNames
+    }
+
 {-
     4.5.1
     Optional parameters
 -}
+
+parseOptionalParams :: StateT DBL.ByteString IO (Maybe [CPC])
+parseOptionalParams =
+    fromU30LE_vl >>= forNState optionDetail . fromIntegral >>= return . Just
+
+optionDetail :: StateT DBL.ByteString IO CPC
+optionDetail = do
+    (w:[]) <- nWordsT 1
+    fromU30LE_vl >>= return . cpcChoice w . fromIntegral
+
+cpcChoice :: Word8 -> (Word32 -> CPC)
+cpcChoice w
+    | w == 0x01 = CPC_Utf8
+    | w == 0x03 = CPC_Integer
+    | w == 0x04 = CPC_UInt
+    | w == 0x05 = CPC_PrivateNamespace
+    | w == 0x06 = CPC_Double
+    | w == 0x07 = CPC_QName
+    | w == 0x08 = CPC_Namespace
+    | w == 0x09 = CPC_Multiname
+    | w == 0x0A = CPC_False
+    | w == 0x0B = CPC_True
+    | w == 0x0C = CPC_Null
+    | w == 0x0D = CPC_QNameA
+    | w == 0x0E = CPC_MultinameA
+    | w == 0x0F = CPC_RTQName
+    | w == 0x10 = CPC_RTQNameA
+    | w == 0x11 = CPC_RTQNameL
+    | w == 0x12 = CPC_RTQNameLA
+    | w == 0x13 = CPC_NameL
+    | w == 0x14 = CPC_NameLA
+    | w == 0x15 = CPC_NamespaceSet
+    | w == 0x16 = CPC_PackageNamespace
+    | w == 0x17 = CPC_PackageInternalNS
+    | w == 0x18 = CPC_ProtectedNamespace
+    | w == 0x19 = CPC_ExplicitNamespace
+    | w == 0x1A = CPC_StaticProtectedNS
+    | w == 0x1B = CPC_MultinameL
+    | w == 0x1C = CPC_MultinameLA
+
+{-
+    4.5.2
+    Parameter names
+-}
+
+parseParamNames :: StateT DBL.ByteString IO (Maybe [String])
+parseParamNames = undefined
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

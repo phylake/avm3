@@ -16,3 +16,12 @@ foo = do
     (Just f) <- H.lookup ht 1
     putStrLn $ bar f
     return ht
+
+data Abcs = Abc_Int32 [Int32]
+          | Abc_Word32 [Word32]
+          | Abc_Double [Double]
+          | Abc_String [String]
+          | Abc_NSInfo [NSInfo]
+          | Abc_NSSet [NSSet]
+          | Abc_Multiname [Multiname]
+          | Abc_MethodSignature [MethodSignature]

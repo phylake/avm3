@@ -9,9 +9,6 @@ import qualified Data.HashTable.IO as H
 type ByteString = DBL.ByteString
 type HashTable k v = H.BasicHashTable k v
 
-type OptionDetail = (Int, Int)
-type OptionInfo = [OptionDetail]
-
 {-
     4.2
     Abc
@@ -178,9 +175,16 @@ abcMethodSigsR value cp = Abc
     value
 
 {-
+    4.4
+    String
+-}
+type StringIdx = Word32
+
+{-
     4.4.1
     Namespace
 -}
+type NSInfoIdx = Word32
 data NSInfo = {- 0x08 -} NSInfo_Namespace Word32
             | {- 0x16 -} NSInfo_PackageNamespace Word32
             | {- 0x17 -} NSInfo_PackageInternalNs Word32
@@ -195,22 +199,24 @@ data NSInfo = {- 0x08 -} NSInfo_Namespace Word32
     4.4.2
     Namespace set
 -}
+type NSSetIdx = Word32
 type NSSet = [Word32]
 
 {-
     4.4.3
     Multiname
 -}
-data Multiname = {- 0x07 -} Multiname_QName Word32 {- NSInfo -} Word32 {-String-}
-               | {- 0x0D -} Multiname_QNameA Word32 {- NSInfo -} Word32 {-String-}
-               | {- 0x0F -} Multiname_RTQName Word32 {-String-}
-               | {- 0x10 -} Multiname_RTQNameA Word32 {-String-}
+type MultinameIdx = Word32
+data Multiname = {- 0x07 -} Multiname_QName NSInfoIdx StringIdx
+               | {- 0x0D -} Multiname_QNameA NSInfoIdx StringIdx
+               | {- 0x0F -} Multiname_RTQName StringIdx
+               | {- 0x10 -} Multiname_RTQNameA StringIdx
                | {- 0x11 -} Multiname_RTQNameL
                | {- 0x12 -} Multiname_RTQNameLA
-               | {- 0x09 -} Multiname_Multiname Word32 {-String-} Word32 {-NSSet-}
-               | {- 0x0E -} Multiname_MultinameA Word32 {-String-} Word32 {-NSSet-}
-               | {- 0x1B -} Multiname_MultinameL Word32 {-NSSet-}
-               | {- 0x1C -} Multiname_MultinameLA Word32 {-NSSet-}
+               | {- 0x09 -} Multiname_Multiname StringIdx NSSetIdx
+               | {- 0x0E -} Multiname_MultinameA StringIdx NSSetIdx
+               | {- 0x1B -} Multiname_MultinameL NSSetIdx
+               | {- 0x1C -} Multiname_MultinameLA NSSetIdx
                |            Multiname_Any
                deriving (Show)
 
@@ -219,14 +225,32 @@ data Multiname = {- 0x07 -} Multiname_QName Word32 {- NSInfo -} Word32 {-String-
     Method signature
 -}
 data MethodSignature = MethodSignature {
-                                         returnType :: Multiname
-                                       , paramType :: [Int]
-                                       , name :: Int
+                                         returnType :: MultinameIdx
+                                       , paramTypes :: [Word32]
+                                       , name :: StringIdx
                                        , flags :: Word8
-                                       , optionInfo :: Maybe OptionInfo
-                                       , paramInfo :: Maybe [String]
+                                       , optionInfo :: Maybe [CPC]
+                                       , paramNames :: Maybe [String]
                                        }
                                        deriving (Show)
+
+msflag_NEED_ARGUMENTS :: Word8
+msflag_NEED_ARGUMENTS = 0x01
+
+msflag_NEED_ACTIVATION :: Word8
+msflag_NEED_ACTIVATION = 0x02
+
+msflag_NEED_REST :: Word8
+msflag_NEED_REST = 0x04
+
+msflag_HAS_OPTIONAL :: Word8
+msflag_HAS_OPTIONAL = 0x08
+
+msflag_SET_DNX :: Word8
+msflag_SET_DNX = 0x40
+
+msflag_HAS_PARAM_NAMES :: Word8
+msflag_HAS_PARAM_NAMES = 0x80
 
 {-
     4.5.1
@@ -234,33 +258,34 @@ data MethodSignature = MethodSignature {
 -}
 
 -- 4.5.1
-data CPC = {- 0x01 -} CPC_Utf8
-         | {- 0x03 -} CPC_Integer
-         | {- 0x04 -} CPC_UInt
-         | {- 0x05 -} CPC_PrivateNamespace
-         | {- 0x06 -} CPC_Double
-         | {- 0x07 -} CPC_QName
-         | {- 0x08 -} CPC_Namespace
-         | {- 0x09 -} CPC_Multiname
-         | {- 0x0A -} CPC_False
-         | {- 0x0B -} CPC_True
-         | {- 0x0C -} CPC_Null
-         | {- 0x0D -} CPC_QNameA
-         | {- 0x0E -} CPC_MultinameA
-         | {- 0x0F -} CPC_RTQName
-         | {- 0x10 -} CPC_RTQNameA
-         | {- 0x11 -} CPC_RTQNameL
-         | {- 0x12 -} CPC_RTQNameLA
-         | {- 0x13 -} CPC_NameL
-         | {- 0x14 -} CPC_NameLA
-         | {- 0x15 -} CPC_NamespaceSet
-         | {- 0x16 -} CPC_PackageNamespace
-         | {- 0x17 -} CPC_PackageInternalNS
-         | {- 0x18 -} CPC_ProtectedNamespace
-         | {- 0x19 -} CPC_ExplicitNamespace
-         | {- 0x1A -} CPC_StaticProtectedNS
-         | {- 0x1B -} CPC_MultinameL
-         | {- 0x1C -} CPC_MultinameLA
+data CPC = {- 0x01 -} CPC_Utf8 Word32
+         | {- 0x03 -} CPC_Integer Word32
+         | {- 0x04 -} CPC_UInt Word32
+         | {- 0x05 -} CPC_PrivateNamespace Word32
+         | {- 0x06 -} CPC_Double Word32
+         | {- 0x07 -} CPC_QName Word32
+         | {- 0x08 -} CPC_Namespace Word32
+         | {- 0x09 -} CPC_Multiname Word32
+         | {- 0x0A -} CPC_False Word32
+         | {- 0x0B -} CPC_True Word32
+         | {- 0x0C -} CPC_Null Word32
+         | {- 0x0D -} CPC_QNameA Word32
+         | {- 0x0E -} CPC_MultinameA Word32
+         | {- 0x0F -} CPC_RTQName Word32
+         | {- 0x10 -} CPC_RTQNameA Word32
+         | {- 0x11 -} CPC_RTQNameL Word32
+         | {- 0x12 -} CPC_RTQNameLA Word32
+         | {- 0x13 -} CPC_NameL Word32
+         | {- 0x14 -} CPC_NameLA Word32
+         | {- 0x15 -} CPC_NamespaceSet Word32
+         | {- 0x16 -} CPC_PackageNamespace Word32
+         | {- 0x17 -} CPC_PackageInternalNS Word32
+         | {- 0x18 -} CPC_ProtectedNamespace Word32
+         | {- 0x19 -} CPC_ExplicitNamespace Word32
+         | {- 0x1A -} CPC_StaticProtectedNS Word32
+         | {- 0x1B -} CPC_MultinameL Word32
+         | {- 0x1C -} CPC_MultinameLA Word32
+         deriving (Show)
 
 data InstanceFlags = {- 0x01 -} IF_ClassSealed
                    | {- 0x02 -} IF_ClassFinal
