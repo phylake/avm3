@@ -2,46 +2,60 @@ module ABC.Deserialize where
 
 {-# LANGUAGE BangPatterns #-}
 
-import Control.Concurrent.STM
-import Control.Monad.State
 import ABC.Def
 import ABC.Util
+import Control.Concurrent.STM
+import Control.Monad.State
 import Data.Bits
 import Data.Int (Int32)
 import Data.Word
 import System (getArgs)
 import TFish
-import Util hiding ( fromU16
-                   , fromU16LE
-                   , fromU32
-                   , fromU32LE
-                   , fromDouble
-                   , fromDoubleLE
-                   , fromU32LE_vl
-                   , fromU30LE_vl
-                   , fromS32LE_vl)
+import Util.Words hiding
+    (
+      fromU16
+    , fromU16LE
+    , fromU32
+    , fromU32LE
+    , fromDouble
+    , fromDoubleLE
+    , fromU32LE_vl
+    , fromU30LE_vl
+    , fromS32LE_vl
+    )
 import SWF.Deserialize as SWF hiding (testFile)
 import qualified Data.ByteString.Lazy as DBL
 import qualified Data.ByteString.Lazy.Char8 as DBLC
+--import qualified Data.HashTable.IO as H
 
+putStrLn2 = liftIO . putStrLn
+
+{-foo :: IO (HashTable Int Foo)
+foo = do
+    ht <- H.new
+    H.insert ht 1 $ Foo "hi!" 2
+    (Just f) <- H.lookup ht 1
+    putStrLn $ bar f
+    return ht
+-}
 testFile = DBL.readFile "Test.abc" >>= runStateT testFileM
 
 testFileM :: StateT DBL.ByteString IO Abc
 testFileM = do
     minor <- fromU16LE
-    liftIO . putStrLn $ "minor: " ++ show minor
-    
+    putStrLn2 $ "minor: " ++ show minor
+
     major <- fromU16LE
-    liftIO . putStrLn $ "major: " ++ show major
-    
+    putStrLn2 $ "major: " ++ show major
+
     ints       <- parseCommon True fromS32LE_vl
     uints      <- parseCommon True fromU32LE_vl
     doubles    <- parseCommon True fromDoubleLE
     strings    <- parseCommon True parseStringInfo
-    nsinfos    <- parseCommon True $ parseNSInfo strings
-    nssets     <- parseCommon True $ parseNSSet nsinfos
-    multinames <- parseCommon True $ parseMultiname strings nsinfos nssets
-    --signatures <- parseCommon False parseMethodSignature
+    nsinfos    <- parseCommon True $ parseNSInfo ("":strings)
+    nssets     <- parseCommon True $ parseNSSet (NSInfo_Any:nsinfos)
+    multinames <- parseCommon True $ parseMultiname ("":strings) (NSInfo_Any:nsinfos) nssets
+    signatures <- parseCommon False parseMethodSignature
     return Abc {
           abcInts       = 0:ints
         , abcUints      = 0:uints
@@ -50,7 +64,7 @@ testFileM = do
         , abcNsInfo     = NSInfo_Any:nsinfos
         , abcNsSet      = nssets
         , abcMultinames = multinames
-        , abcMethodSigs = []
+        , abcMethodSigs = signatures
     }
 
 -- newtype StateT s m a = StateT { runStateT :: s -> m (a, s) }
@@ -64,12 +78,6 @@ parseCommon hasOne f = do
         then fromIntegral $ (u30 <||> 1) - 1
         else fromIntegral u30
     forNState u30' f
-
-pop :: StateT [a] IO a
-pop = StateT $ \(x:xs) -> return (x,xs)
-
-push :: a -> StateT [a] IO ()
-push a = StateT $ \xs -> return ((),a:xs)
 
 forNState :: Int -> StateT s IO a -> StateT s IO [a]
 forNState n f = if n > 0
@@ -153,7 +161,7 @@ parseMultinameImpl w strings infos sets
     | w == 0x1C = parseMultinameML sets Multiname_MultinameLA
 
 parseMultinameQ :: [NSInfo]
-                -> [String] 
+                -> [String]
                 -> (NSInfo -> String -> Multiname)
                 -> StateT DBL.ByteString IO Multiname
 parseMultinameQ infos strings f = do
@@ -194,17 +202,16 @@ parseMultinameML sets f = do
     4.5
     Method signature
 -}
-{-parseMethodSignature :: StateT DBL.ByteString IO MethodSignature
-parseMethodSignature :: Abc -> DBL.ByteString -> (MethodSignature, DBL.ByteString)
-parseMethodSignature abc bs0 =
-    let (paramCount, bs1) = fromU30LE_vl bs0 in
-    let (returnType, bs2) = fromU30LE_vl bs1 in
-    let (pTypes, bs3) = forN' paramCountF ([], bs2) $ fromIntegral paramCount in
-    (MethodSignature Multiname_Any [] 0 0 Nothing Nothing, bs0)
-    where
-        paramCountF :: ([Word32], DBL.ByteString) -> ([Word32], DBL.ByteString)
-        paramCountF (ws, bs) =
-            let (u30, bs') = fromU30LE_vl bs in (ws ++ [u30], bs')-}
+parseMethodSignature :: StateT DBL.ByteString IO MethodSignature
+parseMethodSignature = do
+    paramCount <- fromU30LE_vl
+    returnType <- fromU30LE_vl
+    pTypes <- forNState (fromIntegral paramCount) fromU30LE_vl
+    name <- fromU30LE_vl
+    (w:[]) <- nWordsT 1
+    return $ MethodSignature Multiname_Any [] 0 0 Nothing Nothing
+    --(MethodSignature Multiname_Any [] 0 0 Nothing Nothing, bs0)
+    
 {-
     4.5.1
     Optional parameters

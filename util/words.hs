@@ -1,4 +1,4 @@
-module Util where
+module Util.Words where
 
 import Control.Applicative ((<$>))
 import Control.Monad (forM, filterM)

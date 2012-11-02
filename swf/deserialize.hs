@@ -8,7 +8,7 @@ import Data.Char (digitToInt, intToDigit)
 import Data.Maybe (listToMaybe)
 import Data.Word
 import System (getArgs)
-import Util
+import Util.Words
 import qualified Data.ByteString as DB
 import qualified Data.ByteString.Lazy as DBL
 import qualified Data.ByteString.Char8 as DBC

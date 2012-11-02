@@ -1,11 +1,12 @@
 module ABC.Def where
 
+import ABC.Util
 import Data.Int
 import Data.Word
-import ABC.Util
 import qualified Data.ByteString.Lazy as DBL
 
 type ByteString = DBL.ByteString
+--type HashTable k v = H.BasicHashTable k v
 
 type OptionDetail = (Int, Int)
 type OptionInfo = [OptionDetail]

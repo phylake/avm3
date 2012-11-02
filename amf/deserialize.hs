@@ -16,8 +16,8 @@ import Data.Bits
 import Data.ByteString (ByteString)
 import Data.Char (digitToInt, intToDigit)
 import Data.Word
-import DiffList
-import Util
+--import DiffList
+import Util.Words
 import qualified Data.ByteString as DB
 import qualified Data.ByteString.Char8 as DBC
 
@@ -66,8 +66,8 @@ type Traits = (UTF_8_vr, [UTF_8_vr], Bool)
 class AmfPrim a where
     fromAmf :: Acc Word8 -> Either AmfErr (Acc Word8, a)
 
-toAmf :: Acc Amf -> Either AmfErr (Acc Amf, DiffList Word8)
-toAmf = undefined
+{-toAmf :: Acc Amf -> Either AmfErr (Acc Amf, DiffList Word8)
+toAmf = undefined-}
 
 data Acc a = Acc {
                    accAs  :: [a]
