@@ -26,7 +26,8 @@ data Abc = Abc {
                , abcMultinames :: [Multiname]
                , abcMethodSigs :: [MethodSignature]
                , abcMetadata :: [Metadata]
-               , abcInstances :: [Instance]
+               , abcInstances :: [InstanceInfo]
+               , abcClasses :: [ClassInfo]
                --, abcClasses :: [Int]
                --, abcScripts :: [Int]
                --, abcMethodBodies :: [Int]
@@ -313,16 +314,16 @@ data Metadata = Metadata {
     instance
 -}
 
-data Instance = Instance {
-                           instName :: StringIdx
-                         , instSuperName :: StringIdx
-                         , instFlags :: Word8
-                         , instNs :: Maybe NSInfoIdx
-                         , instInterface :: [MultinameIdx]
-                         , instInit :: Word32
-                         , instTraits :: [TraitsInfo]
-                         }
-                         deriving (Show)
+data InstanceInfo = InstanceInfo {
+                                   instName :: StringIdx
+                                 , instSuperName :: StringIdx
+                                 , instFlags :: Word8
+                                 , instNs :: Maybe NSInfoIdx
+                                 , instInterface :: [MultinameIdx]
+                                 , instInit :: Word32
+                                 , instTraits :: [TraitsInfo]
+                                 }
+                                 deriving (Show)
 
 instf_CLASS_SEALED :: Word8
 instf_CLASS_SEALED = 0x01
@@ -415,4 +416,34 @@ data TraitMethod = TraitMethod {
                                , tmMethod :: Word32
                                }
                                deriving (Show)
+
+{-
+    4.8.5
+    trait method
+-}
+
+data ClassInfo = ClassInfo {
+                             ciInit :: Word32
+                           , ciTraits :: [TraitsInfo]
+                           }
+                           deriving (Show)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

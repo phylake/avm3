@@ -53,7 +53,7 @@ parseAbc = do
     
     instanceClassCount <- fromU30LE_vl
     instances <- forNState parseInstances instanceClassCount
-    --forNState parseClasses instanceClassCount
+    classes <- forNState parseClasses instanceClassCount
     return Abc {
         abcInts       = 0:ints
       , abcUints      = 0:uints
@@ -65,6 +65,7 @@ parseAbc = do
       , abcMethodSigs = signatures
       , abcMetadata   = metadata
       , abcInstances  = instances
+      , abcClasses    = classes
     }
 
 common :: Bool
@@ -254,7 +255,7 @@ parseMetadataPair = do
     instances
 -}
 
-parseInstances :: Parser Instance
+parseInstances :: Parser InstanceInfo
 parseInstances = do
     name <- fromU30LE_vl
     superName <- fromU30LE_vl
@@ -265,7 +266,7 @@ parseInstances = do
     interfaces <- fromU30LE_vl >>= forNState fromU30LE_vl
     iinit <- fromU30LE_vl
     traits <- fromU30LE_vl >>= forNState parseTrait
-    return Instance {
+    return InstanceInfo {
         instName = name
       , instSuperName = superName
       , instFlags = flags
@@ -370,7 +371,19 @@ parseTraitMethod f = do
       , tmMethod = meth
     }
     
+{-
+    4.7
+    classes
+-}
 
+parseClasses :: Parser ClassInfo
+parseClasses = do
+    init <- fromU30LE_vl
+    traits <- fromU30LE_vl >>= forNState parseTrait
+    return ClassInfo {
+        ciInit = init
+      , ciTraits = traits
+    }
 
 
 
