@@ -9,6 +9,9 @@ data Foo = Foo {
     baz :: Int
 }
 
+--ht <- liftIO H.new
+--liftIO $ H.insert ht "foo" (Abc_String [""])
+
 foo :: IO (HashTable Int Foo)
 foo = do
     ht <- H.new

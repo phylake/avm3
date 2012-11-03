@@ -31,15 +31,12 @@ import qualified Data.HashTable.IO as H
 putStrLn2 :: String -> IO ()
 putStrLn2 = liftIO . putStrLn
 
---ht <- liftIO H.new
---liftIO $ H.insert ht "foo" (Abc_String [""])
-
 -- newtype StateT s m a = StateT { runStateT :: s -> m (a, s) }
 
 testFile = DBL.readFile "abc/Test.abc" >>= runStateT parseAbc
 
 --parseAbc :: StateT DBL.ByteString IO (HashTable String Abcs)
-parseAbc :: StateT DBL.ByteString IO Abc
+parseAbc :: Parser Abc
 parseAbc = do
     minor <- fromU16LE
     major <- fromU16LE
@@ -53,22 +50,26 @@ parseAbc = do
     multinames <- common True parseMultinames
     signatures <- common False parseMethodSignatures
     metadata   <- common False parseMetadata
-    {- instance and class use same count. TODO handle this -}
+    
+    instanceClassCount <- fromU30LE_vl
+    instances <- forNState parseInstances instanceClassCount
+    --forNState parseClasses instanceClassCount
     return Abc {
-          abcInts       = 0:ints
-        , abcUints      = 0:uints
-        , abcDoubles    = 0:doubles
-        , abcStrings    = "":strings
-        , abcNsInfo     = NSInfo_Any:nsinfos
-        , abcNsSet      = []:nssets
-        , abcMultinames = Multiname_Any:multinames
-        , abcMethodSigs = signatures
-        , abcMetadata   = metadata
+        abcInts       = 0:ints
+      , abcUints      = 0:uints
+      , abcDoubles    = 0:doubles
+      , abcStrings    = "":strings
+      , abcNsInfo     = NSInfo_Any:nsinfos
+      , abcNsSet      = []:nssets
+      , abcMultinames = Multiname_Any:multinames
+      , abcMethodSigs = signatures
+      , abcMetadata   = metadata
+      , abcInstances  = instances
     }
 
 common :: Bool
-       -> StateT DBL.ByteString IO a
-       -> StateT DBL.ByteString IO [a]
+       -> Parser a
+       -> Parser [a]
 common hasOne f = do
     u30 <- fromU30LE_vl
     let u30' = if hasOne -- make sure 0 and 1 == 0
@@ -76,7 +77,7 @@ common hasOne f = do
         else fromIntegral u30
     forNState f u30'
 
-forNState :: StateT s IO a -> Int -> StateT s IO [a]
+forNState :: (Ord a, Num a, Monad m) => m b -> a -> m [b]
 forNState f n = if n > 0
     then do
         x <- f
@@ -89,7 +90,7 @@ forNState f n = if n > 0
     String
 -}
 
-parseStrings :: StateT DBL.ByteString IO String
+parseStrings :: Parser String
 parseStrings = do
     u30 <- fromU30LE_vl
     string <- StateT $ return . DBL.splitAt (fromIntegral u30)
@@ -99,7 +100,7 @@ parseStrings = do
     4.4.1
     Namespace
 -}
-parseNSInfos :: StateT DBL.ByteString IO NSInfo
+parseNSInfos :: Parser NSInfo
 parseNSInfos = do
     (w:[]) <- nWordsT 1
     fromU30LE_vl >>= return . parseNSInfoImpl w
@@ -117,20 +118,20 @@ parseNSInfos = do
     4.4.2
     Namespace set
 -}
-parseNSSets :: StateT DBL.ByteString IO NSSet
-parseNSSets = fromU30LE_vl >>= forNState fromU30LE_vl . fromIntegral
+parseNSSets :: Parser NSSet
+parseNSSets = fromU30LE_vl >>= forNState fromU30LE_vl
 
 {-
     4.4.3
     Multiname
 -}
-parseMultinames :: StateT DBL.ByteString IO Multiname
+parseMultinames :: Parser Multiname
 parseMultinames = do
     (w:[]) <- nWordsT 1
     multinameImpl w
 
 multinameImpl :: Word8
-              -> StateT DBL.ByteString IO Multiname
+              -> Parser Multiname
 multinameImpl w
     | w == 0x07 = multinameDouble Multiname_QName
     | w == 0x0D = multinameDouble Multiname_QNameA
@@ -144,7 +145,7 @@ multinameImpl w
     | w == 0x1C = fromU30LE_vl >>= return . Multiname_MultinameLA
 
 multinameDouble :: (Word32 -> Word32 -> Multiname)
-                -> StateT DBL.ByteString IO Multiname
+                -> Parser Multiname
 multinameDouble f = do
     nameOrNamespace <- fromU30LE_vl
     nameOrSet <- fromU30LE_vl
@@ -154,11 +155,11 @@ multinameDouble f = do
     4.5
     Method signature
 -}
-parseMethodSignatures :: StateT DBL.ByteString IO MethodSignature
+parseMethodSignatures :: Parser MethodSignature
 parseMethodSignatures = do
     paramCount <- fromU30LE_vl
     returnType <- fromU30LE_vl
-    paramTypes <- forNState fromU30LE_vl $ fromIntegral paramCount
+    paramTypes <- forNState fromU30LE_vl paramCount
     name <- fromU30LE_vl
     (flags:[]) <- nWordsT 1
     optionInfo <- if (flags .&. msflag_HAS_OPTIONAL == 1)
@@ -168,12 +169,12 @@ parseMethodSignatures = do
         then parseParamNames paramCount
         else return Nothing
     return MethodSignature {
-         returnType = returnType
-       , paramTypes = paramTypes
-       , methodName = name
-       , flags = flags
-       , optionInfo = optionInfo
-       , paramNames = paramNames
+        returnType = returnType
+      , paramTypes = paramTypes
+      , methodName = name
+      , flags = flags
+      , optionInfo = optionInfo
+      , paramNames = paramNames
     }
 
 {-
@@ -181,15 +182,15 @@ parseMethodSignatures = do
     Optional parameters
 -}
 
-parseOptionalParams :: StateT DBL.ByteString IO (Maybe [CPC])
+parseOptionalParams :: Parser (Maybe [CPC])
 parseOptionalParams =
-    fromU30LE_vl >>= forNState optionDetail . fromIntegral >>= return . Just
+    fromU30LE_vl >>= forNState optionDetail >>= return . Just
 
-optionDetail :: StateT DBL.ByteString IO CPC
+optionDetail :: Parser CPC
 optionDetail = do
     val <- fromU30LE_vl
     (kind:[]) <- nWordsT 1
-    return $ cpcChoice kind $ fromIntegral val
+    return $ cpcChoice kind val
 
 cpcChoice :: Word8 -> Word32 -> CPC
 cpcChoice w idx
@@ -227,22 +228,22 @@ cpcChoice w idx
     Parameter names
 -}
 
-parseParamNames :: Word32 -> StateT DBL.ByteString IO (Maybe [Word32])
+parseParamNames :: Word32 -> Parser (Maybe [Word32])
 parseParamNames count =
-    forNState fromU30LE_vl (fromIntegral count) >>= return . Just
+    forNState fromU30LE_vl count >>= return . Just
 
 {-
     4.6
     metadata
 -}
 
-parseMetadata :: StateT DBL.ByteString IO Metadata
+parseMetadata :: Parser Metadata
 parseMetadata = do
     name <- fromU30LE_vl
-    pairs <- fromU30LE_vl >>= forNState parseMetadataPair . fromIntegral
+    pairs <- fromU30LE_vl >>= forNState parseMetadataPair
     return $ Metadata name pairs
 
-parseMetadataPair :: StateT DBL.ByteString IO (StringIdx, StringIdx)
+parseMetadataPair :: Parser (StringIdx, StringIdx)
 parseMetadataPair = do
     key <- fromU30LE_vl
     value <- fromU30LE_vl
@@ -253,11 +254,122 @@ parseMetadataPair = do
     instances
 -}
 
+parseInstances :: Parser Instance
+parseInstances = do
+    name <- fromU30LE_vl
+    superName <- fromU30LE_vl
+    (flags:[]) <- nWordsT 1
+    protectedNs <- if (flags .&. instf_CLASS_PROTECTEDNS == 1)
+        then fromU30LE_vl >>= return . Just
+        else return Nothing
+    interfaces <- fromU30LE_vl >>= forNState fromU30LE_vl
+    iinit <- fromU30LE_vl
+    traits <- fromU30LE_vl >>= forNState parseTrait
+    return Instance {
+        instName = name
+      , instSuperName = superName
+      , instFlags = flags
+      , instNs = protectedNs
+      , instInterface = interfaces
+      , instInit = iinit
+      , instTraits = traits
+    }
 
+{-
+    4.8
+    traits info
+-}
 
+parseTrait :: Parser TraitsInfo
+parseTrait = do
+    name <- fromU30LE_vl
+    (kind:[]) <- nWordsT 1
+    traitType <- traitInfoChoice (kind .&. 0xf)
+    meta <- if (kind .&. 0x40 == 1)
+        then parseMetadata >>= return . Just
+        else return Nothing
+    return TraitsInfo {
+        tiName = name
+      , tiAttributes = kind `shiftR` 4
+      , tiType = traitType
+      , tiMeta = meta
+    }
 
+{-
+    4.8.1
+    trait type
+-}
 
+traitInfoChoice :: Word8 -> Parser TraitType
+traitInfoChoice w
+    | w == 0 = parseTraitSlot TT_Slot
+    | w == 1 = parseTraitMethod TT_Method
+    | w == 2 = parseTraitMethod TT_Getter
+    | w == 3 = parseTraitMethod TT_Setter
+    | w == 4 = parseTraitClass TT_Class
+    | w == 5 = parseTraitFunction TT_Function
+    | w == 6 = parseTraitSlot TT_Const
 
+{-
+    4.8.2
+    trait slot
+-}
+
+parseTraitSlot :: (TraitSlot -> TraitType) -> Parser TraitType
+parseTraitSlot f = do
+    slot <- fromU30LE_vl
+    name <- fromU30LE_vl
+    index <- fromU30LE_vl
+    kind <- fromU30LE_vl
+    return $ f TraitSlot {
+        tsSlotId = slot
+      , tsName = name
+      , tsIndex = index
+      , tsKind = kind
+    }
+
+{-
+    4.8.3
+    trait class
+-}
+
+parseTraitClass :: (TraitClass -> TraitType) -> Parser TraitType
+parseTraitClass f = do
+    slot <- fromU30LE_vl
+    init <- fromU30LE_vl
+    return $ f TraitClass {
+        tcId = slot
+      , tcInit = init
+    }
+
+{-
+    4.8.4
+    trait function
+-}
+
+parseTraitFunction :: (TraitFunction -> TraitType) -> Parser TraitType
+parseTraitFunction f = do
+    id <- fromU30LE_vl
+    func <- fromU30LE_vl
+    return $ f TraitFunction {
+        tfId = id
+      , tfFunc = func
+    }
+
+{-
+    4.8.5
+    trait method
+-}
+
+parseTraitMethod :: (TraitMethod -> TraitType) -> Parser TraitType
+parseTraitMethod f = do
+    id <- fromU30LE_vl
+    meth <- fromU30LE_vl
+    return $ f TraitMethod {
+        tmDispId = id
+      , tmMethod = meth
+    }
+    
 
 
 

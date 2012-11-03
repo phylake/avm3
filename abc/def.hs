@@ -1,10 +1,13 @@
 module ABC.Def where
 
-import ABC.Util
+import Control.Monad.State (StateT)
 import Data.Int
 import Data.Word
 import qualified Data.ByteString.Lazy as DBL
 import qualified Data.HashTable.IO as H
+
+type Parser a = StateT DBL.ByteString IO a
+--type Parser a = State DBL.ByteString a
 
 type ByteString = DBL.ByteString
 type HashTable k v = H.BasicHashTable k v
@@ -23,7 +26,7 @@ data Abc = Abc {
                , abcMultinames :: [Multiname]
                , abcMethodSigs :: [MethodSignature]
                , abcMetadata :: [Metadata]
-               --, abcInstances :: [Int]
+               , abcInstances :: [Instance]
                --, abcClasses :: [Int]
                --, abcScripts :: [Int]
                --, abcMethodBodies :: [Int]
@@ -311,18 +314,27 @@ data Metadata = Metadata {
 -}
 
 data Instance = Instance {
-                           instanceName :: StringIdx
-                         , superInstanceName :: StringIdx
-                         , instanceFlags :: Word8
-                         , instanceNs :: Maybe NSInfoIdx
+                           instName :: StringIdx
+                         , instSuperName :: StringIdx
+                         , instFlags :: Word8
+                         , instNs :: Maybe NSInfoIdx
+                         , instInterface :: [MultinameIdx]
+                         , instInit :: Word32
+                         , instTraits :: [TraitsInfo]
                          }
                          deriving (Show)
 
-data InstanceFlags = {- 0x01 -} IF_ClassSealed
-                   | {- 0x02 -} IF_ClassFinal
-                   | {- 0x04 -} IF_ClassInterface
-                   | {- 0x08 -} IF_ClassProtectedNs
+instf_CLASS_SEALED :: Word8
+instf_CLASS_SEALED = 0x01
 
+instf_CLASS_FINAL :: Word8
+instf_CLASS_FINAL = 0x02
+
+instf_CLASS_INTERFACE :: Word8
+instf_CLASS_INTERFACE = 0x04
+
+instf_CLASS_PROTECTEDNS :: Word8
+instf_CLASS_PROTECTEDNS = 0x08
 
 {-const SLOT_var                    = 0;
 const SLOT_method                 = 1;
@@ -331,23 +343,24 @@ const SLOT_setter                 = 3;
 const SLOT_class                  = 4;
 const SLOT_function               = 6;-}
 
-{-const METHOD_Arguments            = 0x1;
-const METHOD_Activation           = 0x2;
-const METHOD_Needrest             = 0x4;
-const METHOD_HasOptional          = 0x8;
-const METHOD_IgnoreRest           = 0x10;
-const METHOD_Native               = 0x20;
-const METHOD_Setsdxns             = 0x40;
-const METHOD_HasParamNames        = 0x80;-}
+{-
+    4.8
+    traits info
+-}
 
--- 4.8
 data TraitsInfo = TraitsInfo {
-                               tiName :: Int
-                             , tiAttribute :: TraitAttributes
+                               tiName :: MultinameIdx
+                             , tiAttributes :: Word8
                              , tiType :: TraitType
+                             , tiMeta :: Maybe Metadata
                              }
+                             deriving (Show)
 
--- 4.8.1
+{-
+    4.8.1
+    trait type
+-}
+
 data TraitType = {- 0 -} TT_Slot TraitSlot
                | {- 1 -} TT_Method TraitMethod
                | {- 2 -} TT_Getter TraitMethod
@@ -355,35 +368,51 @@ data TraitType = {- 0 -} TT_Slot TraitSlot
                | {- 4 -} TT_Class TraitClass
                | {- 5 -} TT_Function TraitFunction
                | {- 6 -} TT_Const TraitSlot
+               deriving (Show)
 
--- 4.8.2
+{-
+    4.8.2
+    trait slot
+-}
+
 data TraitSlot = TraitSlot {
-                             tsSlotId :: Int
-                           , typeName :: Int
-                           , vIndex :: Int
-                           , vKind :: Int
+                             tsSlotId :: Word32
+                           , tsName :: MultinameIdx
+                           , tsIndex :: Word32
+                           , tsKind :: Word32
                            }
+                           deriving (Show)
 
--- 4.8.3
+{-
+    4.8.3
+    trait class
+-}
+
 data TraitClass = TraitClass {
-                               ctSlotId :: Int
-                             , classi :: Int
+                               tcId :: Word32
+                             , tcInit :: Word32
                              }
+                             deriving (Show)
 
--- 4.8.4
+{-
+    4.8.4
+    trait function
+-}
+
 data TraitFunction = TraitFunction {
-                                     tfSlotId :: Int
-                                   , function :: Int
+                                     tfId :: Word32
+                                   , tfFunc :: Word32
                                    }
+                                   deriving (Show)
 
--- 4.8.5
+{-
+    4.8.5
+    trait method
+-}
+
 data TraitMethod = TraitMethod {
-                                 dispId :: Int
-                               , method :: Int
+                                 tmDispId :: Word32
+                               , tmMethod :: Word32
                                }
-
--- 4.8.6
-data TraitAttributes = {- 0x01 -} TA_Final
-                     | {- 0x02 -} TA_Override
-                     | {- 0x04 -} TA_Metadata
+                               deriving (Show)
 

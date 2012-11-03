@@ -1,9 +1,10 @@
 module ABC.Util where
 
-import Control.Monad.State
+import ABC.Def
 import Data.ByteString.Lazy (ByteString)
 import Data.Int
 import Data.Word
+import Control.Monad.State
 import Util.Words hiding
     (
       fromU16
@@ -29,32 +30,32 @@ import qualified Util.Words as Util
     , fromS32LE_vl
     )
 
-nWordsT :: Int64 -> StateT ByteString IO [Word8]
+nWordsT :: Int64 -> Parser [Word8]
 nWordsT n = StateT $ return . nWords n
 
-fromU16 :: StateT ByteString IO Word16
+fromU16 :: Parser Word16
 fromU16 = StateT $ return . Util.fromU16
 
-fromU16LE :: StateT ByteString IO Word16
+fromU16LE :: Parser Word16
 fromU16LE = StateT $ return . Util.fromU16LE
 
-fromU32 :: StateT ByteString IO Word32
+fromU32 :: Parser Word32
 fromU32 = StateT $ return . Util.fromU32
 
-fromU32LE :: StateT ByteString IO Word32
+fromU32LE :: Parser Word32
 fromU32LE = StateT $ return . Util.fromU32LE
 
-fromDouble :: StateT ByteString IO Double
+fromDouble :: Parser Double
 fromDouble = StateT $ return . Util.fromDouble
 
-fromDoubleLE :: StateT ByteString IO Double
+fromDoubleLE :: Parser Double
 fromDoubleLE = StateT $ return . Util.fromDoubleLE
 
-fromU32LE_vl :: StateT ByteString IO Word32
+fromU32LE_vl :: Parser Word32
 fromU32LE_vl = StateT $ return . Util.fromU32LE_vl
 
-fromU30LE_vl :: StateT ByteString IO Word32
+fromU30LE_vl :: Parser Word32
 fromU30LE_vl = StateT $ return . Util.fromU30LE_vl
 
-fromS32LE_vl :: StateT ByteString IO Int32
+fromS32LE_vl :: Parser Int32
 fromS32LE_vl = StateT $ return . Util.fromS32LE_vl
