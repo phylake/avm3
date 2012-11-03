@@ -295,11 +295,6 @@ data CPC = {- 0x00 -} CPC_Undefined
          | {- 0x1C -} CPC_MultinameLA Word32
          deriving (Show)
 
-data InstanceFlags = {- 0x01 -} IF_ClassSealed
-                   | {- 0x02 -} IF_ClassFinal
-                   | {- 0x04 -} IF_ClassInterface
-                   | {- 0x08 -} IF_ClassProtectedNs
-
 {-
     4.6
     metadata
@@ -309,6 +304,25 @@ data Metadata = Metadata {
                          , kvps :: [(StringIdx, StringIdx)]
                          }
                          deriving (Show)
+
+{-
+    4.7
+    instance
+-}
+
+data Instance = Instance {
+                           instanceName :: StringIdx
+                         , superInstanceName :: StringIdx
+                         , instanceFlags :: Word8
+                         , instanceNs :: Maybe NSInfoIdx
+                         }
+                         deriving (Show)
+
+data InstanceFlags = {- 0x01 -} IF_ClassSealed
+                   | {- 0x02 -} IF_ClassFinal
+                   | {- 0x04 -} IF_ClassInterface
+                   | {- 0x08 -} IF_ClassProtectedNs
+
 
 {-const SLOT_var                    = 0;
 const SLOT_method                 = 1;

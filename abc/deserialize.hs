@@ -47,12 +47,13 @@ parseAbc = do
     ints       <- common True fromS32LE_vl
     uints      <- common True fromU32LE_vl
     doubles    <- common True fromDoubleLE
-    strings    <- common True stringInfo
-    nsinfos    <- common True nsInfo
-    nssets     <- common True nsSet
+    strings    <- common True parseStrings
+    nsinfos    <- common True parseNSInfos
+    nssets     <- common True parseNSSets
     multinames <- common True parseMultinames
-    signatures <- common False methodSignature
+    signatures <- common False parseMethodSignatures
     metadata   <- common False parseMetadata
+    {- instance and class use same count. TODO handle this -}
     return Abc {
           abcInts       = 0:ints
         , abcUints      = 0:uints
@@ -88,8 +89,8 @@ forNState f n = if n > 0
     String
 -}
 
-stringInfo :: StateT DBL.ByteString IO String
-stringInfo = do
+parseStrings :: StateT DBL.ByteString IO String
+parseStrings = do
     u30 <- fromU30LE_vl
     string <- StateT $ return . DBL.splitAt (fromIntegral u30)
     return $ DBLC.unpack string
@@ -98,8 +99,8 @@ stringInfo = do
     4.4.1
     Namespace
 -}
-nsInfo :: StateT DBL.ByteString IO NSInfo
-nsInfo = do
+parseNSInfos :: StateT DBL.ByteString IO NSInfo
+parseNSInfos = do
     (w:[]) <- nWordsT 1
     fromU30LE_vl >>= return . parseNSInfoImpl w
     where
@@ -116,8 +117,8 @@ nsInfo = do
     4.4.2
     Namespace set
 -}
-nsSet :: StateT DBL.ByteString IO NSSet
-nsSet = fromU30LE_vl >>= forNState fromU30LE_vl . fromIntegral
+parseNSSets :: StateT DBL.ByteString IO NSSet
+parseNSSets = fromU30LE_vl >>= forNState fromU30LE_vl . fromIntegral
 
 {-
     4.4.3
@@ -153,8 +154,8 @@ multinameDouble f = do
     4.5
     Method signature
 -}
-methodSignature :: StateT DBL.ByteString IO MethodSignature
-methodSignature = do
+parseMethodSignatures :: StateT DBL.ByteString IO MethodSignature
+parseMethodSignatures = do
     paramCount <- fromU30LE_vl
     returnType <- fromU30LE_vl
     paramTypes <- forNState fromU30LE_vl $ fromIntegral paramCount
@@ -186,8 +187,9 @@ parseOptionalParams =
 
 optionDetail :: StateT DBL.ByteString IO CPC
 optionDetail = do
-    (w:[]) <- nWordsT 1
-    fromU30LE_vl >>= return . cpcChoice w . fromIntegral
+    val <- fromU30LE_vl
+    (kind:[]) <- nWordsT 1
+    return $ cpcChoice kind $ fromIntegral val
 
 cpcChoice :: Word8 -> Word32 -> CPC
 cpcChoice w idx
@@ -242,11 +244,14 @@ parseMetadata = do
 
 parseMetadataPair :: StateT DBL.ByteString IO (StringIdx, StringIdx)
 parseMetadataPair = do
-    name <- fromU30LE_vl
+    key <- fromU30LE_vl
     value <- fromU30LE_vl
-    return (name, value)
+    return (key, value)
 
-
+{-
+    4.7
+    instances
+-}
 
 
 
