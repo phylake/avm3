@@ -50,17 +50,19 @@ parseAbc = do
     strings    <- common True stringInfo
     nsinfos    <- common True nsInfo
     nssets     <- common True nsSet
-    multinames <- common True multiname
+    multinames <- common True parseMultinames
     signatures <- common False methodSignature
+    metadata   <- common False parseMetadata
     return Abc {
           abcInts       = 0:ints
         , abcUints      = 0:uints
         , abcDoubles    = 0:doubles
         , abcStrings    = "":strings
         , abcNsInfo     = NSInfo_Any:nsinfos
-        , abcNsSet      = nssets
-        , abcMultinames = multinames
+        , abcNsSet      = []:nssets
+        , abcMultinames = Multiname_Any:multinames
         , abcMethodSigs = signatures
+        , abcMetadata   = metadata
     }
 
 common :: Bool
@@ -99,8 +101,7 @@ stringInfo = do
 nsInfo :: StateT DBL.ByteString IO NSInfo
 nsInfo = do
     (w:[]) <- nWordsT 1
-    idx <- fromU30LE_vl
-    return $ parseNSInfoImpl w idx
+    fromU30LE_vl >>= return . parseNSInfoImpl w
     where
         parseNSInfoImpl w
             | w == 0x08 = NSInfo_Namespace
@@ -122,28 +123,28 @@ nsSet = fromU30LE_vl >>= forNState fromU30LE_vl . fromIntegral
     4.4.3
     Multiname
 -}
-multiname :: StateT DBL.ByteString IO Multiname
-multiname = do
+parseMultinames :: StateT DBL.ByteString IO Multiname
+parseMultinames = do
     (w:[]) <- nWordsT 1
-    parseMultinameImpl w
+    multinameImpl w
 
-parseMultinameImpl :: Word8
-                   -> StateT DBL.ByteString IO Multiname
-parseMultinameImpl w
-    | w == 0x07 = parseMultinameDouble Multiname_QName
-    | w == 0x0D = parseMultinameDouble Multiname_QNameA
+multinameImpl :: Word8
+              -> StateT DBL.ByteString IO Multiname
+multinameImpl w
+    | w == 0x07 = multinameDouble Multiname_QName
+    | w == 0x0D = multinameDouble Multiname_QNameA
     | w == 0x0F = fromU30LE_vl >>= return . Multiname_RTQName
     | w == 0x10 = fromU30LE_vl >>= return . Multiname_RTQNameA
     | w == 0x11 = return Multiname_RTQNameL
     | w == 0x12 = return Multiname_RTQNameLA
-    | w == 0x09 = parseMultinameDouble Multiname_Multiname
-    | w == 0x0E = parseMultinameDouble Multiname_MultinameA
+    | w == 0x09 = multinameDouble Multiname_Multiname
+    | w == 0x0E = multinameDouble Multiname_MultinameA
     | w == 0x1B = fromU30LE_vl >>= return . Multiname_MultinameL
     | w == 0x1C = fromU30LE_vl >>= return . Multiname_MultinameLA
 
-parseMultinameDouble :: (Word32 -> Word32 -> Multiname)
-                     -> StateT DBL.ByteString IO Multiname
-parseMultinameDouble f = do
+multinameDouble :: (Word32 -> Word32 -> Multiname)
+                -> StateT DBL.ByteString IO Multiname
+multinameDouble f = do
     nameOrNamespace <- fromU30LE_vl
     nameOrSet <- fromU30LE_vl
     return $ f nameOrNamespace nameOrSet
@@ -163,12 +164,12 @@ methodSignature = do
         then parseOptionalParams
         else return Nothing
     paramNames <- if (flags .&. msflag_HAS_PARAM_NAMES == 1)
-        then parseParamNames
+        then parseParamNames paramCount
         else return Nothing
     return MethodSignature {
          returnType = returnType
        , paramTypes = paramTypes
-       , name = name
+       , methodName = name
        , flags = flags
        , optionInfo = optionInfo
        , paramNames = paramNames
@@ -188,46 +189,62 @@ optionDetail = do
     (w:[]) <- nWordsT 1
     fromU30LE_vl >>= return . cpcChoice w . fromIntegral
 
-cpcChoice :: Word8 -> (Word32 -> CPC)
-cpcChoice w
-    | w == 0x01 = CPC_Utf8
-    | w == 0x03 = CPC_Integer
-    | w == 0x04 = CPC_UInt
-    | w == 0x05 = CPC_PrivateNamespace
-    | w == 0x06 = CPC_Double
-    | w == 0x07 = CPC_QName
-    | w == 0x08 = CPC_Namespace
-    | w == 0x09 = CPC_Multiname
+cpcChoice :: Word8 -> Word32 -> CPC
+cpcChoice w idx
+    | w == 0x00 = CPC_Undefined
+    | w == 0x01 = CPC_Utf8 idx
+    | w == 0x03 = CPC_Int idx
+    | w == 0x04 = CPC_Uint idx
+    | w == 0x05 = CPC_PrivateNamespace idx
+    | w == 0x06 = CPC_Double idx
+    | w == 0x07 = CPC_QName idx
+    | w == 0x08 = CPC_Namespace idx
+    | w == 0x09 = CPC_Multiname idx
     | w == 0x0A = CPC_False
     | w == 0x0B = CPC_True
     | w == 0x0C = CPC_Null
-    | w == 0x0D = CPC_QNameA
-    | w == 0x0E = CPC_MultinameA
-    | w == 0x0F = CPC_RTQName
-    | w == 0x10 = CPC_RTQNameA
-    | w == 0x11 = CPC_RTQNameL
-    | w == 0x12 = CPC_RTQNameLA
-    | w == 0x13 = CPC_NameL
-    | w == 0x14 = CPC_NameLA
-    | w == 0x15 = CPC_NamespaceSet
-    | w == 0x16 = CPC_PackageNamespace
-    | w == 0x17 = CPC_PackageInternalNS
-    | w == 0x18 = CPC_ProtectedNamespace
-    | w == 0x19 = CPC_ExplicitNamespace
-    | w == 0x1A = CPC_StaticProtectedNS
-    | w == 0x1B = CPC_MultinameL
-    | w == 0x1C = CPC_MultinameLA
+    | w == 0x0D = CPC_QNameA idx
+    | w == 0x0E = CPC_MultinameA idx
+    | w == 0x0F = CPC_RTQName idx
+    | w == 0x10 = CPC_RTQNameA idx
+    | w == 0x11 = CPC_RTQNameL idx
+    | w == 0x12 = CPC_RTQNameLA idx
+    | w == 0x13 = CPC_NameL idx
+    | w == 0x14 = CPC_NameLA idx
+    | w == 0x15 = CPC_NamespaceSet idx
+    | w == 0x16 = CPC_PackageNamespace idx
+    | w == 0x17 = CPC_PackageInternalNs idx
+    | w == 0x18 = CPC_ProtectedNamespace idx
+    | w == 0x19 = CPC_ExplicitNamespace idx
+    | w == 0x1A = CPC_StaticProtectedNs idx
+    | w == 0x1B = CPC_MultinameL idx
+    | w == 0x1C = CPC_MultinameLA idx
 
 {-
     4.5.2
     Parameter names
 -}
 
-parseParamNames :: StateT DBL.ByteString IO (Maybe [String])
-parseParamNames = undefined
+parseParamNames :: Word32 -> StateT DBL.ByteString IO (Maybe [Word32])
+parseParamNames count =
+    forNState fromU30LE_vl (fromIntegral count) >>= return . Just
 
+{-
+    4.6
+    metadata
+-}
 
+parseMetadata :: StateT DBL.ByteString IO Metadata
+parseMetadata = do
+    name <- fromU30LE_vl
+    pairs <- fromU30LE_vl >>= forNState parseMetadataPair . fromIntegral
+    return $ Metadata name pairs
 
+parseMetadataPair :: StateT DBL.ByteString IO (StringIdx, StringIdx)
+parseMetadataPair = do
+    name <- fromU30LE_vl
+    value <- fromU30LE_vl
+    return (name, value)
 
 
 

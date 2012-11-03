@@ -22,6 +22,7 @@ data Abc = Abc {
                , abcNsSet :: [NSSet]
                , abcMultinames :: [Multiname]
                , abcMethodSigs :: [MethodSignature]
+               , abcMetadata :: [Metadata]
                --, abcInstances :: [Int]
                --, abcClasses :: [Int]
                --, abcScripts :: [Int]
@@ -35,7 +36,7 @@ Multinames and NSSet have a default I just don't know what it is
 see abc-decode.es
 
 -}
-defaultAbc :: Abc
+{-defaultAbc :: Abc
 defaultAbc = Abc [0] [0] [0] [""] [NSInfo_Any] [] [] []
 
 abcIntsIdx :: (Integral a) => Abc -> a -> Int32
@@ -172,7 +173,7 @@ abcMethodSigsR value cp = Abc
     (abcNsInfo cp)
     (abcNsSet cp)
     (abcMultinames cp)
-    value
+    value-}
 
 {-
     4.4
@@ -227,10 +228,10 @@ data Multiname = {- 0x07 -} Multiname_QName NSInfoIdx StringIdx
 data MethodSignature = MethodSignature {
                                          returnType :: MultinameIdx
                                        , paramTypes :: [Word32]
-                                       , name :: StringIdx
+                                       , methodName :: StringIdx
                                        , flags :: Word8
                                        , optionInfo :: Maybe [CPC]
-                                       , paramNames :: Maybe [String]
+                                       , paramNames :: Maybe [Word32]
                                        }
                                        deriving (Show)
 
@@ -246,6 +247,12 @@ msflag_NEED_REST = 0x04
 msflag_HAS_OPTIONAL :: Word8
 msflag_HAS_OPTIONAL = 0x08
 
+msflag_IGNORE_REST :: Word8
+msflag_IGNORE_REST = 0x10
+
+msflag_NATIVE :: Word8
+msflag_NATIVE = 0x20
+
 msflag_SET_DNX :: Word8
 msflag_SET_DNX = 0x40
 
@@ -258,17 +265,18 @@ msflag_HAS_PARAM_NAMES = 0x80
 -}
 
 -- 4.5.1
-data CPC = {- 0x01 -} CPC_Utf8 Word32
-         | {- 0x03 -} CPC_Integer Word32
-         | {- 0x04 -} CPC_UInt Word32
+data CPC = {- 0x00 -} CPC_Undefined
+         | {- 0x01 -} CPC_Utf8 Word32
+         | {- 0x03 -} CPC_Int Word32
+         | {- 0x04 -} CPC_Uint Word32
          | {- 0x05 -} CPC_PrivateNamespace Word32
          | {- 0x06 -} CPC_Double Word32
          | {- 0x07 -} CPC_QName Word32
          | {- 0x08 -} CPC_Namespace Word32
          | {- 0x09 -} CPC_Multiname Word32
-         | {- 0x0A -} CPC_False Word32
-         | {- 0x0B -} CPC_True Word32
-         | {- 0x0C -} CPC_Null Word32
+         | {- 0x0A -} CPC_False
+         | {- 0x0B -} CPC_True
+         | {- 0x0C -} CPC_Null
          | {- 0x0D -} CPC_QNameA Word32
          | {- 0x0E -} CPC_MultinameA Word32
          | {- 0x0F -} CPC_RTQName Word32
@@ -279,10 +287,10 @@ data CPC = {- 0x01 -} CPC_Utf8 Word32
          | {- 0x14 -} CPC_NameLA Word32
          | {- 0x15 -} CPC_NamespaceSet Word32
          | {- 0x16 -} CPC_PackageNamespace Word32
-         | {- 0x17 -} CPC_PackageInternalNS Word32
+         | {- 0x17 -} CPC_PackageInternalNs Word32
          | {- 0x18 -} CPC_ProtectedNamespace Word32
          | {- 0x19 -} CPC_ExplicitNamespace Word32
-         | {- 0x1A -} CPC_StaticProtectedNS Word32
+         | {- 0x1A -} CPC_StaticProtectedNs Word32
          | {- 0x1B -} CPC_MultinameL Word32
          | {- 0x1C -} CPC_MultinameLA Word32
          deriving (Show)
@@ -292,7 +300,15 @@ data InstanceFlags = {- 0x01 -} IF_ClassSealed
                    | {- 0x04 -} IF_ClassInterface
                    | {- 0x08 -} IF_ClassProtectedNs
 
-
+{-
+    4.6
+    metadata
+-}
+data Metadata = Metadata {
+                           metaName :: StringIdx
+                         , kvps :: [(StringIdx, StringIdx)]
+                         }
+                         deriving (Show)
 
 {-const SLOT_var                    = 0;
 const SLOT_method                 = 1;
