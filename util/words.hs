@@ -1,7 +1,7 @@
 module Util.Words where
 
 import Control.Applicative ((<$>))
-import Control.Monad (forM, filterM)
+--import Control.Monad (forM, filterM)
 import Data.Binary.IEEE754 (wordToDouble)
 import Data.Bits
 import Data.Int
@@ -9,8 +9,8 @@ import Data.List (intercalate)
 import Data.Monoid (mappend)
 import Data.Word
 import Numeric (showHex)
-import System.Directory
-import System.FilePath ((</>))
+--import System.Directory
+--import System.FilePath ((</>))
 import TFish
 import qualified Data.ByteString as DB
 import qualified Data.ByteString.Lazy as DBL
@@ -159,29 +159,6 @@ fromU29 (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
         lsb3 = (w3 .&. 0x7f) `shiftL` 14
         lsb2 = (w2 .&. 0x7f) `shiftL` 7
         lsb1 =  w1 {- NO mask. see spec -}
-
-recurseDirs :: FilePath -> IO [FilePath]
-recurseDirs baseDir = do
-    contents <- getDirectoryContents baseDir
-    let contentChildren = filter (`notElem` [".", ".."]) contents
-    paths <- forM contentChildren $ returnOrRecurse baseDir
-    return $ concat paths
-    where
-        returnOrRecurse baseDir fileOrDir = do
-            let path = baseDir </> fileOrDir
-            isDir <- doesDirectoryExist path
-            if isDir
-                then recurseDirs path
-                else return [path]
-
-allDirs :: FilePath -> IO [FilePath]
-allDirs dir = do
-    rawDirs <- getDirectoryContents dir >>= filterM doesDirectoryExist
-    let dirs = filter (`notElem` [".", ".."]) rawDirs -- remove ./ and ../
-    return dirs
-
-allFiles :: FilePath -> IO [FilePath]
-allFiles dir = getDirectoryContents dir >>= filterM doesFileExist
 
 forN :: (Ord n, Num n, Monad m)
      => (a -> m a)
