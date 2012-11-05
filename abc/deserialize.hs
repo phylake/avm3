@@ -49,10 +49,14 @@ parseAbc = do
     nssets     <- common True parseNSSets
     multinames <- common True parseMultinames
     signatures <- common False parseMethodSignatures
-    metadata   <- common False parseMetadata
+    
+    --metadata   <- common False parseMetadata
+    fromU30LE_vl {- abc-parse.as:67 parseMetaData doesn't exist -}
     
     instanceClassCount <- fromU30LE_vl
+    get >>= liftIO . DBL.writeFile "abc/preInstance.abc"
     instances <- forNState parseInstances instanceClassCount
+    get >>= liftIO . DBL.writeFile "abc/postInstance.abc"
     classes <- forNState parseClasses instanceClassCount
     return Abc {
         abcInts       = 0:ints
@@ -63,7 +67,7 @@ parseAbc = do
       , abcNsSet      = []:nssets
       , abcMultinames = Multiname_Any:multinames
       , abcMethodSigs = signatures
-      , abcMetadata   = metadata
+      , abcMetadata   = []
       , abcInstances  = instances
       , abcClasses    = classes
     }
@@ -285,9 +289,10 @@ parseTrait :: Parser TraitsInfo
 parseTrait = do
     name <- fromU30LE_vl
     (kind:[]) <- nWordsT 1
+    liftIO.putStrLn $ "trait kind " ++ show kind
     traitType <- traitInfoChoice (kind .&. 0xf)
     meta <- if (kind .&. 0x40 == 1)
-        then parseMetadata >>= return . Just
+        then fromU30LE_vl >>= forNState fromU30LE_vl >>= return . Just
         else return Nothing
     return TraitsInfo {
         tiName = name
@@ -300,6 +305,21 @@ parseTrait = do
     4.8.1
     trait type
 -}
+
+{-switch(t.kind) {
+case TRAIT_Slot:
+case TRAIT_Const:
+    trait = new ABCSlotTrait(name(t.name), t.attrs, t.kind==TRAIT_Const, t.slot_id, name(t.type_name), t.val_index, t.val_kind);
+    break;
+case TRAIT_Method:
+case TRAIT_Getter:
+case TRAIT_Setter:
+    trait = new ABCOtherTrait(name(t.name), t.attrs, t.kind, t.disp_id, t.method);
+    break;
+case TRAIT_Class:
+    trait = new ABCOtherTrait(name(t.name), t.attrs, t.kind, t.slot_id, t["class"]);
+    break;
+}-}
 
 traitInfoChoice :: Word8 -> Parser TraitType
 traitInfoChoice w
@@ -321,12 +341,16 @@ parseTraitSlot f = do
     slot <- fromU30LE_vl
     name <- fromU30LE_vl
     index <- fromU30LE_vl
-    kind <- fromU30LE_vl
+    kind <- if index == 0
+        then return Nothing
+        else do
+            (w:[]) <- nWordsT 1
+            return $ Just w
     return $ f TraitSlot {
-        tsSlotId = slot
+        tsId = slot
       , tsName = name
-      , tsIndex = index
-      , tsKind = kind
+      , tsVindex = index
+      , tsVkind = kind
     }
 
 {-
@@ -378,10 +402,15 @@ parseTraitMethod f = do
 
 parseClasses :: Parser ClassInfo
 parseClasses = do
-    init <- fromU30LE_vl
-    traits <- fromU30LE_vl >>= forNState parseTrait
+    initIdx <- fromU30LE_vl
+    liftIO.putStrLn $ "initIdx " ++ show initIdx
+    traitCount <- fromU30LE_vl
+    liftIO.putStrLn $ "traitCount " ++ show traitCount
+    traits <- forNState parseTrait traitCount
+
+    --traits <- fromU30LE_vl >>= forNState parseTrait
     return ClassInfo {
-        ciInit = init
+        ciInit = initIdx
       , ciTraits = traits
     }
 

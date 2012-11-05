@@ -303,6 +303,7 @@ data CPC = {- 0x00 -} CPC_Undefined
     4.6
     metadata
 -}
+type MetadataIdx = Word32
 data Metadata = Metadata {
                            metaName :: StringIdx
                          , kvps :: [(StringIdx, StringIdx)]
@@ -326,16 +327,16 @@ data InstanceInfo = InstanceInfo {
                                  deriving (Show)
 
 instf_CLASS_SEALED :: Word8
-instf_CLASS_SEALED = 0x01
+instf_CLASS_SEALED = 0x1
 
 instf_CLASS_FINAL :: Word8
-instf_CLASS_FINAL = 0x02
+instf_CLASS_FINAL = 0x2
 
 instf_CLASS_INTERFACE :: Word8
-instf_CLASS_INTERFACE = 0x04
+instf_CLASS_INTERFACE = 0x4
 
 instf_CLASS_PROTECTEDNS :: Word8
-instf_CLASS_PROTECTEDNS = 0x08
+instf_CLASS_PROTECTEDNS = 0x8
 
 {-const SLOT_var                    = 0;
 const SLOT_method                 = 1;
@@ -353,7 +354,7 @@ data TraitsInfo = TraitsInfo {
                                tiName :: MultinameIdx
                              , tiAttributes :: Word8
                              , tiType :: TraitType
-                             , tiMeta :: Maybe Metadata
+                             , tiMeta :: Maybe [MetadataIdx]
                              }
                              deriving (Show)
 
@@ -377,10 +378,10 @@ data TraitType = {- 0 -} TT_Slot TraitSlot
 -}
 
 data TraitSlot = TraitSlot {
-                             tsSlotId :: Word32
+                             tsId :: Word32
                            , tsName :: MultinameIdx
-                           , tsIndex :: Word32
-                           , tsKind :: Word32
+                           , tsVindex :: Word32
+                           , tsVkind :: Maybe Word8
                            }
                            deriving (Show)
 
