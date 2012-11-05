@@ -1,7 +1,6 @@
 module Util.Words where
 
 import Control.Applicative ((<$>))
---import Control.Monad (forM, filterM)
 import Data.Binary.IEEE754 (wordToDouble)
 import Data.Bits
 import Data.Int
@@ -9,8 +8,6 @@ import Data.List (intercalate)
 import Data.Monoid (mappend)
 import Data.Word
 import Numeric (showHex)
---import System.Directory
---import System.FilePath ((</>))
 import TFish
 import qualified Data.ByteString as DB
 import qualified Data.ByteString.Lazy as DBL
