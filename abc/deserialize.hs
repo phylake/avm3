@@ -50,9 +50,19 @@ parseAbc = do
     multinames <- common True parseMultinames
     signatures <- common False parseMethodSignatures
     metadata   <- common False parseMetadata
+
+    liftIO.putStrLn $ "strings " ++ show strings
+    liftIO.putStrLn $ "nsinfos " ++ show nsinfos
+    liftIO.putStrLn $ "nssets " ++ show nssets
+    liftIO.putStrLn $ "multinames " ++ show multinames
+    liftIO.putStrLn $ "signature returnTypes " ++ (concat (map (show.returnType) signatures))
+    liftIO.putStrLn $ "metadata " ++ show metadata
+    
     classCount <- fromU30LE_vl
     instances <- forNState parseInstances classCount
     classes <- forNState parseClasses classCount
+    
+    --scripts <- common False parseScripts
     return Abc {
         abcInts       = 0:ints
       , abcUints      = 0:uints
@@ -65,6 +75,7 @@ parseAbc = do
       , abcMetadata   = metadata
       , abcInstances  = instances
       , abcClasses    = classes
+      , abcScripts    = []
     }
 
 common :: Bool
@@ -106,13 +117,13 @@ parseNSInfos = do
     fromU30LE_vl >>= return . parseNSInfoImpl w
     where
         parseNSInfoImpl w
-            | w == 0x08 = NSInfo_Namespace
-            | w == 0x16 = NSInfo_PackageNamespace
-            | w == 0x17 = NSInfo_PackageInternalNs
-            | w == 0x18 = NSInfo_ProtectedNamespace
-            | w == 0x19 = NSInfo_ExplicitNamespace
-            | w == 0x1A = NSInfo_StaticProtectedNs
-            | w == 0x05 = NSInfo_PrivateNs
+            | w == cpc_Namespace = NSInfo_Namespace
+            | w == cpc_PackageNamespace = NSInfo_PackageNamespace
+            | w == cpc_PackageInternalNs = NSInfo_PackageInternalNs
+            | w == cpc_ProtectedNamespace = NSInfo_ProtectedNamespace
+            | w == cpc_ExplicitNamespace = NSInfo_ExplicitNamespace
+            | w == cpc_StaticProtectedNs = NSInfo_StaticProtectedNs
+            | w == cpc_PrivateNamespace = NSInfo_PrivateNs
 
 {-
     4.4.2
@@ -133,16 +144,16 @@ parseMultinames = do
 multinameImpl :: Word8
               -> Parser Multiname
 multinameImpl w
-    | w == 0x07 = multinameDouble Multiname_QName
-    | w == 0x0D = multinameDouble Multiname_QNameA
-    | w == 0x0F = fromU30LE_vl >>= return . Multiname_RTQName
-    | w == 0x10 = fromU30LE_vl >>= return . Multiname_RTQNameA
-    | w == 0x11 = return Multiname_RTQNameL
-    | w == 0x12 = return Multiname_RTQNameLA
-    | w == 0x09 = multinameDouble Multiname_Multiname
-    | w == 0x0E = multinameDouble Multiname_MultinameA
-    | w == 0x1B = fromU30LE_vl >>= return . Multiname_MultinameL
-    | w == 0x1C = fromU30LE_vl >>= return . Multiname_MultinameLA
+    | w == cpc_QName = multinameDouble Multiname_QName
+    | w == cpc_QNameA = multinameDouble Multiname_QNameA
+    | w == cpc_RTQName = fromU30LE_vl >>= return . Multiname_RTQName
+    | w == cpc_RTQNameA = fromU30LE_vl >>= return . Multiname_RTQNameA
+    | w == cpc_RTQNameL = return Multiname_RTQNameL
+    | w == cpc_RTQNameLA = return Multiname_RTQNameLA
+    | w == cpc_Multiname = multinameDouble Multiname_Multiname
+    | w == cpc_MultinameA = multinameDouble Multiname_MultinameA
+    | w == cpc_MultinameL = fromU30LE_vl >>= return . Multiname_MultinameL
+    | w == cpc_MultinameLA = fromU30LE_vl >>= return . Multiname_MultinameLA
 
 multinameDouble :: (Word32 -> Word32 -> Multiname)
                 -> Parser Multiname
@@ -194,34 +205,35 @@ optionDetail = do
 
 cpcChoice :: Word8 -> Word32 -> CPC
 cpcChoice w idx
-    | w == 0x00 = CPC_Undefined
-    | w == 0x01 = CPC_Utf8 idx
-    | w == 0x03 = CPC_Int idx
-    | w == 0x04 = CPC_Uint idx
-    | w == 0x05 = CPC_PrivateNamespace idx
-    | w == 0x06 = CPC_Double idx
-    | w == 0x07 = CPC_QName idx
-    | w == 0x08 = CPC_Namespace idx
-    | w == 0x09 = CPC_Multiname idx
-    | w == 0x0A = CPC_False
-    | w == 0x0B = CPC_True
-    | w == 0x0C = CPC_Null
-    | w == 0x0D = CPC_QNameA idx
-    | w == 0x0E = CPC_MultinameA idx
-    | w == 0x0F = CPC_RTQName idx
-    | w == 0x10 = CPC_RTQNameA idx
-    | w == 0x11 = CPC_RTQNameL idx
-    | w == 0x12 = CPC_RTQNameLA idx
-    | w == 0x13 = CPC_NameL idx
-    | w == 0x14 = CPC_NameLA idx
-    | w == 0x15 = CPC_NamespaceSet idx
-    | w == 0x16 = CPC_PackageNamespace idx
-    | w == 0x17 = CPC_PackageInternalNs idx
-    | w == 0x18 = CPC_ProtectedNamespace idx
-    | w == 0x19 = CPC_ExplicitNamespace idx
-    | w == 0x1A = CPC_StaticProtectedNs idx
-    | w == 0x1B = CPC_MultinameL idx
-    | w == 0x1C = CPC_MultinameLA idx
+    | w == cpc_Undefined = CPC_Undefined
+    | w == cpc_Utf8 = CPC_Utf8 idx
+    | w == cpc_Decimal = CPC_Decimal idx
+    | w == cpc_Int = CPC_Int idx
+    | w == cpc_Uint = CPC_Uint idx
+    | w == cpc_PrivateNamespace = CPC_PrivateNamespace idx
+    | w == cpc_Double = CPC_Double idx
+    | w == cpc_QName = CPC_QName idx
+    | w == cpc_Namespace = CPC_Namespace idx
+    | w == cpc_Multiname = CPC_Multiname idx
+    | w == cpc_False = CPC_False
+    | w == cpc_True = CPC_True
+    | w == cpc_Null = CPC_Null
+    | w == cpc_QNameA = CPC_QNameA idx
+    | w == cpc_MultinameA = CPC_MultinameA idx
+    | w == cpc_RTQName = CPC_RTQName idx
+    | w == cpc_RTQNameA = CPC_RTQNameA idx
+    | w == cpc_RTQNameL = CPC_RTQNameL idx
+    | w == cpc_RTQNameLA = CPC_RTQNameLA idx
+    | w == cpc_NameL = CPC_NameL idx
+    | w == cpc_NameLA = CPC_NameLA idx
+    | w == cpc_NamespaceSet = CPC_NamespaceSet idx
+    | w == cpc_PackageNamespace = CPC_PackageNamespace idx
+    | w == cpc_PackageInternalNs = CPC_PackageInternalNs idx
+    | w == cpc_ProtectedNamespace = CPC_ProtectedNamespace idx
+    | w == cpc_ExplicitNamespace = CPC_ExplicitNamespace idx
+    | w == cpc_StaticProtectedNs = CPC_StaticProtectedNs idx
+    | w == cpc_MultinameL = CPC_MultinameL idx
+    | w == cpc_MultinameLA = CPC_MultinameLA idx
 
 {-
     4.5.2
@@ -316,7 +328,7 @@ parseTraitSlot f = do
     slot <- fromU30LE_vl
     name <- fromU30LE_vl
     index <- fromU30LE_vl
-    kind <- if index /= 0
+    kind <- if index == 0
         then return Nothing
         else do
             (w:[]) <- nWordsT 1
@@ -371,8 +383,8 @@ parseTraitMethod f = do
     }
     
 {-
-    4.7
-    classes
+    4.9
+    class info
 -}
 
 parseClasses :: Parser ClassInfo
@@ -382,6 +394,20 @@ parseClasses = do
     return ClassInfo {
         ciInit = initIdx
       , ciTraits = traits
+    }
+
+{-
+    4.9
+    class info
+-}
+
+parseScripts :: Parser ScriptInfo
+parseScripts = do
+    initIdx <- fromU30LE_vl
+    traits <- fromU30LE_vl >>= forNState parseTrait
+    return ScriptInfo {
+        siInit = initIdx
+      , siTraits = traits
     }
 
 

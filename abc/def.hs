@@ -28,8 +28,7 @@ data Abc = Abc {
                , abcMetadata :: [Metadata]
                , abcInstances :: [InstanceInfo]
                , abcClasses :: [ClassInfo]
-               --, abcClasses :: [Int]
-               --, abcScripts :: [Int]
+               , abcScripts :: [ScriptInfo]
                --, abcMethodBodies :: [Int]
                }
                deriving (Show)
@@ -267,10 +266,96 @@ msflag_HAS_PARAM_NAMES = 0x80
     4.5.1
     Optional parameters
 -}
+cpc_Undefined :: Word8
+cpc_Undefined = 0x00
 
--- 4.5.1
+cpc_Utf8 :: Word8
+cpc_Utf8 = 0x01
+
+cpc_Decimal :: Word8
+cpc_Decimal = 0x02
+
+cpc_Int :: Word8
+cpc_Int = 0x03
+
+cpc_Uint :: Word8
+cpc_Uint = 0x04
+
+cpc_PrivateNamespace :: Word8
+cpc_PrivateNamespace = 0x05
+
+cpc_Double :: Word8
+cpc_Double = 0x06
+
+cpc_QName :: Word8
+cpc_QName = 0x07
+
+cpc_Namespace :: Word8
+cpc_Namespace = 0x08
+
+cpc_Multiname :: Word8
+cpc_Multiname = 0x09
+
+cpc_False :: Word8
+cpc_False = 0x0A
+
+cpc_True :: Word8
+cpc_True = 0x0B
+
+cpc_Null :: Word8
+cpc_Null = 0x0C
+
+cpc_QNameA :: Word8
+cpc_QNameA = 0x0D
+
+cpc_MultinameA :: Word8
+cpc_MultinameA = 0x0E
+
+cpc_RTQName :: Word8
+cpc_RTQName = 0x0F
+
+cpc_RTQNameA :: Word8
+cpc_RTQNameA = 0x10
+
+cpc_RTQNameL :: Word8
+cpc_RTQNameL = 0x11
+
+cpc_RTQNameLA :: Word8
+cpc_RTQNameLA = 0x12
+
+cpc_NameL :: Word8
+cpc_NameL = 0x13
+
+cpc_NameLA :: Word8
+cpc_NameLA = 0x14
+
+cpc_NamespaceSet :: Word8
+cpc_NamespaceSet = 0x15
+
+cpc_PackageNamespace :: Word8
+cpc_PackageNamespace = 0x16
+
+cpc_PackageInternalNs :: Word8
+cpc_PackageInternalNs = 0x17
+
+cpc_ProtectedNamespace :: Word8
+cpc_ProtectedNamespace = 0x18
+
+cpc_ExplicitNamespace :: Word8
+cpc_ExplicitNamespace = 0x19
+
+cpc_StaticProtectedNs :: Word8
+cpc_StaticProtectedNs = 0x1A
+
+cpc_MultinameL :: Word8
+cpc_MultinameL = 0x1B
+
+cpc_MultinameLA :: Word8
+cpc_MultinameLA = 0x1C
+
 data CPC = {- 0x00 -} CPC_Undefined
          | {- 0x01 -} CPC_Utf8 Word32
+         | {- 0x02 -} CPC_Decimal Word32
          | {- 0x03 -} CPC_Int Word32
          | {- 0x04 -} CPC_Uint Word32
          | {- 0x05 -} CPC_PrivateNamespace Word32
@@ -337,13 +422,6 @@ instf_CLASS_INTERFACE = 0x4
 
 instf_CLASS_PROTECTEDNS :: Word8
 instf_CLASS_PROTECTEDNS = 0x8
-
-{-const SLOT_var                    = 0;
-const SLOT_method                 = 1;
-const SLOT_getter                 = 2;
-const SLOT_setter                 = 3;
-const SLOT_class                  = 4;
-const SLOT_function               = 6;-}
 
 {-
     4.8
@@ -419,8 +497,8 @@ data TraitMethod = TraitMethod {
                                deriving (Show)
 
 {-
-    4.8.5
-    trait method
+    4.9
+    class info
 -}
 
 data ClassInfo = ClassInfo {
@@ -428,6 +506,17 @@ data ClassInfo = ClassInfo {
                            , ciTraits :: [TraitsInfo]
                            }
                            deriving (Show)
+
+{-
+    4.10
+    script
+-}
+
+data ScriptInfo = ScriptInfo {
+                               siInit :: Word32
+                             , siTraits :: [TraitsInfo]
+                             }
+                             deriving (Show)
 
 
 
