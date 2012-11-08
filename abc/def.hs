@@ -235,7 +235,7 @@ data MethodSignature = MethodSignature {
                                        , methodName :: StringIdx
                                        , flags :: Word8
                                        , optionInfo :: Maybe [CPC]
-                                       , paramNames :: Maybe [Word32]
+                                       , paramNames :: Maybe [Word32] {- these are for debug builds only -}
                                        }
                                        deriving (Show)
 
@@ -316,8 +316,8 @@ data Metadata = Metadata {
 -}
 
 data InstanceInfo = InstanceInfo {
-                                   instName :: StringIdx
-                                 , instSuperName :: StringIdx
+                                   instName :: MultinameIdx
+                                 , instSuperName :: MultinameIdx
                                  , instFlags :: Word8
                                  , instNs :: Maybe NSInfoIdx
                                  , instInterface :: [MultinameIdx]
