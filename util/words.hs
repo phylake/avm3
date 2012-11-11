@@ -77,6 +77,19 @@ fromU32LE_vl bs = let (w64, bs') = varLenUintBSL bs in (fromIntegral w64, bs')
 fromU30LE_vl :: DBL.ByteString -> (Word32, DBL.ByteString)
 fromU30LE_vl bs = let (w32, bs') = fromU32LE_vl bs in (w32 .&. 0x3fffffff, bs')
 
+fromS24LE :: DBL.ByteString -> (Int32, DBL.ByteString)
+fromS24LE bs =
+    let (unpackThese, bs') = DBL.splitAt 3 bs in
+    (fromIntegral . fromS24LE_impl $ map fromIntegral $ DBL.unpack unpackThese, bs')
+    where
+        fromS24LE_impl :: [Word32] -> Word32
+        fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
+            where
+                sign = (w1 .&. 0x80) `shiftL` 24
+                w1'  = (w1 .&. 0x7f) `shiftL` 16
+                w2'  =  w2 `shiftL` 8
+                w3'  =  w3
+
 fromS32LE_vl :: DBL.ByteString -> (Int32, DBL.ByteString)
 fromS32LE_vl bs =
     let (unpackThese, bs') = DBL.splitAt (varIntLenBSL bs) bs in

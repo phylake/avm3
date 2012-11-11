@@ -16,6 +16,7 @@ import Util.Words hiding
     , fromU32LE_vl
     , fromU30LE_vl
     , fromS32LE_vl
+    , fromS24LE
     )
 import qualified Util.Words as Util
     (
@@ -28,10 +29,16 @@ import qualified Util.Words as Util
     , fromU32LE_vl
     , fromU30LE_vl
     , fromS32LE_vl
+    , fromS24LE
     )
 
 nWordsT :: Int64 -> Parser [Word8]
 nWordsT n = StateT $ return . nWords n
+
+fromU8 :: Parser Word8
+fromU8 = do
+    (w:[]) <- nWordsT 1
+    return w
 
 fromU16 :: Parser Word16
 fromU16 = StateT $ return . Util.fromU16
@@ -59,3 +66,6 @@ fromU30LE_vl = StateT $ return . Util.fromU30LE_vl
 
 fromS32LE_vl :: Parser Int32
 fromS32LE_vl = StateT $ return . Util.fromS32LE_vl
+
+fromS24LE :: Parser Int32
+fromS24LE = StateT $ return . Util.fromS24LE
