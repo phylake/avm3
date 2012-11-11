@@ -23,10 +23,10 @@ import Util.Words hiding
     , fromS32LE_vl
     , fromS24LE
     )
-import qualified Data.ByteString.Lazy as DBL
-import qualified Data.ByteString.Lazy.Char8 as DBLC
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC
 
-testFile = DBL.readFile "abc/Test.abc" >>= runStateT parseAbc
+testFile = BS.readFile "abc/Test.abc" >>= runStateT parseAbc
 
 parseAbc :: Parser Abc
 parseAbc = do
@@ -90,8 +90,8 @@ forNState f n = if n > 0
 parseStrings :: Parser String
 parseStrings = do
     u30 <- fromU30LE_vl
-    string <- StateT $ return . DBL.splitAt (fromIntegral u30)
-    return $ DBLC.unpack string
+    string <- StateT $ return . BS.splitAt (fromIntegral u30)
+    return $ BSC.unpack string
 
 {-
     4.4.1
@@ -123,10 +123,10 @@ parseNSSets = fromU30LE_vl >>= forNState fromU30LE_vl
     Multiname
 -}
 parseMultinames :: Parser Multiname
-parseMultinames = fromU8 >>= multinameImpl
+parseMultinames = fromU8 >>= multinameChoice
 
-multinameImpl :: Word8 -> Parser Multiname
-multinameImpl w
+multinameChoice :: Word8 -> Parser Multiname
+multinameChoice w
     | w == cpc_QName = multinameDouble Multiname_QName
     | w == cpc_QNameA = multinameDouble Multiname_QNameA
     | w == cpc_RTQName = fromU30LE_vl >>= return . Multiname_RTQName
@@ -312,9 +312,7 @@ parseTraitVar f = do
     index <- fromU30LE_vl
     kind <- if index == 0
         then return Nothing
-        else do
-            (w:[]) <- nWordsT 1
-            return $ Just w
+        else fromU8 >>= return . Just
     return $ f TraitVar {
         tsId = slot
       , tsName = name
@@ -408,7 +406,7 @@ parseMethodBody = do
     -- TODO there has to be a better way
     mbCodeCount <- fromU30LE_vl
     bs <- get
-    let (opcodeBytes, bs2) = DBL.splitAt (fromIntegral mbCodeCount) bs
+    let (opcodeBytes, bs2) = BS.splitAt (fromIntegral mbCodeCount) bs
     put opcodeBytes
     mbCode <- allBytes parseOpCode
     put bs2
@@ -428,7 +426,7 @@ parseMethodBody = do
     where
         allBytes f = do
             bs <- get
-            if DBL.null bs
+            if BS.null bs
                 then return []
                 else do
                     x <- f

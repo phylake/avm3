@@ -6,13 +6,11 @@ import Control.Monad.State (StateT)
 import Data.Int
 import Data.Word
 import qualified Data.ByteString.Lazy as DBL
-import qualified Data.HashTable.IO as H
 
 type Parser a = StateT DBL.ByteString IO a
 --type Parser a = State DBL.ByteString a
 
 type ByteString = DBL.ByteString
-type HashTable k v = H.BasicHashTable k v
 
 type U8 = Word8
 type U30 = Word32

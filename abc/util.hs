@@ -34,9 +34,6 @@ import qualified Util.Words as Util
     , fromS24LE
     )
 
-nWordsT :: Int64 -> Parser [Word8]
-nWordsT n = StateT $ return . nWords n
-
 fromU8 :: Parser Word8
 fromU8 = StateT $ return . Util.fromU8
 

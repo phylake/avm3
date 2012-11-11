@@ -21,7 +21,7 @@ word8ToChar :: Word8 -> Char
 word8ToChar = head . BSC.unpack . BS.singleton
 
 stringToHex :: String -> [String]
-stringToHex str = map showHex' $ BS.unpack $ BSC.pack str
+stringToHex = map showHex' . BS.unpack . BSC.pack
     where
         showHex' = (flip showHex) ""
 
