@@ -4,16 +4,15 @@ module ABC.Deserialize (parseAbc) where
 
 import ABC.Def
 import ABC.Util
-import Control.Concurrent.STM
 import Control.Monad.State
 import Data.Bits
 import Data.Int (Int32)
 import Data.Word
-import System.Environment (getArgs)
 import TFish
 import Util.Words hiding
     (
-      fromU16
+      fromU8
+    , fromU16
     , fromU16LE
     , fromU32
     , fromU32LE
@@ -24,25 +23,16 @@ import Util.Words hiding
     , fromS32LE_vl
     , fromS24LE
     )
-import SWF.Deserialize as SWF hiding (testFile)
 import qualified Data.ByteString.Lazy as DBL
 import qualified Data.ByteString.Lazy.Char8 as DBLC
-import qualified Data.HashTable.IO as H
-
-import Data.List (intersperse)
-
-putStrLn2 :: String -> IO ()
-putStrLn2 = liftIO . putStrLn
-
--- newtype StateT s m a = StateT { runStateT :: s -> m (a, s) }
 
 testFile = DBL.readFile "abc/Test.abc" >>= runStateT parseAbc
 
---parseAbc :: StateT DBL.ByteString IO (HashTable String Abcs)
 parseAbc :: Parser Abc
 parseAbc = do
-    minor <- fromU16LE
-    major <- fromU16LE
+    -- TODO validate these
+    minor <- fromU16LE -- 16
+    major <- fromU16LE -- 46
 
     ints       <- common True fromS32LE_vl
     uints      <- common True fromU32LE_vl
@@ -57,7 +47,7 @@ parseAbc = do
     classCount <- fromU30LE_vl
     instances <- forNState parseInstance classCount
     classes <- forNState parseClass classCount
-    
+
     scripts <- common False parseScript
     methodBodies <- common False parseMethodBody
     return Abc {
@@ -76,9 +66,7 @@ parseAbc = do
       , abcMethodBodies = methodBodies
     }
 
-common :: Bool
-       -> Parser a
-       -> Parser [a]
+common :: Bool -> Parser a -> Parser [a]
 common hasOne f = do
     u30 <- fromU30LE_vl
     let u30' = if hasOne -- make sure 0 and 1 == 0
@@ -369,13 +357,13 @@ parseTraitFunction f = do
 
 parseTraitMethod :: (TraitMethod -> TraitType) -> Parser TraitType
 parseTraitMethod f = do
-    id <- fromU30LE_vl
-    meth <- fromU30LE_vl
+    tmDispId <- fromU30LE_vl
+    tmMethod <- fromU30LE_vl
     return $ f TraitMethod {
-        tmDispId = id
-      , tmMethod = meth
+        tmDispId = tmDispId
+      , tmMethod = tmMethod
     }
-    
+
 {-
     4.9
     class info
@@ -416,12 +404,13 @@ parseMethodBody = do
     mbLocalCount <- fromU30LE_vl
     mbInitScopeDepth <- fromU30LE_vl
     mbMaxScopeDepth <- fromU30LE_vl
-    mbCodeCount <- fromU30LE_vl
 
+    -- TODO there has to be a better way
+    mbCodeCount <- fromU30LE_vl
     bs <- get
     let (opcodeBytes, bs2) = DBL.splitAt (fromIntegral mbCodeCount) bs
     put opcodeBytes
-    mbCode <- consumeT parseOpCode
+    mbCode <- allBytes parseOpCode
     put bs2
 
     mbExceptions <- fromU30LE_vl >>= forNState parseException
@@ -436,22 +425,21 @@ parseMethodBody = do
       , mbExceptions = mbExceptions
       , mbTraits = mbTraits
     }
-
---consumeT :: MonadState DBLC.ByteString m => m a -> m [a]
-consumeT f = do
-    bs <- get
-    if DBL.null bs
-        then return []
-        else do
-            x <- f
-            xs <- consumeT f
-            return $ x:xs
+    where
+        allBytes f = do
+            bs <- get
+            if DBL.null bs
+                then return []
+                else do
+                    x <- f
+                    xs <- allBytes f
+                    return $ x:xs
 
 parseOpCode :: Parser OpCode
-parseOpCode = fromU8 >>= parseOpCodeImpl
+parseOpCode = fromU8 >>= parseOpCodeChoice
 
-parseOpCodeImpl :: Word8 -> Parser OpCode
-parseOpCodeImpl w
+parseOpCodeChoice :: Word8 -> Parser OpCode
+parseOpCodeChoice w
     | w == 0x01 = return Breakpoint
     | w == 0x02 = return Nop
     | w == 0x03 = return Throw

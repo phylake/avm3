@@ -9,43 +9,47 @@ import Data.Monoid (mappend)
 import Data.Word
 import Numeric (showHex)
 import TFish
-import qualified Data.ByteString as DB
-import qualified Data.ByteString.Lazy as DBL
-import qualified Data.ByteString.Char8 as DBC
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC
+
+type ByteString = BS.ByteString
 
 charToWord8 :: Char -> Word8
-charToWord8 = head . DB.unpack . DBC.singleton
+charToWord8 = head . BS.unpack . BSC.singleton
 
 word8ToChar :: Word8 -> Char
-word8ToChar = head . DBC.unpack . DB.singleton
+word8ToChar = head . BSC.unpack . BS.singleton
 
 stringToHex :: String -> [String]
-stringToHex str = map showHex' $ DB.unpack $ DBC.pack str
+stringToHex str = map showHex' $ BS.unpack $ BSC.pack str
     where
         showHex' = (flip showHex) ""
 
 stringToHexRe :: String -> IO ()
 stringToHexRe str = putStrLn $ intercalate "\\s?" $ stringToHex str
 
-nWords :: Int64 -> DBL.ByteString -> ([Word8], DBL.ByteString)
-nWords n bs = (DBL.unpack $ DBL.take n bs, DBL.drop n bs)
+nWords :: Int64 -> ByteString -> ([Word8], ByteString)
+nWords n bs = (BS.unpack $ BS.take n bs, BS.drop n bs)
 
-fromU16 :: DBL.ByteString -> (Word16, DBL.ByteString)
+fromU8 :: ByteString -> (Word8, ByteString)
+fromU8 bs = let ((w:[]), bs') = nWords 1 bs in (w, bs')
+
+fromU16 :: ByteString -> (Word16, ByteString)
 fromU16 bs = let (ws, bs') = nWords 2 bs in (toWord16 ws, bs')
 
-fromU16LE :: DBL.ByteString -> (Word16, DBL.ByteString)
+fromU16LE :: ByteString -> (Word16, ByteString)
 fromU16LE bs = let (ws, bs') = nWords 2 bs in (toWord16LE ws, bs')
 
-fromU32 :: DBL.ByteString -> (Word32, DBL.ByteString)
+fromU32 :: ByteString -> (Word32, ByteString)
 fromU32 bs = let (ws, bs') = nWords 4 bs in (toWord32 ws, bs')
 
-fromU32LE :: DBL.ByteString -> (Word32, DBL.ByteString)
+fromU32LE :: ByteString -> (Word32, ByteString)
 fromU32LE bs = let (ws, bs') = nWords 4 bs in (toWord32LE ws, bs')
 
-fromDouble :: DBL.ByteString -> (Double, DBL.ByteString)
+fromDouble :: ByteString -> (Double, ByteString)
 fromDouble bs = let (ws, bs') = nWords 8 bs in (toDouble ws, bs')
 
-fromDoubleLE :: DBL.ByteString -> (Double, DBL.ByteString)
+fromDoubleLE :: ByteString -> (Double, ByteString)
 fromDoubleLE bs = let (ws, bs') = nWords 8 bs in (toDouble $ reverse ws, bs')
 
 toWord16 :: [Word8] -> Word16
@@ -71,16 +75,16 @@ toDouble = wordToDouble . toWord64
 
 {- variable length integers -}
 
-fromU32LE_vl :: DBL.ByteString -> (Word32, DBL.ByteString)
-fromU32LE_vl bs = let (w64, bs') = varLenUintBSL bs in (fromIntegral w64, bs')
+fromU32LE_vl :: ByteString -> (Word32, ByteString)
+fromU32LE_vl bs = let (w64, bs') = varLenUintLE bs in (fromIntegral w64, bs')
 
-fromU30LE_vl :: DBL.ByteString -> (Word32, DBL.ByteString)
+fromU30LE_vl :: ByteString -> (Word32, ByteString)
 fromU30LE_vl bs = let (w32, bs') = fromU32LE_vl bs in (w32 .&. 0x3fffffff, bs')
 
-fromS24LE :: DBL.ByteString -> (Int32, DBL.ByteString)
+fromS24LE :: ByteString -> (Int32, ByteString)
 fromS24LE bs =
-    let (unpackThese, bs') = DBL.splitAt 3 bs in
-    (fromIntegral . fromS24LE_impl $ map fromIntegral $ DBL.unpack unpackThese, bs')
+    let (unpackThese, bs') = BS.splitAt 3 bs in
+    (fromIntegral . fromS24LE_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
     where
         fromS24LE_impl :: [Word32] -> Word32
         fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
@@ -90,10 +94,10 @@ fromS24LE bs =
                 w2'  =  w2 `shiftL` 8
                 w3'  =  w3
 
-fromS32LE_vl :: DBL.ByteString -> (Int32, DBL.ByteString)
+fromS32LE_vl :: ByteString -> (Int32, ByteString)
 fromS32LE_vl bs =
-    let (unpackThese, bs') = DBL.splitAt (varIntLenBSL bs) bs in
-    (fromIntegral . fromS32LE_vl_impl $ map fromIntegral $ DBL.unpack unpackThese, bs')
+    let (unpackThese, bs') = BS.splitAt (varIntLenBS bs) bs in
+    (fromIntegral . fromS32LE_vl_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
     where
         fromS32LE_vl_impl :: [Word32] -> Word32
         fromS32LE_vl_impl (w1:[]) = sign .|. w1'
@@ -138,14 +142,14 @@ hasSignalBit :: Word8 -> Bool
 hasSignalBit w = w .&. 0x80 == 0x80
 
 {- little-endian -}
-varLenUintBSL :: DBL.ByteString -> (Word64, DBL.ByteString)
-varLenUintBSL bs =
-    let (foldThese, bs') = DBL.splitAt (varIntLenBSL bs) bs in
-    let vli = DBL.foldr (flip foldVarLen) 0 foldThese in
+varLenUintLE :: ByteString -> (Word64, ByteString)
+varLenUintLE bs =
+    let (foldThese, bs') = BS.splitAt (varIntLenBS bs) bs in
+    let vli = BS.foldr (flip foldVarLen) 0 foldThese in
     (vli, bs')
 
-varIntLenBSL :: DBL.ByteString -> Int64
-varIntLenBSL = (+1) . DBL.length . DBL.takeWhile hasSignalBit
+varIntLenBS :: ByteString -> Int64
+varIntLenBS = (+1) . BS.length . BS.takeWhile hasSignalBit
 
 varIntLen :: [Word8] -> Int
 varIntLen = (+1) . length . takeWhile hasSignalBit

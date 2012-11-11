@@ -7,7 +7,8 @@ import Data.Word
 import Control.Monad.State
 import Util.Words hiding
     (
-      fromU16
+      fromU8
+    , fromU16
     , fromU16LE
     , fromU32
     , fromU32LE
@@ -20,7 +21,8 @@ import Util.Words hiding
     )
 import qualified Util.Words as Util
     (
-      fromU16
+      fromU8
+    , fromU16
     , fromU16LE
     , fromU32
     , fromU32LE
@@ -36,9 +38,7 @@ nWordsT :: Int64 -> Parser [Word8]
 nWordsT n = StateT $ return . nWords n
 
 fromU8 :: Parser Word8
-fromU8 = do
-    (w:[]) <- nWordsT 1
-    return w
+fromU8 = StateT $ return . Util.fromU8
 
 fromU16 :: Parser Word16
 fromU16 = StateT $ return . Util.fromU16
