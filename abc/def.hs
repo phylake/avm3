@@ -2,8 +2,8 @@ module ABC.Def where
 
 {-# LANGUAGE BangPatterns #-}
 
-import Control.Monad.State (StateT)
 import Control.DeepSeq
+import Control.Monad.State (StateT)
 import Data.Int
 import Data.Word
 import qualified Data.ByteString.Lazy as DBL
@@ -17,6 +17,20 @@ type U8 = Word8
 type U30 = Word32
 type U32 = Word32
 type S24 = Int32
+
+type IntIdx = U30
+type UintIdx = U30
+type DoubleIdx = U30
+type StringIdx = U30
+type NSInfoIdx = U30
+type NSSetIdx = U30
+type MultinameIdx = U30
+type MethodSignatureIdx = U30
+type MetadataIdx = U30
+type InstanceInfoIdx = U30
+type ClassInfoIdx = U30
+type ScriptInfoIdx = U30
+type MethodBodyIdx = U30
 
 {-
     4.2
@@ -56,165 +70,9 @@ instance NFData Abc where
         `deepseq` ()
 
 {-
-
-Multinames and NSSet have a default I just don't know what it is
-see abc-decode.es
-
--}
-{-defaultAbc :: Abc
-defaultAbc = Abc [0] [0] [0] [""] [NSInfo_Any] [] [] []
-
-abcIntsIdx :: (Integral a) => Abc -> a -> Int32
-abcIntsIdx cp w = abcInts cp !! fromIntegral w
-
-abcIntsF :: Abc -> ([Int32] -> [Int32]) -> Abc
-abcIntsF cp f = abcIntsR (f $ abcInts cp) cp
-
-abcIntsR :: [Int32] -> Abc -> Abc
-abcIntsR value cp = Abc
-    value
-    (abcUints cp)
-    (abcDoubles cp)
-    (abcStrings cp)
-    (abcNsInfo cp)
-    (abcNsSet cp)
-    (abcMultinames cp)
-    (abcMethodSigs cp)
-
-abcUintsIdx :: (Integral a) => Abc -> a -> U30
-abcUintsIdx cp w = abcUints cp !! fromIntegral w
-
-abcUintsF :: Abc -> ([U30] -> [U30]) -> Abc
-abcUintsF cp f = abcUintsR (f $ abcUints cp) cp
-
-abcUintsR :: [U30] -> Abc -> Abc
-abcUintsR value cp = Abc
-    (abcInts cp)
-    value
-    (abcDoubles cp)
-    (abcStrings cp)
-    (abcNsInfo cp)
-    (abcNsSet cp)
-    (abcMultinames cp)
-    (abcMethodSigs cp)
-
-abcDoublesIdx :: (Integral a) => Abc -> a -> Double
-abcDoublesIdx cp w = abcDoubles cp !! fromIntegral w
-
-abcDoublesF :: Abc -> ([Double] -> [Double]) -> Abc
-abcDoublesF cp f = abcDoublesR (f $ abcDoubles cp) cp
-
-abcDoublesR :: [Double] -> Abc -> Abc
-abcDoublesR value cp = Abc
-    (abcInts cp)
-    (abcUints cp)
-    value
-    (abcStrings cp)
-    (abcNsInfo cp)
-    (abcNsSet cp)
-    (abcMultinames cp)
-    (abcMethodSigs cp)
-
-abcStringsIdx :: (Integral a) => Abc -> a -> String
-abcStringsIdx cp w = abcStrings cp !! fromIntegral w
-
-abcStringsF :: Abc -> ([String] -> [String]) -> Abc
-abcStringsF cp f = abcStringsR (f $ abcStrings cp) cp
-
-abcStringsR :: [String] -> Abc -> Abc
-abcStringsR value cp = Abc
-    (abcInts cp)
-    (abcUints cp)
-    (abcDoubles cp)
-    value
-    (abcNsInfo cp)
-    (abcNsSet cp)
-    (abcMultinames cp)
-    (abcMethodSigs cp)
-
-abcNsInfoIdx :: (Integral a) => Abc -> a -> NSInfo
-abcNsInfoIdx cp w = abcNsInfo cp !! fromIntegral w
-
-abcNsInfoF :: Abc -> ([NSInfo] -> [NSInfo]) -> Abc
-abcNsInfoF cp f = abcNsInfoR (f $ abcNsInfo cp) cp
-
-abcNsInfoR :: [NSInfo] -> Abc -> Abc
-abcNsInfoR value cp = Abc
-    (abcInts cp)
-    (abcUints cp)
-    (abcDoubles cp)
-    (abcStrings cp)
-    value
-    (abcNsSet cp)
-    (abcMultinames cp)
-    (abcMethodSigs cp)
-
-abcNsSetIdx :: (Integral a) => Abc -> a -> NSSet
-abcNsSetIdx cp w = abcNsSet cp !! fromIntegral w
-
-abcNsSetF :: Abc -> ([NSSet] -> [NSSet]) -> Abc
-abcNsSetF cp f = abcNsSetR (f $ abcNsSet cp) cp
-
-abcNsSetR :: [NSSet] -> Abc -> Abc
-abcNsSetR value cp = Abc
-    (abcInts cp)
-    (abcUints cp)
-    (abcDoubles cp)
-    (abcStrings cp)
-    (abcNsInfo cp)
-    value
-    (abcMultinames cp)
-    (abcMethodSigs cp)
-
-abcMultinameIdx :: (Integral a) => Abc -> a -> Multiname
-abcMultinameIdx cp w = abcMultinames cp !! fromIntegral w
-
-abcMultinameF :: Abc -> ([Multiname] -> [Multiname]) -> Abc
-abcMultinameF cp f = abcMultinameR (f $ abcMultinames cp) cp
-
-abcMultinameR :: [Multiname] -> Abc -> Abc
-abcMultinameR value cp = Abc
-    (abcInts cp)
-    (abcUints cp)
-    (abcDoubles cp)
-    (abcStrings cp)
-    (abcNsInfo cp)
-    (abcNsSet cp)
-    value
-    (abcMethodSigs cp)
-
-abcMethodSigsIdx :: (Integral a) => Abc -> a -> MethodSignature
-abcMethodSigsIdx cp w = abcMethodSigs cp !! fromIntegral w
-
-abcMethodSigsF :: Abc -> ([MethodSignature] -> [MethodSignature]) -> Abc
-abcMethodSigsF cp f = abcMethodSigsR (f $ abcMethodSigs cp) cp
-
-abcMethodSigsR :: [MethodSignature] -> Abc -> Abc
-abcMethodSigsR value cp = Abc
-    (abcInts cp)
-    (abcUints cp)
-    (abcDoubles cp)
-    (abcStrings cp)
-    (abcNsInfo cp)
-    (abcNsSet cp)
-    (abcMultinames cp)
-    value-}
-
-type DoubleIdx = U30
-type IntIdx = U30
-type UintIdx = U30
-
-{-
-    4.4
-    String
--}
-type StringIdx = U30
-
-{-
     4.4.1
     Namespace
 -}
-type NSInfoIdx = U30
 data NSInfo = {- 0x08 -} NSInfo_Namespace StringIdx
             | {- 0x16 -} NSInfo_PackageNamespace StringIdx
             | {- 0x17 -} NSInfo_PackageInternalNs StringIdx
@@ -233,19 +91,18 @@ instance NFData NSInfo where
     rnf (NSInfo_ExplicitNamespace a) = a `deepseq` ()
     rnf (NSInfo_StaticProtectedNs a) = a `deepseq` ()
     rnf (NSInfo_PrivateNs a) = a `deepseq` ()
+    rnf _ = ()
 
 {-
     4.4.2
     Namespace set
 -}
-type NSSetIdx = U30
 type NSSet = [U30]
 
 {-
     4.4.3
     Multiname
 -}
-type MultinameIdx = U30
 data Multiname = {- 0x07 -} Multiname_QName NSInfoIdx StringIdx
                | {- 0x0D -} Multiname_QNameA NSInfoIdx StringIdx
                | {- 0x0F -} Multiname_RTQName StringIdx
@@ -268,12 +125,12 @@ instance NFData Multiname where
     rnf (Multiname_MultinameA a b) = a `deepseq` b `deepseq` ()
     rnf (Multiname_MultinameL a) = a `deepseq` ()
     rnf (Multiname_MultinameLA a) = a `deepseq` ()
+    rnf _ = ()
 
 {-
     4.5
     Method signature
 -}
-type MethodSignatureIdx = U30
 data MethodSignature = MethodSignature {
                                          returnType :: MultinameIdx
                                        , paramTypes :: [U30]
@@ -469,13 +326,13 @@ instance NFData CPC where
     rnf (CPC_StaticProtectedNs a) = a `deepseq` ()
     rnf (CPC_MultinameL a) = a `deepseq` ()
     rnf (CPC_MultinameLA a) = a `deepseq` ()
+    rnf _ = ()
 
 
 {-
     4.6
     metadata
 -}
-type MetadataIdx = U30
 data Metadata = Metadata {
                            metaName :: StringIdx
                          , kvps :: [(StringIdx, StringIdx)]
@@ -1243,5 +1100,5 @@ instance NFData OpCode where
 {- 0xFD -}
 {- 0xFE -}
 {- 0xFF -}
-
+           rnf _ = ()
 
