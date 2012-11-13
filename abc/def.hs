@@ -390,17 +390,19 @@ instf_CLASS_NON_NULLABLE = 0x10
 
 data TraitsInfo = TraitsInfo {
                                tiName :: MultinameIdx
-                             , tiAttributes :: Word8
+                             , tiFinal :: Bool
+                             , tiOverride :: Bool
                              , tiType :: TraitType
                              , tiMeta :: Maybe [MetadataIdx]
                              }
                              deriving (Show)
 
 instance NFData TraitsInfo where
-    rnf (TraitsInfo a b c d) = a
+    rnf (TraitsInfo a b c d e) = a
         `deepseq` b
         `deepseq` c
         `deepseq` d
+        `deepseq` e
         `deepseq` ()
 
 {-
@@ -474,7 +476,7 @@ instance NFData TraitVar where
 
 data TraitClass = TraitClass {
                                tcId :: U30
-                             , tcInit :: U30
+                             , tcInit :: ClassInfoIdx
                              }
                              deriving (Show)
 
@@ -488,7 +490,7 @@ instance NFData TraitClass where
 
 data TraitFunction = TraitFunction {
                                      tfId :: U30
-                                   , tfFunc :: U30
+                                   , tfFunc :: MethodSignatureIdx
                                    }
                                    deriving (Show)
 
@@ -502,7 +504,7 @@ instance NFData TraitFunction where
 
 data TraitMethod = TraitMethod {
                                  tmDispId :: U30
-                               , tmMethod :: U30
+                               , tmMethod :: MethodSignatureIdx
                                }
                                deriving (Show)
 
@@ -515,7 +517,7 @@ instance NFData TraitMethod where
 -}
 
 data ClassInfo = ClassInfo {
-                             ciInit :: U30
+                             ciInit :: MethodSignatureIdx
                            , ciTraits :: [TraitsInfo]
                            }
                            deriving (Show)
@@ -529,7 +531,7 @@ instance NFData ClassInfo where
 -}
 
 data ScriptInfo = ScriptInfo {
-                               siInit :: U30
+                               siInit :: MethodSignatureIdx
                              , siTraits :: [TraitsInfo]
                              }
                              deriving (Show)

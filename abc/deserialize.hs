@@ -275,12 +275,15 @@ parseTrait = do
     name <- fromU30LE_vl
     kind <- fromU8
     traitType <- traitInfoChoice (kind .&. 0xf)
+    let final = kind .&. 0x10 == 0x10
+    let override = kind .&. 0x20 == 0x20
     meta <- if (kind .&. 0x40 == 0x40)
         then fromU30LE_vl >>= forNState fromU30LE_vl >>= return . Just
         else return Nothing
     return TraitsInfo {
         tiName = name
-      , tiAttributes = kind `shiftR` 4
+      , tiFinal = final
+      , tiOverride = override
       , tiType = traitType
       , tiMeta = meta
     }

@@ -23,12 +23,18 @@ test_file = do
 execute_abc :: Abc -> AVM3 ()
 execute_abc abc = do
     build_ht abc
-    (Just m) <- get_int 1
-    liftIO.putStrLn$ show m
+    {-(Just m) <- get_int 1
+    liftIO.putStrLn$ show m-}
 
-    (Just si) <- get_script ((length $ abcScripts abc) -1)
-    liftIO.putStrLn$ show $ length $ abcScripts abc
+    liftIO.putStrLn$ "scripts length " ++ (show $ length $ abcScripts abc)
+
+    (Just (ScriptInfo _ ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]))) <- get_script $ fromIntegral ((length $ abcScripts abc) -1)
     liftIO.putStrLn$ show $ abcScripts abc
-    liftIO.putStrLn$ show si
+    liftIO.putStrLn$ show idx
+    (Just (ClassInfo msidx _)) <- get_class idx
+    (Just (MethodSignature returnT _ name _ _ _)) <- get_methodSig msidx
 
     return ()
+
+instruction_switch :: Registers -> [Stack] -> [Stack]
+instruction_switch = undefined
