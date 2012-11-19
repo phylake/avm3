@@ -2,3 +2,4 @@
 
 find ./ -path "*.hi" | xargs rm $1
 find ./ -path "*.o" | xargs rm $1
+find ./ -path "*.prof" | xargs rm $1

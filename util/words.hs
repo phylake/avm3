@@ -1,4 +1,33 @@
-module Util.Words where
+module Util.Words (
+    charToWord8
+  , word8ToChar
+  , stringToHex
+  , stringToHexRe
+  , nWords
+  , fromU8
+  , fromU16
+  , fromU16LE
+  , fromU32
+  , fromU32LE
+  , fromDouble
+  , fromDoubleLE
+  , toWord16
+  , toWord16LE
+  , toWord32
+  , toWord32LE
+  , toWord64
+  , toWord64LE
+  , toDouble
+  , fromU32LE_vl
+  , fromU30LE_vl
+  , fromS24LE
+  , fromS32LE_vl
+  , hasSignalBit
+  , varLenUintLE
+  , varIntLenBS
+  , varIntLen
+  , fromU29
+) where
 
 import Control.Applicative ((<$>))
 import Data.Binary.IEEE754 (wordToDouble)
@@ -173,28 +202,3 @@ fromU29 (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
         lsb3 = (w3 .&. 0x7f) `shiftL` 14
         lsb2 = (w2 .&. 0x7f) `shiftL` 7
         lsb1 =  w1 {- NO mask. see spec -}
-
-forN :: (Ord n, Num n, Monad m)
-     => (a -> m a)
-     -> a
-     -> n
-     -> m a
-forN f m n
-    | n > 0     = return m >>= f >>= \m' -> forN f m' (n-1)
-    | otherwise = return m
-
-forN' f a n
-    | n > 0 = forN' f (f a) (n-1)
-    | otherwise = a
-
-t21 = fst
-t22 = snd
-
-t31 (a,_,_) = a
-t32 (_,a,_) = a
-t33 (_,_,a) = a
-
-t41 (a,_,_,_) = a
-t42 (_,a,_,_) = a
-t43 (_,_,a,_) = a
-t44 (_,_,_,a) = a

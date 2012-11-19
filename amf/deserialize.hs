@@ -11,15 +11,19 @@ module Amf.Deserialize where
 
 {-# LANGUAGE BangPatterns #-}
 
-import Data.Binary.IEEE754 (wordToDouble)
-import Data.Bits
-import Data.ByteString (ByteString)
-import Data.Char (digitToInt, intToDigit)
-import Data.Word
---import DiffList
-import Util.Words
-import qualified Data.ByteString as DB
-import qualified Data.ByteString.Char8 as DBC
+import           Amf.Def
+import           Control.DeepSeq
+import           Control.Monad.State
+import           Data.Binary.IEEE754 (wordToDouble)
+import           Data.Bits
+import           Data.ByteString (ByteString)
+import           Data.Char (digitToInt, intToDigit)
+import           Data.Int
+import           Data.Word
+import           Util.Misc
+import           Util.Words
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC
 
 {-
 
@@ -27,8 +31,8 @@ BEGIN test code
 
 -}
 testFile = do
-    bs <- DB.readFile "file.amf"
-    case allFromAmf $ (,) (Acc (DB.unpack bs) 0 nilTable []) [] of
+    bs <- BS.readFile "amf/file.amf"
+    case allFromAmf $ (,) (Acc (BS.unpack bs) 0 nilTable []) [] of
         Left err -> putStrLn err
         Right (acc, as) -> do
             putStrLn "AMFS"
@@ -50,76 +54,6 @@ allFromAmf amft@(acc, amfs) = if (length $ accAs acc) > 0
 END test code
 
 -}
-
-
-type AmfErr = String
-type U29 = Int
-type Assoc_Value = (UTF_8_vr, Amf)
-type AmfT = (Acc Word8, [Amf])
-
--- (Strings, Complex Object, Traits)
-type Tables = ([String], [Amf], [Traits])
-
--- (class name, [properties], dynamic)
-type Traits = (UTF_8_vr, [UTF_8_vr], Bool)
-
-class AmfPrim a where
-    fromAmf :: Acc Word8 -> Either AmfErr (Acc Word8, a)
-
-{-toAmf :: Acc Amf -> Either AmfErr (Acc Amf, DiffList Word8)
-toAmf = undefined-}
-
-data Acc a = Acc {
-                   accAs  :: [a]
-                 , accBs  :: Int
-                 , accTs  :: Tables
-                 , accLog :: [String]
-                 }
-
-data Amf = {- 0x0 -} AmfUndefined {- undefined-marker -}
-         | {- 0x1 -} AmfNull      {- null-marker -}
-         | {- 0x2 -} AmfFalse     {- false-marker -}
-         | {- 0x3 -} AmfTrue      {- true-marker -}
-         | {- 0x4 -} AmfInt U29
-         | {- 0x5 -} AmfDouble Double
-         | {- 0x6 -} AmfString UTF_8_vr
-         | {- 0x7 -} AmfXmlDoc U29X
-         | {- 0x8 -} AmfDate String
-         | {- 0x9 -} AmfArray U29A
-         | {- 0xA -} AmfObject U29O
-         | {- 0xB -} AmfXml U29X
-         | {- 0xC -} AmfByteArray U29B
-
-instance Show Amf where
-    show AmfUndefined      = "undefined"
-    show AmfNull           = "null"
-    show AmfFalse          = "false"
-    show AmfTrue           = "true"
-    show (AmfInt v)        = show v
-    show (AmfDouble v)     = show v
-    show (AmfString v)     = show v
-    show (AmfXmlDoc v)     = show v
-    show (AmfDate v)       = show v
-    show (AmfArray xs)     = show xs
-    --show (AmfObject hs) = show $ map (\(k,v) -> show k ++ ": " ++ show v) hs
-    show (AmfObject v)     = show v
-    show (AmfXml v)        = show v
-    show (AmfByteArray ba) = "bytearray"
-
-instance Eq Amf where
-    (==) AmfUndefined AmfUndefined         = True
-    (==) AmfNull AmfNull                   = True
-    (==) AmfFalse AmfFalse                 = True
-    (==) AmfTrue AmfTrue                   = True
-    (==) (AmfInt a) (AmfInt b)             = a == b
-    (==) (AmfDouble a) (AmfDouble b)       = a == b
-    (==) (AmfString a) (AmfString b)       = a == b
-    (==) (AmfXmlDoc a) (AmfXmlDoc b)       = a == b
-    (==) (AmfDate a) (AmfDate b)           = a == b
-    (==) (AmfArray a) (AmfArray b)         = a == b
-    (==) (AmfObject a) (AmfObject b)       = a == b
-    (==) (AmfXml a) (AmfXml b)             = a == b
-    (==) (AmfByteArray a) (AmfByteArray b) = a == b
 
 fromAmfImpl :: AmfT -> Either AmfErr AmfT
 fromAmfImpl ((Acc [] bs ts log), as) = Right ((Acc [] bs ts log), as)
@@ -164,10 +98,6 @@ fromAmfImpl ((Acc (w:ws) bs ts log), as)
     U29B-value U8*
 -}
 
-data U29B = U29B_Ref U29
-          | U29B_Value [Word8]
-          deriving (Show, Eq)
-
 fromByteArray :: AmfT -> Either AmfErr AmfT
 fromByteArray = refOrValue fromU29BRef fromU29BValue
 
@@ -188,8 +118,6 @@ fromU29BValue len (acc, amfs) = Right $ (,) acc' $ (toByteArray acc) : amfs
     U29O-ref |
     U29X-value UTF8-char*
 -}
-
-type U29X = UTF_8_vr
 
 fromXmlType :: AmfT -> Either AmfErr AmfT
 fromXmlType = fromCommonXml AmfXml
@@ -213,18 +141,6 @@ fromCommonXml c (acc, amfs) = do
     )
     value-type* dynamic-member*
 -}
-
-data U29O = U29O_Ref U29
-          | U29O_TraitsRef [Assoc_Value]
-          | U29O_TraitsExt UTF_8_vr [Word8] {-[Amf] [Assoc_Value]-} --TODO handle this
-          | U29O_Traits [Assoc_Value]
-          deriving (Eq)
-
-instance Show U29O where
-    show (U29O_Ref u29) = "U29O-ref " ++ show u29
-    show (U29O_TraitsRef assocs) = "U29O-traits-ref " ++ show assocs
-    show (U29O_Traits assocs)    = "U29O-traits " ++ show assocs
-    show (U29O_TraitsExt _ _) = show "U29O-traits-ext"
 
 fromObjectType :: AmfT -> Either AmfErr AmfT
 fromObjectType (acc, amfs) = do
@@ -313,10 +229,6 @@ strictProps assocAcc props = do
     )
 -}
 
-data U29A = U29A_Ref U29
-          | U29A_Value [Assoc_Value] [Amf]
-          deriving (Show, Eq)
-
 fromArrayType :: AmfT -> Either AmfErr AmfT
 fromArrayType = refOrValue fromU29ARef fromU29AValue
 
@@ -351,13 +263,9 @@ fromAssoc (acc, kvs) = do
     Char
 -}
 
-data UTF_8_vr = U29S_Ref U29
-              | U29S_Value String
-              deriving (Show, Eq)
-
 instance AmfPrim UTF_8_vr where
-    {-fromAmf = DBC.unpack . DB.pack
-    toAmf = DB.unpack . DBC.pack-}
+    {-fromAmf = BSC.unpack . BS.pack
+    toAmf = BS.unpack . BSC.pack-}
     fromAmf acc = do
         (u29Acc, u29) <- fromAmf acc
         let lenOrIdx = u29 `shiftR` 1
@@ -370,7 +278,7 @@ instance AmfPrim UTF_8_vr where
 fromU29SValue :: Int -> Acc Word8 -> Either AmfErr (Acc Word8, UTF_8_vr)
 fromU29SValue len acc = Right (acc', U29S_Value str)
     where
-        accToStr = DBC.unpack . DB.pack . take len . accAs
+        accToStr = BSC.unpack . BS.pack . take len . accAs
         str = accToStr acc
         acc' = acc
             `fAs` drop len
