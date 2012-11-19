@@ -3,12 +3,19 @@ module Vm.Def where
 import ABC.Def
 import Control.Monad.State (StateT)
 import Data.Int
+import Data.Word
 import qualified Data.HashTable.IO as H
 
 type CPoolHashTable k v = H.BasicHashTable k v
 type AVM3 a = StateT Execution IO a
 
-type ScopeStack = [(String, VmAbc)]
+type Heap = Int
+
+
+data Heapidx_or_VmAbc = Former Int | Latter VmAbc
+
+type Scope = [Heapidx_or_VmAbc] -- indexes into the heap or values
+type ScopeStack = [Scope]
 type Registers = [VmAbc]
 type ConstantPool = IO (CPoolHashTable String VmAbc)
 newtype Execution = Execution { ex :: (ScopeStack, Registers, ConstantPool) }
@@ -25,6 +32,28 @@ type SingleHash = IO (CPoolHashTable String VmAbc)
 
 data Stack = StackCode OpCode
            | StackData VmAbc
+
+data VmMethod = VmMethod {
+                         -- maybe body
+                           vmm_mbody :: Maybe MethodBody
+                         -- method body
+                         , vmm_method :: MethodSignatureIdx
+                         , vmm_maxStack :: U30
+                         , vmm_localCount :: U30
+                         , vmm_initScopeDepth :: U30
+                         , vmm_maxScopeDepth :: U30
+                         , vmm_code :: [OpCode]
+                         , vmm_exceptions :: [Exception]
+                         , vmm_traits :: [TraitsInfo]
+                         -- method signature
+                         , vmm_returnType :: MultinameIdx
+                         , vmm_paramTypes :: [U30]
+                         , vmm_methodName :: StringIdx
+                         , vmm_flags :: Word8
+                         , vmm_optionInfo :: Maybe [CPC]
+                         , vmm_paramNames :: Maybe [U30]
+                         }
+                         deriving (Show)
 
 data VmAbc = VmAbc_Int Int32
            | VmAbc_Uint U30

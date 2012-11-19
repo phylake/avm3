@@ -15,12 +15,12 @@ module Vm.Store (
   , get_methodBody
 ) where
 
-import ABC.Def
-import Control.Applicative ((<$>))
-import Control.Monad.State
-import Data.Int
-import Util.Words (t33)
-import Vm.Def
+import           ABC.Def
+import           Control.Applicative ((<$>))
+import           Control.Monad.State
+import           Data.Int
+import           Util.Misc (t33)
+import           Vm.Def
 import qualified Data.HashTable.IO as H
 
 data HTPrefix = Int_
@@ -40,19 +40,20 @@ data HTPrefix = Int_
 
 build_ht :: Abc -> AVM3 ()
 build_ht abc = do
-    mapM_ (\(idx, i) -> put_int idx i) $ zip (map fromIntegral [0..length ints]) ints
-    mapM_ (\(idx, i) -> put_uint idx i) $ zip (map fromIntegral [0..length uints]) uints
-    mapM_ (\(idx, i) -> put_double idx i) $ zip (map fromIntegral [0..length doubles]) doubles
-    mapM_ (\(idx, i) -> put_string idx i) $ zip (map fromIntegral [0..length strings]) strings
-    mapM_ (\(idx, i) -> put_nsInfo idx i) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
-    mapM_ (\(idx, i) -> put_nsSet idx i) $ zip (map fromIntegral [0..length nsSet]) nsSet
-    mapM_ (\(idx, i) -> put_multiname idx i) $ zip (map fromIntegral [0..length multinames]) multinames
-    mapM_ (\(idx, i) -> put_methodSig idx i) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
-    mapM_ (\(idx, i) -> put_metadata idx i) $ zip (map fromIntegral [0..length metadata]) metadata
-    mapM_ (\(idx, i) -> put_instance idx i) $ zip (map fromIntegral [0..length instances]) instances
-    mapM_ (\(idx, i) -> put_class idx i) $ zip (map fromIntegral [0..length classes]) classes
-    mapM_ (\(idx, i) -> put_script idx i) $ zip (map fromIntegral [0..length scripts]) scripts
-    mapM_ (\(idx, i) -> put_methodBody idx i) $ zip (map fromIntegral [0..length methodBodies]) methodBodies
+    mapM_ (\(idx, a) -> put_int idx a) $ zip (map fromIntegral [0..length ints]) ints
+    mapM_ (\(idx, a) -> put_uint idx a) $ zip (map fromIntegral [0..length uints]) uints
+    mapM_ (\(idx, a) -> put_double idx a) $ zip (map fromIntegral [0..length doubles]) doubles
+    mapM_ (\(idx, a) -> put_string idx a) $ zip (map fromIntegral [0..length strings]) strings
+    mapM_ (\(idx, a) -> put_nsInfo idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
+    mapM_ (\(idx, a) -> put_nsSet idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
+    mapM_ (\(idx, a) -> put_multiname idx a) $ zip (map fromIntegral [0..length multinames]) multinames
+    mapM_ (\(idx, a) -> put_methodSig idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
+    mapM_ (\(idx, a) -> put_metadata idx a) $ zip (map fromIntegral [0..length metadata]) metadata
+    mapM_ (\(idx, a) -> put_instance idx a) $ zip (map fromIntegral [0..length instances]) instances
+    mapM_ (\(idx, a) -> put_class idx a) $ zip (map fromIntegral [0..length classes]) classes
+    mapM_ (\(idx, a) -> put_script idx a) $ zip (map fromIntegral [0..length scripts]) scripts
+    -- reverse lookup: get_methodBody expects a method signature index
+    mapM_ (\(idx, a) -> put_methodBody idx a) $ zip (map mbMethod methodBodies) methodBodies
     where
         ints = abcInts abc
         uints = abcUints abc

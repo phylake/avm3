@@ -132,12 +132,12 @@ instance NFData Multiname where
     Method signature
 -}
 data MethodSignature = MethodSignature {
-                                         returnType :: MultinameIdx
-                                       , paramTypes :: [U30]
-                                       , methodName :: StringIdx -- debug
-                                       , flags :: Word8
-                                       , optionInfo :: Maybe [CPC]
-                                       , paramNames :: Maybe [U30] -- debug
+                                         msReturnType :: MultinameIdx
+                                       , msParamTypes :: [MultinameIdx]
+                                       , msMethodName :: StringIdx -- debug
+                                       , msFlags :: Word8
+                                       , msOptionInfo :: Maybe [CPC]
+                                       , msParamNames :: Maybe [U30] -- debug
                                        }
                                        deriving (Show)
 

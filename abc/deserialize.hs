@@ -162,12 +162,12 @@ parseMethodSignatures = do
         then parseParamNames paramCount
         else return Nothing
     return MethodSignature {
-        returnType = returnType
-      , paramTypes = paramTypes
-      , methodName = name
-      , flags = flags
-      , optionInfo = optionInfo
-      , paramNames = paramNames
+        msReturnType = returnType
+      , msParamTypes = paramTypes
+      , msMethodName = name
+      , msFlags = flags
+      , msOptionInfo = optionInfo
+      , msParamNames = paramNames
     }
 
 {-
