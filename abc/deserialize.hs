@@ -9,6 +9,7 @@ import Data.Bits
 import Data.Int (Int32)
 import Data.Word
 import TFish
+import Util.Misc (allBytes, forNState)
 import Util.Words hiding
     (
       fromU8
@@ -73,14 +74,6 @@ common hasOne f = do
         then fromIntegral $ (u30 <||> 1) - 1
         else fromIntegral u30
     forNState f u30'
-
-forNState :: (Ord n, Num n, Monad m) => m a -> n -> m [a]
-forNState f n = if n > 0
-    then do
-        x <- f
-        xs <- forNState f (n-1)
-        return $ x:xs
-    else do return []
 
 {-
     4.4
@@ -329,13 +322,7 @@ parseTraitVar f = do
 -}
 
 parseTraitClass :: (TraitClass -> TraitType) -> Parser TraitType
-parseTraitClass f = do
-    slot <- fromU30LE_vl
-    init <- fromU30LE_vl
-    return $ f TraitClass {
-        tcId = slot
-      , tcInit = init
-    }
+parseTraitClass f = liftM f $ liftM2 TraitClass fromU30LE_vl fromU30LE_vl
 
 {-
     4.8.4
@@ -343,13 +330,7 @@ parseTraitClass f = do
 -}
 
 parseTraitFunction :: (TraitFunction -> TraitType) -> Parser TraitType
-parseTraitFunction f = do
-    id <- fromU30LE_vl
-    func <- fromU30LE_vl
-    return $ f TraitFunction {
-        tfId = id
-      , tfFunc = func
-    }
+parseTraitFunction f = liftM f $ liftM2 TraitFunction fromU30LE_vl fromU30LE_vl
 
 {-
     4.8.5
@@ -357,13 +338,7 @@ parseTraitFunction f = do
 -}
 
 parseTraitMethod :: (TraitMethod -> TraitType) -> Parser TraitType
-parseTraitMethod f = do
-    tmDispId <- fromU30LE_vl
-    tmMethod <- fromU30LE_vl
-    return $ f TraitMethod {
-        tmDispId = tmDispId
-      , tmMethod = tmMethod
-    }
+parseTraitMethod f = liftM f $ liftM2 TraitMethod fromU30LE_vl fromU30LE_vl
 
 {-
     4.9
@@ -426,15 +401,6 @@ parseMethodBody = do
       , mbExceptions = mbExceptions
       , mbTraits = mbTraits
     }
-    where
-        allBytes f = do
-            bs <- get
-            if BS.null bs
-                then return []
-                else do
-                    x <- f
-                    xs <- allBytes f
-                    return $ x:xs
 
 parseOpCode :: Parser OpCode
 parseOpCode = fromU8 >>= parseOpCodeChoice

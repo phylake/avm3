@@ -1,5 +1,25 @@
 module Util.Misc where
 
+import           Control.Monad.State (get)
+import qualified Data.ByteString.Lazy as BS
+
+forNState :: (Ord n, Num n, Monad m) => m a -> n -> m [a]
+forNState f n = if n > 0
+    then do
+        x <- f
+        xs <- forNState f (n-1)
+        return $ x:xs
+    else do return []
+
+allBytes f = do
+    bs <- get
+    if BS.null bs
+        then return []
+        else do
+            x <- f
+            xs <- allBytes f
+            return $ x:xs
+
 forN :: (Ord n, Num n, Monad m)
      => (a -> m a)
      -> a
