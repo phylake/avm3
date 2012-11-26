@@ -1,14 +1,18 @@
 module Swf.Def where
 
-import Control.DeepSeq
-import Control.Monad.State (StateT)
-import Data.Int
-import Data.Word
+import           Control.DeepSeq
+import           Control.Monad.State (StateT)
+--import           Data.Functor.Identity
+import           Data.Int
+import           Data.Word
 import qualified Data.ByteString.Lazy as BS
 
 type ByteString = BS.ByteString
 
 type Parser a = StateT BS.ByteString IO a
+
+--type BitParser a = State (Float, [Word8]) a
+type BitParser a = StateT (Float, [Word8]) IO a
 
 type U8 = Word8
 type U30 = Word32
@@ -33,10 +37,10 @@ data RGB = RGB Word8 Word8 Word8
          deriving (Show)
 
 data Rect = Rect {
-                   xMin :: Int
-                 , xMax :: Int
-                 , yMin :: Int
-                 , yMax :: Int
+                   xMin :: Word32
+                 , xMax :: Word32
+                 , yMin :: Word32
+                 , yMax :: Word32
                  }
                  deriving (Show)
 

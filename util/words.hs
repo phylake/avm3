@@ -3,6 +3,7 @@ module Util.Words (
   , word8ToChar
   , stringToHex
   , stringToHexRe
+  , shuffle_bits
   , nWords
   , fromU8
   , fromU16
@@ -51,11 +52,24 @@ word8ToChar = head . BSC.unpack . BS.singleton
 
 stringToHex :: String -> [String]
 stringToHex = map showHex' . BS.unpack . BSC.pack
-    where
-        showHex' = (flip showHex) ""
+  where
+    showHex' = (flip showHex) ""
 
 stringToHexRe :: String -> IO ()
 stringToHexRe str = putStrLn $ intercalate "\\s?" $ stringToHex str
+
+shuffle_bits :: (Bits a)
+             => Int --right shift
+             -> [a]
+             -> [a]
+shuffle_bits shift ws = map map_f $ zip (0:init ws) ws
+  where
+    r_shift = shift `mod` 8
+    l_shift = 8 - r_shift
+    r_mask = 0xff `shiftR` r_shift
+    l_mask = 0xff `shiftL` l_shift .&. 0xff
+    map_f = \(w1,w2) -> (w1 `shiftL` l_shift .&. l_mask) .|.
+                        (w2 `shiftR` r_shift .&. r_mask)
 
 nWords :: Int64 -> ByteString -> ([Word8], ByteString)
 nWords n bs = (BS.unpack $ BS.take n bs, BS.drop n bs)
@@ -112,45 +126,45 @@ fromU30LE_vl bs = let (w32, bs') = fromU32LE_vl bs in (w32 .&. 0x3fffffff, bs')
 
 fromS24LE :: ByteString -> (Int32, ByteString)
 fromS24LE bs =
-    let (unpackThese, bs') = BS.splitAt 3 bs in
-    (fromIntegral . fromS24LE_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
-    where
-        fromS24LE_impl :: [Word32] -> Word32
-        fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
-            where
-                sign = (w1 .&. 0x80) `shiftL` 24
-                w1'  = (w1 .&. 0x7f) `shiftL` 16
-                w2'  =  w2 `shiftL` 8
-                w3'  =  w3
+  let (unpackThese, bs') = BS.splitAt 3 bs in
+  (fromIntegral . fromS24LE_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
+  where
+    fromS24LE_impl :: [Word32] -> Word32
+    fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
+      where
+        sign = (w1 .&. 0x80) `shiftL` 24
+        w1'  = (w1 .&. 0x7f) `shiftL` 16
+        w2'  =  w2 `shiftL` 8
+        w3'  =  w3
 
 fromS32LE_vl :: ByteString -> (Int32, ByteString)
 fromS32LE_vl bs =
-    let (unpackThese, bs') = BS.splitAt (varIntLenBS bs) bs in
-    (fromIntegral . fromS32LE_vl_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
-    where
-        fromS32LE_vl_impl :: [Word32] -> Word32
-        fromS32LE_vl_impl (w1:[]) = sign .|. w1'
-            where
-                sign = (w1 .&. 0x40) `shiftL` 25
-                w1'  = (w1 .&. 0x3f) `shiftL` 0
-        fromS32LE_vl_impl (w2:w1:[]) = sign .|. w1' .|. w2'
-            where
-                sign = (w1 .&. 0x40) `shiftL` 25
-                w1'  = (w1 .&. 0x3f) `shiftL` 7
-                w2'  = (w2 .&. 0x7f) `shiftL` 0
-        fromS32LE_vl_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
-            where
-                sign = (w1 .&. 0x40) `shiftL` 25
-                w1'  = (w1 .&. 0x3f) `shiftL` 14
-                w2'  = (w2 .&. 0x7f) `shiftL` 7
-                w3'  = (w3 .&. 0x7f) `shiftL` 0
-        fromS32LE_vl_impl (w4:w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3' .|. w4'
-            where
-                sign = (w1 .&. 0x40) `shiftL` 25
-                w1'  = (w1 .&. 0x3f) `shiftL` 21
-                w2'  = (w2 .&. 0x7f) `shiftL` 14
-                w3'  = (w3 .&. 0x7f) `shiftL` 7
-                w4'  = (w4 .&. 0x7f) `shiftL` 0
+  let (unpackThese, bs') = BS.splitAt (varIntLenBS bs) bs in
+  (fromIntegral . fromS32LE_vl_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
+  where
+    fromS32LE_vl_impl :: [Word32] -> Word32
+    fromS32LE_vl_impl (w1:[]) = sign .|. w1'
+      where
+        sign = (w1 .&. 0x40) `shiftL` 25
+        w1'  = (w1 .&. 0x3f) `shiftL` 0
+    fromS32LE_vl_impl (w2:w1:[]) = sign .|. w1' .|. w2'
+      where
+        sign = (w1 .&. 0x40) `shiftL` 25
+        w1'  = (w1 .&. 0x3f) `shiftL` 7
+        w2'  = (w2 .&. 0x7f) `shiftL` 0
+    fromS32LE_vl_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
+      where
+        sign = (w1 .&. 0x40) `shiftL` 25
+        w1'  = (w1 .&. 0x3f) `shiftL` 14
+        w2'  = (w2 .&. 0x7f) `shiftL` 7
+        w3'  = (w3 .&. 0x7f) `shiftL` 0
+    fromS32LE_vl_impl (w4:w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3' .|. w4'
+      where
+        sign = (w1 .&. 0x40) `shiftL` 25
+        w1'  = (w1 .&. 0x3f) `shiftL` 21
+        w2'  = (w2 .&. 0x7f) `shiftL` 14
+        w3'  = (w3 .&. 0x7f) `shiftL` 7
+        w4'  = (w4 .&. 0x7f) `shiftL` 0
 
 
 foldl' f acc []     = acc
@@ -173,9 +187,9 @@ hasSignalBit w = w .&. 0x80 == 0x80
 {- little-endian -}
 varLenUintLE :: ByteString -> (Word64, ByteString)
 varLenUintLE bs =
-    let (foldThese, bs') = BS.splitAt (varIntLenBS bs) bs in
-    let vli = BS.foldr (flip foldVarLen) 0 foldThese in
-    (vli, bs')
+  let (foldThese, bs') = BS.splitAt (varIntLenBS bs) bs in
+  let vli = BS.foldr (flip foldVarLen) 0 foldThese in
+  (vli, bs')
 
 varIntLenBS :: ByteString -> Int64
 varIntLenBS = (+1) . BS.length . BS.takeWhile hasSignalBit
@@ -185,20 +199,20 @@ varIntLen = (+1) . length . takeWhile hasSignalBit
 
 fromU29 :: (Bits a) => [a] -> a
 fromU29 (w1:[]) = lsb1
-    where
-        lsb1 =  w1 .&. 0x7f
+  where
+    lsb1 =  w1 .&. 0x7f
 fromU29 (w2:w1:[]) = lsb2 .|. lsb1
-    where
-        lsb2 = (w2 .&. 0x7f) `shiftL` 7
-        lsb1 =  w1 .&. 0x7f
+  where
+    lsb2 = (w2 .&. 0x7f) `shiftL` 7
+    lsb1 =  w1 .&. 0x7f
 fromU29 (w3:w2:w1:[]) = lsb3 .|. lsb2 .|. lsb1
-    where
-        lsb3 = (w3 .&. 0x7f) `shiftL` 14
-        lsb2 = (w2 .&. 0x7f) `shiftL` 7
-        lsb1 =  w1 .&. 0x7f
+  where
+    lsb3 = (w3 .&. 0x7f) `shiftL` 14
+    lsb2 = (w2 .&. 0x7f) `shiftL` 7
+    lsb1 =  w1 .&. 0x7f
 fromU29 (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
-    where
-        lsb4 = (w4 .&. 0x7f) `shiftL` 21
-        lsb3 = (w3 .&. 0x7f) `shiftL` 14
-        lsb2 = (w2 .&. 0x7f) `shiftL` 7
-        lsb1 =  w1 {- NO mask. see spec -}
+  where
+    lsb4 = (w4 .&. 0x7f) `shiftL` 21
+    lsb3 = (w3 .&. 0x7f) `shiftL` 14
+    lsb2 = (w2 .&. 0x7f) `shiftL` 7
+    lsb1 =  w1 {- NO mask. see spec -}

@@ -3,22 +3,36 @@ module Util.Misc where
 import           Control.Monad.State (get)
 import qualified Data.ByteString.Lazy as BS
 
+instance Integral Float where
+  quotRem a b = (fab, (ab - fab)*b)
+    where
+      ab = a/b
+      fab = floor ab
+  toInteger = floor
+
+instance Integral Double where
+  quotRem a b = (fab, (ab - fab)*b)
+    where
+      ab = a/b
+      fab = floor ab
+  toInteger = floor
+
 forNState :: (Ord n, Num n, Monad m) => m a -> n -> m [a]
 forNState f n = if n > 0
-    then do
-        x <- f
-        xs <- forNState f (n-1)
-        return $ x:xs
-    else do return []
+  then do
+    x <- f
+    xs <- forNState f (n-1)
+    return $ x:xs
+  else do return []
 
 allBytes f = do
-    bs <- get
-    if BS.null bs
-        then return []
-        else do
-            x <- f
-            xs <- allBytes f
-            return $ x:xs
+  bs <- get
+  if BS.null bs
+    then return []
+    else do
+      x <- f
+      xs <- allBytes f
+      return $ x:xs
 
 forN :: (Ord n, Num n, Monad m)
      => (a -> m a)
@@ -26,12 +40,12 @@ forN :: (Ord n, Num n, Monad m)
      -> n
      -> m a
 forN f m n
-    | n > 0     = return m >>= f >>= \m' -> forN f m' (n-1)
-    | otherwise = return m
+  | n > 0     = return m >>= f >>= \m' -> forN f m' (n-1)
+  | otherwise = return m
 
 forN' f a n
-    | n > 0 = forN' f (f a) (n-1)
-    | otherwise = a
+  | n > 0 = forN' f (f a) (n-1)
+  | otherwise = a
 
 t21 = fst
 t22 = snd

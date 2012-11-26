@@ -1,10 +1,26 @@
-module Swf.Util where
+module Swf.Util (
+    nWords
+  , fromU8
+  , fromU16LE
+  , fromU32LE
+  , fromDoubleLE
+  , fromU32LE_vl
+  , fromU30LE_vl
+  , fromS32LE_vl
+  , fromS24LE
+  , read_variable_bits
+  , read_variable_w32
+  , read_variable_w16
+  , read_variable_w8
+) where
 
-import Swf.Def
+import Control.Monad.State
 import Data.ByteString.Lazy (ByteString)
 import Data.Int
 import Data.Word
-import Control.Monad.State
+import Data.Bits
+import Swf.Def
+import Util.Misc
 import Util.Words hiding
     (
       nWords
@@ -29,9 +45,6 @@ import qualified Util.Words as Util
     , fromS32LE_vl
     , fromS24LE
     )
-
-{-nWords :: Int64 -> ByteString -> ([Word8], ByteString)
-nWords n bs = (BS.unpack $ BS.take n bs, BS.drop n bs)-}
 
 nWords :: Int64 -> Parser [Word8]
 nWords i = StateT $ return . Util.nWords i
@@ -59,3 +72,34 @@ fromS32LE_vl = StateT $ return . Util.fromS32LE_vl
 
 fromS24LE :: Parser Int32
 fromS24LE = StateT $ return . Util.fromS24LE
+
+read_variable_bits :: (Bits a)
+                   => ([Word8] -> a)
+                   -> a -- mask
+                   -> Float
+                   -> BitParser a
+read_variable_bits toWord mask w = do
+  (p,ws) <- get
+  let right = drop (floor$ p/8) ws
+  let middle = take (floor$ (7 + p`mod`8 + w) / 8) right
+  let value = shuffle_bits (floor$ (8 - p - w) `mod` 8) middle
+  put (p+w, ws)
+  return $ toWord value .&. mask
+
+read_variable_w32 :: Float -> BitParser Word32
+read_variable_w32 w = read_variable_bits toWord32 mask w
+  where
+    mask :: Word32
+    mask = 0xffffffff `shiftR` (32 - fromIntegral w)
+
+read_variable_w16 :: Float -> BitParser Word16
+read_variable_w16 w = read_variable_bits toWord16 mask w
+  where
+    mask :: Word16
+    mask = 0xffff `shiftR` (16 - fromIntegral w)
+
+read_variable_w8 :: Float -> BitParser Word8
+read_variable_w8 w = read_variable_bits head mask w
+  where
+    mask :: Word8
+    mask = 0xff `shiftR` (8 - fromIntegral w)
