@@ -3,9 +3,11 @@ module Swf.Deserialize where
 import           Codec.Compression.Zlib
 import           Control.Applicative ((<|>))
 import           Control.Monad.State
+import           Control.Monad
 import           Data.Binary.IEEE754 (wordToFloat)
 import           Data.Bits
 import           Data.Char (digitToInt, intToDigit)
+import           Data.Int (Int64)
 import           Data.Maybe (listToMaybe)
 import           Data.Word
 import           Swf.Def
@@ -73,12 +75,38 @@ parse_rect = do
   let nbits = BS.head bs `shiftR` (8-5)
   let wordWidth = ceiling $ ((fromIntegral nbits)*4 + 5)/8
   ws <- nWords wordWidth
-  liftIO$ evalStateT (rect_parser $ fromIntegral nbits) (5,ws)
+  let rect = evalState (rect_parser $ fromIntegral nbits) (5,ws)
+  return rect
   where
     rect_parser :: Float -> BitParser Rect
     rect_parser nbits = liftM4 Rect rvw32 rvw32 rvw32 rvw32
       where
         rvw32 = read_variable_w32 nbits
+
+parse_matrix :: Parser Matrix
+parse_matrix = do
+  bs <- get
+  let (m,(p,_)) = runState matrix_parser (0, BS.unpack$ BS.take max_bytes bs)
+  put$ BS.drop (ceiling$ p/8) bs
+  return m
+  where
+    max_bytes :: Int64
+    max_bytes = ceiling$ (1+5+31*2)*3/8
+    
+    matrix_parser :: BitParser Matrix
+    matrix_parser = do
+      (scale_x, scale_y) <- matrix_field
+      (rotate0, rotate1) <- matrix_field
+      (translate_x, translate_y) <- matrix_field
+      return $ Matrix scale_x scale_y rotate0 rotate1 translate_x translate_y
+    
+    matrix_field :: BitParser (Word32, Word32)
+    matrix_field = do
+      unless_flag (return (0,0)) $ do
+        nbits <- read_variable_w8 5
+        a <- read_variable_w32$ fromIntegral nbits
+        b <- read_variable_w32$ fromIntegral nbits
+        return (a,b)
 
 parse_string :: Parser String
 parse_string = do

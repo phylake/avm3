@@ -8,7 +8,8 @@ module Swf.Util (
   , fromU30LE_vl
   , fromS32LE_vl
   , fromS24LE
-  , read_variable_bits
+  , unless_flag
+  , read_variable_bool
   , read_variable_w32
   , read_variable_w16
   , read_variable_w8
@@ -73,18 +74,21 @@ fromS32LE_vl = StateT $ return . Util.fromS32LE_vl
 fromS24LE :: Parser Int32
 fromS24LE = StateT $ return . Util.fromS24LE
 
-read_variable_bits :: (Bits a)
-                   => ([Word8] -> a)
-                   -> a -- mask
-                   -> Float
-                   -> BitParser a
-read_variable_bits toWord mask w = do
+unless_flag :: BitParser a -- false action
+            -> BitParser a -- true action
+            -> BitParser a
+unless_flag false true = do
+  bool <- read_variable_bool
+  if bool then true else false
+
+read_variable_bool :: BitParser Bool
+read_variable_bool = do
   (p,ws) <- get
   let right = drop (floor$ p/8) ws
-  let middle = take (floor$ (7 + p`mod`8 + w) / 8) right
-  let value = shuffle_bits (floor$ (8 - p - w) `mod` 8) middle
-  put (p+w, ws)
-  return $ toWord value .&. mask
+  let middle = take (floor$ (7 + p`mod`8 + 1) / 8) right
+  let (w:[]) = shuffle_bits (floor$ (8 - p - 1) `mod` 8) middle
+  put (p+1, ws)
+  return $ w.&.1 == 1
 
 read_variable_w32 :: Float -> BitParser Word32
 read_variable_w32 w = read_variable_bits toWord32 mask w
@@ -103,3 +107,16 @@ read_variable_w8 w = read_variable_bits head mask w
   where
     mask :: Word8
     mask = 0xff `shiftR` (8 - fromIntegral w)
+
+read_variable_bits :: (Bits a)
+                   => ([Word8] -> a)
+                   -> a -- mask
+                   -> Float
+                   -> BitParser a
+read_variable_bits toWord mask w = do
+  (p,ws) <- get
+  let right = drop (floor$ p/8) ws
+  let middle = take (floor$ (7 + p`mod`8 + w) / 8) right
+  let value = shuffle_bits (floor$ (8 - p - w) `mod` 8) middle
+  put (p+w, ws)
+  return $ toWord value .&. mask

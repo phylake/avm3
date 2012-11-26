@@ -1,5 +1,5 @@
 #!/bin/bash
 
-find ./ -path "*.hi" | xargs rm $1
-find ./ -path "*.o" | xargs rm $1
-find ./ -path "*.prof" | xargs rm $1
+find ./ -path "*.hi" | xargs rm -f $1
+find ./ -path "*.o" | xargs rm -f $1
+find ./ -path "*.prof" | xargs rm -f $1

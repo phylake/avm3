@@ -1,7 +1,7 @@
 module Swf.Def where
 
 import           Control.DeepSeq
-import           Control.Monad.State (StateT)
+import           Control.Monad.State (StateT, State)
 --import           Data.Functor.Identity
 import           Data.Int
 import           Data.Word
@@ -11,8 +11,8 @@ type ByteString = BS.ByteString
 
 type Parser a = StateT BS.ByteString IO a
 
---type BitParser a = State (Float, [Word8]) a
-type BitParser a = StateT (Float, [Word8]) IO a
+type BitParser a = State (Float, [Word8]) a
+--type BitParser a = StateT (Float, [Word8]) IO a
 
 type U8 = Word8
 type U30 = Word32
