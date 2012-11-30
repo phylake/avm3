@@ -86,6 +86,37 @@ data Tag = Definition RecordHeader Swf
          | Control
          deriving (Show)
 
+{- chapter 3 The Display List -}
+data PlaceObject = PlaceObject {
+                                 poCharId :: Word16
+                               , poDepth :: Word16
+                               , poMatrix :: Matrix
+                               , poCxform :: ColorXForm
+                               }
+                               deriving (Show)
+
+data PlaceObject2 = PlaceObject2 {
+                                   po2Depth :: Word16
+                                 , po2Matrix :: Maybe Matrix
+                                 , po2Cxform :: Maybe ColorXForm
+                                 , po2Ratio :: Maybe Word16
+                                 , po2Name :: Maybe String
+                                 , po2ClipDepth :: Maybe Word16
+                                 , po2ClipActions :: Maybe ClipActions
+                                 }
+                                 deriving (Show)
+
+data ClipActions = ClipActions {
+                                 caCharId :: Word16
+                               , caDepth :: Word16
+                               , caMatrix :: Matrix
+                               , caCxform :: ColorXForm
+                               }
+                               deriving (Show)
+
+{- chapter 5 Actions -}
+
+
 {- !undocumented tag! -}
 data Swf = Swf_Header Word8 Word32 Rect Word16 Word16
          | {-  0 -} Swf_End

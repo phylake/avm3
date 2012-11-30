@@ -50,7 +50,7 @@ parse_header = do
     then fail "parse_header - invalid header"
     else do
       case word8ToChar cf of
-        'C' -> get >>= put . decompress
+        'C' -> modify decompress
         'F' -> return ()
         otherwise -> fail "parse_header - unknown error"
   frame_size <- parse_rect
@@ -79,16 +79,12 @@ parse_rect = do
   return rect
   where
     rect_parser :: Float -> BitParser Rect
-    rect_parser nbits = liftM4 Rect rvw32 rvw32 rvw32 rvw32
+    rect_parser nbits = liftM4 Rect rv_w32' rv_w32' rv_w32' rv_w32'
       where
-        rvw32 = read_variable_w32 nbits
+        rv_w32' = rv_w32 nbits
 
 parse_matrix :: Parser Matrix
-parse_matrix = do
-  bs <- get
-  let (m,(p,_)) = runState matrix_parser (0, BS.unpack$ BS.take max_bytes bs)
-  put$ BS.drop (ceiling$ p/8) bs
-  return m
+parse_matrix = parse_common max_bytes matrix_parser
   where
     max_bytes :: Int64
     max_bytes = ceiling$ (1+5+31*2)*3/8
@@ -101,19 +97,64 @@ parse_matrix = do
       return $ Matrix scale_x scale_y rotate0 rotate1 translate_x translate_y
     
     matrix_field :: BitParser (Word32, Word32)
-    matrix_field = do
-      unless_flag (return (0,0)) $ do
-        nbits <- read_variable_w8 5
-        a <- read_variable_w32$ fromIntegral nbits
-        b <- read_variable_w32$ fromIntegral nbits
-        return (a,b)
+    matrix_field = unless_flag (return (0,0)) $ do
+      nbits <- rv_w8 5
+      a <- rv_w32$ fromIntegral nbits
+      b <- rv_w32$ fromIntegral nbits
+      return (a,b)
+
+parse_colorxform :: Bool -- alpha
+                 -> Parser ColorXForm
+parse_colorxform alpha = parse_common max_bytes $ cxform_parser alpha
+  where
+    max_bytes :: Int64
+    max_bytes = if alpha
+                  then ceiling$ (1+1+4+15*8)/8
+                  else ceiling$ (1+1+4+15*6)/8
+
+    cxform_parser :: Bool -> BitParser ColorXForm
+    cxform_parser alpha = do
+      has_add_terms <- rv_bool
+      has_mult_terms <- rv_bool
+      nbits <- rv_w16 4
+      let nbits2 = fromIntegral nbits
+      (rM,gM,bM) <- if has_mult_terms
+                      then liftM3 (,,)
+                        (rv_w16 nbits2)
+                        (rv_w16 nbits2)
+                        (rv_w16 nbits2)
+                      else return (0,0,0)
+      aM <- if alpha then liftM Just (rv_w16 nbits2) else return Nothing
+      (rA,gA,bA) <- if has_add_terms
+                      then liftM3 (,,)
+                        (rv_w16 nbits2)
+                        (rv_w16 nbits2)
+                        (rv_w16 nbits2)
+                      else return (0,0,0)
+      aA <- if alpha then liftM Just (rv_w16 nbits2) else return Nothing
+      return ColorXForm {
+         rM = rM
+       , gM = gM
+       , bM = bM
+       , aM = aM
+       , rA = rA
+       , gA = gA
+       , bA = bA
+       , aA = aA
+      }
+
+parse_common :: Int64 -> BitParser a -> Parser a
+parse_common max_bytes parser = do
+  bs <- get
+  let (m,(p,_)) = runState parser (0, BS.unpack$ BS.take max_bytes bs)
+  modify$ BS.drop (ceiling$ p/8)
+  return m
 
 parse_string :: Parser String
 parse_string = do
-  bs <- get
-  stringBytes <- StateT $ return . BS.span (/= 0x00)
-  StateT $ \s -> return ((), BS.drop 1 bs)
-  return $ BSC.unpack stringBytes
+  stringBytes <- StateT$ return. BS.span (/= 0x00)
+  modify$ BS.drop 1
+  return$ BSC.unpack stringBytes
 
 parse_abc :: Parser Swf
 parse_abc = liftM3 Swf_DoABC fromU32LE parse_string get
