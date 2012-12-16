@@ -1,21 +1,21 @@
 module Vm.Store (
-    build_ht
-  , get_int
-  , get_uint
-  , get_double
-  , get_string
-  , get_nsInfo
-  , get_nsSet
-  , get_multiname
-  , get_methodSig
-  , get_metadata
-  , get_instance
-  , get_class
-  , get_script
-  , get_methodBody
+  build_ht
+, get_int
+, get_uint
+, get_double
+, get_string
+, get_nsInfo
+, get_nsSet
+, get_multiname
+, get_methodSig
+, get_metadata
+, get_instance
+, get_class
+, get_script
+, get_methodBody
 ) where
 
-import           ABC.Def
+import           Abc.Def
 import           Control.Applicative ((<$>))
 import           Control.Monad.State
 import           Data.Int
@@ -40,34 +40,34 @@ data HTPrefix = Int_
 
 build_ht :: Abc -> AVM3 ()
 build_ht abc = do
-    mapM_ (\(idx, a) -> put_int idx a) $ zip (map fromIntegral [0..length ints]) ints
-    mapM_ (\(idx, a) -> put_uint idx a) $ zip (map fromIntegral [0..length uints]) uints
-    mapM_ (\(idx, a) -> put_double idx a) $ zip (map fromIntegral [0..length doubles]) doubles
-    mapM_ (\(idx, a) -> put_string idx a) $ zip (map fromIntegral [0..length strings]) strings
-    mapM_ (\(idx, a) -> put_nsInfo idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
-    mapM_ (\(idx, a) -> put_nsSet idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
-    mapM_ (\(idx, a) -> put_multiname idx a) $ zip (map fromIntegral [0..length multinames]) multinames
-    mapM_ (\(idx, a) -> put_methodSig idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
-    mapM_ (\(idx, a) -> put_metadata idx a) $ zip (map fromIntegral [0..length metadata]) metadata
-    mapM_ (\(idx, a) -> put_instance idx a) $ zip (map fromIntegral [0..length instances]) instances
-    mapM_ (\(idx, a) -> put_class idx a) $ zip (map fromIntegral [0..length classes]) classes
-    mapM_ (\(idx, a) -> put_script idx a) $ zip (map fromIntegral [0..length scripts]) scripts
-    -- reverse lookup: get_methodBody expects a method signature index
-    mapM_ (\(idx, a) -> put_methodBody idx a) $ zip (map mbMethod methodBodies) methodBodies
-    where
-        ints = abcInts abc
-        uints = abcUints abc
-        doubles = abcDoubles abc
-        strings = abcStrings abc
-        nsInfo = abcNsInfo abc
-        nsSet = abcNsSet abc
-        multinames = abcMultinames abc
-        methodSigs = abcMethodSigs abc
-        metadata = abcMetadata abc
-        instances = abcInstances abc
-        classes = abcClasses abc
-        scripts = abcScripts abc
-        methodBodies = abcMethodBodies abc
+  mapM_ (\(idx, a) -> put_int idx a) $ zip (map fromIntegral [0..length ints]) ints
+  mapM_ (\(idx, a) -> put_uint idx a) $ zip (map fromIntegral [0..length uints]) uints
+  mapM_ (\(idx, a) -> put_double idx a) $ zip (map fromIntegral [0..length doubles]) doubles
+  mapM_ (\(idx, a) -> put_string idx a) $ zip (map fromIntegral [0..length strings]) strings
+  mapM_ (\(idx, a) -> put_nsInfo idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
+  mapM_ (\(idx, a) -> put_nsSet idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
+  mapM_ (\(idx, a) -> put_multiname idx a) $ zip (map fromIntegral [0..length multinames]) multinames
+  mapM_ (\(idx, a) -> put_methodSig idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
+  mapM_ (\(idx, a) -> put_metadata idx a) $ zip (map fromIntegral [0..length metadata]) metadata
+  mapM_ (\(idx, a) -> put_instance idx a) $ zip (map fromIntegral [0..length instances]) instances
+  mapM_ (\(idx, a) -> put_class idx a) $ zip (map fromIntegral [0..length classes]) classes
+  mapM_ (\(idx, a) -> put_script idx a) $ zip (map fromIntegral [0..length scripts]) scripts
+  -- reverse lookup: get_methodBody expects a method signature index
+  mapM_ (\(idx, a) -> put_methodBody idx a) $ zip (map mbMethod methodBodies) methodBodies
+  where
+    ints = abcInts abc
+    uints = abcUints abc
+    doubles = abcDoubles abc
+    strings = abcStrings abc
+    nsInfo = abcNsInfo abc
+    nsSet = abcNsSet abc
+    multinames = abcMultinames abc
+    methodSigs = abcMethodSigs abc
+    metadata = abcMetadata abc
+    instances = abcInstances abc
+    classes = abcClasses abc
+    scripts = abcScripts abc
+    methodBodies = abcMethodBodies abc
 
 get_int :: U30 -> AVM3 (Maybe Int32)
 get_int = liftM (liftM (\(VmAbc_Int a) -> a)) <$> get_ht Int_
@@ -149,14 +149,14 @@ put_methodBody k v = put_ht MethodBody_ k $ VmAbc_MethodBody v
 
 get_ht :: HTPrefix -> U30 -> AVM3 (Maybe VmAbc)
 get_ht prefix k = do
-    ht <- (gets $ t33.ex) >>= liftIO
-    --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
-    liftIO $ H.lookup ht (show prefix ++ show k)
+  ht <- (gets $ t33.env) >>= liftIO
+  --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
+  liftIO $ H.lookup ht (show prefix ++ show k)
 
 put_ht :: HTPrefix -> U30 -> VmAbc -> AVM3 ()
 put_ht prefix k v = do
-    (a, b, ioht) <- gets ex
-    ht <- liftIO ioht
-    --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
-    liftIO $ H.insert ht (show prefix ++ show k) v
-    put $ Execution (a, b, return ht)
+  (a, b, ioht) <- gets env
+  ht <- liftIO ioht
+  --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
+  liftIO $ H.insert ht (show prefix ++ show k) v
+  put $ Execution (a, b, return ht)

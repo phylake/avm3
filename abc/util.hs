@@ -1,6 +1,6 @@
-module ABC.Util where
+module Abc.Util where
 
-import ABC.Def
+import Abc.Def
 import Data.ByteString.Lazy (ByteString)
 import Data.Int
 import Data.Word

@@ -9,9 +9,9 @@ import qualified Data.ByteString.Lazy as BS
 
 type ByteString = BS.ByteString
 
-type Parser a = StateT BS.ByteString IO a
+type Parser = StateT BS.ByteString IO
 
-type BitParser a = State (Float, [Word8]) a
+type BitParser = State (Float, [Word8])
 --type BitParser a = StateT (Float, [Word8]) IO a
 
 type U8 = Word8

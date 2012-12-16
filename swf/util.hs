@@ -109,10 +109,10 @@ rv_w8 w = rv_bits head mask w
     mask = 0xff `shiftR` (8 - fromIntegral w)
 
 rv_bits :: (Bits a)
-                   => ([Word8] -> a)
-                   -> a -- mask
-                   -> Float
-                   -> BitParser a
+        => ([Word8] -> a)
+        -> a -- mask
+        -> Float
+        -> BitParser a
 rv_bits toWord mask w = do
   (p,ws) <- get
   let right = drop (floor$ p/8) ws

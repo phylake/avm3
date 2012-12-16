@@ -1,9 +1,9 @@
-module ABC.Deserialize (parseAbc) where
+module Abc.Deserialize (parseAbc) where
 
 {-# LANGUAGE BangPatterns #-}
 
-import ABC.Def
-import ABC.Util
+import Abc.Def
+import Abc.Util
 import Control.Monad.State
 import Data.Bits
 import Data.Int (Int32)

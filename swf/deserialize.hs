@@ -147,7 +147,7 @@ parse_common :: Int64 -> BitParser a -> Parser a
 parse_common max_bytes parser = do
   bs <- get
   let (m,(p,_)) = runState parser (0, BS.unpack$ BS.take max_bytes bs)
-  modify$ BS.drop (ceiling$ p/8)
+  modify$ BS.drop (ceiling$ p/8) -- ceiling for padding
   return m
 
 parse_string :: Parser String
