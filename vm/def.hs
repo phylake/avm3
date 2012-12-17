@@ -14,35 +14,13 @@ type ScopeStack = [Scope]-}
 
 type ConstantPool = H.BasicHashTable String VmAbc
 
---newtype Execution = Execution { ex :: (ScopeStack, Registers, ConstantPool) }
-newtype Execution = Execution { env :: ([Int], Registers, IO ConstantPool) }--TEMP
+--newtype Execution = Execution { env :: (ScopeStack, Registers, IO ConstantPool) }
+newtype Execution = Execution { env :: ([Int], [Int], IO ConstantPool) }
 
 {-
   "The indexing of elements on the local scope stack is the reverse of the
   indexing of elements on the local operand stack."
 -}
-
-data VmMethod = VmMethod {
-                         -- maybe body
-                           vmm_mbody :: Maybe MethodBody
-                         -- method body
-                         {-, vmm_method :: MethodSignatureIdx
-                         , vmm_maxStack :: U30
-                         , vmm_localCount :: U30
-                         , vmm_initScopeDepth :: U30
-                         , vmm_maxScopeDepth :: U30
-                         , vmm_code :: [OpCode]
-                         , vmm_exceptions :: [Exception]
-                         , vmm_traits :: [TraitsInfo]-}
-                         -- method signature
-                         , vmm_returnType :: MultinameIdx
-                         , vmm_paramTypes :: [U30]
-                         , vmm_methodName :: StringIdx
-                         , vmm_flags :: Word8
-                         , vmm_optionInfo :: Maybe [CPC]
-                         , vmm_paramNames :: Maybe [U30]
-                         }
-                         deriving (Show)
 
 type VmObject = H.BasicHashTable String VmRt
 --type ScopeStack = [H.BasicHashTable Multiname VmObject]
@@ -50,9 +28,10 @@ type VmObject = H.BasicHashTable String VmRt
 type ScopeStack = [VmObject]
 
 type Registers = [VmRt]
-type Ops = [VmRtOps]
-data VmRtOps = O OpCode
-             | D VmRt
+type Ops = [VmRtOp]
+data VmRtOp = O OpCode
+            | D VmRt
+            deriving (Show)
 
 data VmRt = VmRt_Undefined
           | VmRt_Null
@@ -61,7 +40,9 @@ data VmRt = VmRt_Undefined
           | VmRt_Double Double
           | VmRt_String String
           | VmRt_Object VmObject
+          deriving (Show)
 
+{- 1:1 transformation of Abc to an ADT -}
 data VmAbc = VmAbc_Int Int32
            | VmAbc_Uint U30
            | VmAbc_Double Double

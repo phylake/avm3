@@ -557,7 +557,7 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x55 -} NewObject U30
             | {- 0x56 -} NewArray U30
             | {- 0x57 -} NewActivation
-            | {- 0x58 -} NewClass U30
+            | {- 0x58 -} NewClass ClassInfoIdx
             | {- 0x59 -} GetDescendants MultinameIdx
             | {- 0x5A -} NewCatch U30
             | {- 0x5B -} FindPropGlobalStrict   {-NEW from Tamarin (internal)-}
@@ -573,7 +573,7 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x65 -} GetScopeObject U8
             | {- 0x66 -} GetProperty MultinameIdx
             | {- 0x67 -} GetPropertyLate
-            | {- 0x68 -} InitProperty U30
+            | {- 0x68 -} InitProperty MultinameIdx
             | {- 0x69 -} SetPropertyLate
             | {- 0x6A -} DeleteProperty U30
             | {- 0x6B -} DeletePropertyLate
