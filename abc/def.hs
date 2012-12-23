@@ -1,6 +1,5 @@
-module Abc.Def where
-
 {-# LANGUAGE BangPatterns #-}
+module Abc.Def where
 
 import Control.Monad.State (StateT)
 import Data.Int

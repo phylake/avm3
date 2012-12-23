@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Vm.Execute where
 
 import           Abc.DeepSeq
@@ -7,7 +8,7 @@ import           Control.Applicative
 import           Control.DeepSeq
 import           Data.Int
 import           Data.Word
-import           MonadLib
+import           MonadLib hiding (get, set)
 import           TFish
 import           Util.Misc
 import           Util.Words
@@ -24,41 +25,44 @@ test_file = do
   {-abc `deepseq` evalStateT (execute_abc abc) $ Execution ([], [], H.new)
   return ()-}
   ht <- H.new
-  abc `deepseq` runStateT ([],[],[],ht) (execute_abc abc)
+  (either::Either String (), _) <- abc `deepseq`
+    (runStateT ([],[],[],ht)$ runExceptionT$ execute_abc abc)
+  case either of
+    Left err -> putStrLn err
+    otherwise -> return ()
 
 execute_abc :: Abc -> AVM3 ()
 execute_abc abc = do
   build_cp abc
   cp <- get_cp
 
-  lift.putStrLn$ show $ abcStrings abc
-  lift.putStrLn$ show $ abcNsInfo abc
-  --lift.putStrLn$ "nssets " ++ (show $ abcNsSet abc)
-  lift.putStrLn$ show $ abcMultinames abc
-  lift.putStrLn$ "\nmethod bodies\n" ++ unlines (map (show.mbCode) $ abcMethodBodies abc)
-  --lift.putStrLn$ "scripts length " ++ (show $ length $ abcScripts abc)
+  liftIO.putStrLn$ show $ abcStrings abc
+  liftIO.putStrLn$ show $ abcNsInfo abc
+  --liftIO.putStrLn$ "nssets " ++ (show $ abcNsSet abc)
+  liftIO.putStrLn$ show $ abcMultinames abc
+  liftIO.putStrLn$ "\nmethod bodies\n" ++ unlines (map (show.mbCode) $ abcMethodBodies abc)
+  --liftIO.putStrLn$ "scripts length " ++ (show $ length $ abcScripts abc)
 
-  Just (ScriptInfo initMeth ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[])) <- get_script $ fromIntegral ((length $ abcScripts abc) - 1)
-  lift.putStrLn$ unlines$ map show$ abcScripts abc
-  lift.putStrLn$ show idx
-  Just (ClassInfo msidx _) <- get_class idx
-  Just (MethodSignature returnT _ name _ _ _) <- get_methodSig msidx
-  Just (MethodBody _ _ _ _ _ mb_Code _ mb_Traits) <- get_methodBody msidx
-  --(Just (MethodBody _ _ _ _ _ mb_Code _ mb_Traits)) <- get_methodBody cp initMeth
-  lift.putStrLn$ show mb_Code
+  ScriptInfo initMeth ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]) <- get_script $ fromIntegral ((length $ abcScripts abc) - 1)
+  liftIO.putStrLn$ unlines$ map show$ abcScripts abc
+  liftIO.putStrLn$ show idx
+  ClassInfo msidx _ <- get_class idx
+  MethodSignature returnT _ name _ _ _ <- get_methodSig msidx
+  MethodBody _ _ _ _ _ mb_Code _ mb_Traits <- get_methodBody msidx
+  liftIO.putStrLn$ show mb_Code
   
-  (lift build_global_scope) >>= set_ss
+  (liftIO build_global_scope) >>= set_ss
   set_ops ((O$ NewClass idx):O PushScope:O ReturnVoid:[])
-  lift.putStrLn$ "-------------------------------------------"
+  liftIO.putStrLn$ "-------------------------------------------"
   run_method
-  lift.putStrLn$ "-------------------------------------------"
+  liftIO.putStrLn$ "-------------------------------------------"
 
   return ()
 
 show_ops :: String -> AVM3 ()
 show_ops header = do
-  lift.putStrLn$ header
-  get_ops >>= lift. putStrLn. unlines. map (\s -> "\t" ++ show s)
+  liftIO.putStrLn$ header
+  get_ops >>= liftIO. putStrLn. unlines. map (\s -> "\t" ++ show s)
 
 build_global_scope :: IO ScopeStack
 build_global_scope = do
@@ -70,8 +74,19 @@ build_global_scope = do
 
   return [global]
 
+{-
+NOTE
+  not parameterizing run_method just yet because it's easy to extract state
+  and operate on a nested level as if the function was parameterized. It's hard
+  to change a bunch of function signatures around as I figure out how this
+  should work
+ASIDE
+  this might be nice
+  type AVM3_2 = StateT (Registers, Ops) (StateT (ScopeStack, ConstantPool) IO)
+-}
 run_method :: AVM3 ()
 run_method = do
+  show_ops "run_method"
   get_ops >>= switch
   ops <- get_ops
   case ops of
@@ -80,7 +95,7 @@ run_method = do
   where
     switch :: Ops -> AVM3 ()
     switch ((D (VmRt_Object v)):(O PushScope):ops) = set_ops ops >> push_scope v
-    switch (_:(O PushScope):ops) = fail "fpm - PushScope"
+    switch (_:(O PushScope):ops) = raise "switch - PushScope"
     switch ((O (NewClass idx)):ops) = set_ops ops >> new_class idx
     switch ((O (FindProperty idx)):ops) = set_ops ops >> find_property idx
     switch ((O (GetLex idx)):ops) = set_ops ops >> get_lex idx
@@ -112,21 +127,15 @@ push_scope v = mod_ss ((:)v)
 
 new_class :: ClassInfoIdx -> AVM3 ()
 new_class idx = do
-  lift.putStrLn$ "NewClass"
-  maybeClassInfo <- get_class idx
-  case maybeClassInfo of
-    Nothing -> fail "NewClass - no ClassInfo"
-    Just (ClassInfo msi traits) -> do
-      maybeMethodBody <- get_methodBody msi
-      case maybeMethodBody of
-        Nothing -> fail "NewClass - no MethodBody"
-        Just (MethodBody _ _ _ _ _ code _ _) -> do
-          global <- get_ss >>= return.last
-          klass <- lift$ H.new
-          prep_method_entry klass code
-          klass_name <- class_name traits
-          lift$ H.insert global klass_name (VmRt_Object klass) -- TODO this won't make it
-          return ()
+  show_ops "NewClass"
+  ClassInfo msi traits <- get_class idx
+  MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
+  global <- get_ss >>= return.last
+  klass <- liftIO$ H.new
+  prep_method_entry klass code
+  klass_name <- class_name traits
+  liftIO$ H.insert global klass_name (VmRt_Object klass) -- TODO this won't make it
+  return ()
   where
     class_name :: [TraitsInfo] -> AVM3 String
     class_name traits = return "Test"
@@ -159,7 +168,7 @@ find_property idx = do
       {-list <- H.toList top
       putStrLn$ show list
       putStrLn$ "key " ++ key-}
-      maybeValue <- lift$ H.lookup top key
+      maybeValue <- liftIO$ H.lookup top key
       case maybeValue of
         Nothing -> search_stack key stack
         Just value -> return$ Just value
@@ -173,11 +182,13 @@ get_scoped_object :: U8 -> AVM3 ()
 get_scoped_object idx = do
   show_ops "GetScopeObject"
   ss <- get_ss
-  mod_ops$ (:)$ D$ VmRt_Object$ ss !! (fromIntegral idx)
+  mod_ops$ cons$ ss !! (fromIntegral idx)
+  where
+    cons = (:). D. VmRt_Object
 
 init_property :: VmObject -> MultinameIdx -> AVM3 ()
 init_property this idx = do
-  lift.putStrLn$ "InitProperty"
+  liftIO.putStrLn$ "InitProperty"
   name <- resolve_multiname idx
   return ()
   --return$ VmRt_Object this
