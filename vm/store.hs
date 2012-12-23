@@ -17,9 +17,9 @@ module Vm.Store (
 
 import           Abc.Def
 import           Control.Applicative ((<$>))
-import           Control.Monad.State
 import           Data.Int
-import           Util.Misc (t33)
+import           MonadLib
+import           Util.Misc (t44)
 import           Vm.Def
 import qualified Data.HashTable.IO as H
 
@@ -38,24 +38,22 @@ data HTPrefix = Int_
               | MethodBody_
               deriving (Show)
 
-build_cp :: Abc -> IO ConstantPool
+build_cp :: Abc -> AVM3 ()
 build_cp abc = do
-  cp <- H.new
-  mapM_ (\(idx, a) -> put_int cp idx a) $ zip (map fromIntegral [0..length ints]) ints
-  mapM_ (\(idx, a) -> put_uint cp idx a) $ zip (map fromIntegral [0..length uints]) uints
-  mapM_ (\(idx, a) -> put_double cp idx a) $ zip (map fromIntegral [0..length doubles]) doubles
-  mapM_ (\(idx, a) -> put_string cp idx a) $ zip (map fromIntegral [0..length strings]) strings
-  mapM_ (\(idx, a) -> put_nsInfo cp idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
-  mapM_ (\(idx, a) -> put_nsSet cp idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
-  mapM_ (\(idx, a) -> put_multiname cp idx a) $ zip (map fromIntegral [0..length multinames]) multinames
-  mapM_ (\(idx, a) -> put_methodSig cp idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
-  mapM_ (\(idx, a) -> put_metadata cp idx a) $ zip (map fromIntegral [0..length metadata]) metadata
-  mapM_ (\(idx, a) -> put_instance cp idx a) $ zip (map fromIntegral [0..length instances]) instances
-  mapM_ (\(idx, a) -> put_class cp idx a) $ zip (map fromIntegral [0..length classes]) classes
-  mapM_ (\(idx, a) -> put_script cp idx a) $ zip (map fromIntegral [0..length scripts]) scripts
+  mapM_ (\(idx, a) -> put_int idx a) $ zip (map fromIntegral [0..length ints]) ints
+  mapM_ (\(idx, a) -> put_uint idx a) $ zip (map fromIntegral [0..length uints]) uints
+  mapM_ (\(idx, a) -> put_double idx a) $ zip (map fromIntegral [0..length doubles]) doubles
+  mapM_ (\(idx, a) -> put_string idx a) $ zip (map fromIntegral [0..length strings]) strings
+  mapM_ (\(idx, a) -> put_nsInfo idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
+  mapM_ (\(idx, a) -> put_nsSet idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
+  mapM_ (\(idx, a) -> put_multiname idx a) $ zip (map fromIntegral [0..length multinames]) multinames
+  mapM_ (\(idx, a) -> put_methodSig idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
+  mapM_ (\(idx, a) -> put_metadata idx a) $ zip (map fromIntegral [0..length metadata]) metadata
+  mapM_ (\(idx, a) -> put_instance idx a) $ zip (map fromIntegral [0..length instances]) instances
+  mapM_ (\(idx, a) -> put_class idx a) $ zip (map fromIntegral [0..length classes]) classes
+  mapM_ (\(idx, a) -> put_script idx a) $ zip (map fromIntegral [0..length scripts]) scripts
   -- reverse lookup: get_methodBody expects a method signature index
-  mapM_ (\(idx, a) -> put_methodBody cp idx a) $ zip (map mbMethod methodBodies) methodBodies
-  return cp
+  mapM_ (\(idx, a) -> put_methodBody idx a) $ zip (map mbMethod methodBodies) methodBodies
   where
     ints = abcInts abc
     uints = abcUints abc
@@ -71,91 +69,93 @@ build_cp abc = do
     scripts = abcScripts abc
     methodBodies = abcMethodBodies abc
 
-get_int :: ConstantPool -> U30 -> IO (Maybe Int32)
-get_int cp idx = liftM (\(VmAbc_Int a) -> a) <$> get_ht Int_ cp idx
+get_int :: U30 -> AVM3 (Maybe Int32)
+get_int = liftM (liftM (\(VmAbc_Int a) -> a)) <$> get_ht Int_
 
-put_int :: ConstantPool -> U30 -> Int32 -> IO ConstantPool
-put_int cp k v = put_ht Int_ cp k $ VmAbc_Int v
+put_int :: U30 -> Int32 -> AVM3 ()
+put_int k v = put_ht Int_ k $ VmAbc_Int v
 
-get_uint :: ConstantPool -> U30 -> IO (Maybe U30)
-get_uint cp idx = liftM (\(VmAbc_Uint a) -> a) <$> get_ht Uint_ cp idx
+get_uint :: U30 -> AVM3 (Maybe U30)
+get_uint = liftM (liftM (\(VmAbc_Uint a) -> a)) <$> get_ht Uint_
 
-put_uint :: ConstantPool -> U30 -> U30 -> IO ConstantPool
-put_uint cp k v = put_ht Uint_ cp k $ VmAbc_Uint v
+put_uint :: U30 -> U30 -> AVM3 ()
+put_uint k v = put_ht Uint_ k $ VmAbc_Uint v
 
-get_double :: ConstantPool -> U30 -> IO (Maybe Double)
-get_double cp idx = liftM (\(VmAbc_Double a) -> a) <$> get_ht Double_ cp idx
+get_double :: U30 -> AVM3 (Maybe Double)
+get_double = liftM (liftM (\(VmAbc_Double a) -> a)) <$> get_ht Double_
 
-put_double :: ConstantPool -> U30 -> Double -> IO ConstantPool
-put_double cp k v = put_ht Double_ cp k $ VmAbc_Double v
+put_double :: U30 -> Double -> AVM3 ()
+put_double k v = put_ht Double_ k $ VmAbc_Double v
 
-get_string :: ConstantPool -> U30 -> IO (Maybe String)
-get_string cp idx = liftM (\(VmAbc_String a) -> a) <$> get_ht String_ cp idx
+get_string :: U30 -> AVM3 (Maybe String)
+get_string = liftM (liftM (\(VmAbc_String a) -> a)) <$> get_ht String_
 
-put_string :: ConstantPool -> U30 -> String -> IO ConstantPool
-put_string cp k v = put_ht String_ cp k $ VmAbc_String v
+put_string :: U30 -> String -> AVM3 ()
+put_string k v = put_ht String_ k $ VmAbc_String v
 
-get_nsInfo :: ConstantPool -> U30 -> IO (Maybe NSInfo)
-get_nsInfo cp idx = liftM (\(VmAbc_NsInfo a) -> a) <$> get_ht NsInfo_ cp idx
+get_nsInfo :: U30 -> AVM3 (Maybe NSInfo)
+get_nsInfo = liftM (liftM (\(VmAbc_NsInfo a) -> a)) <$> get_ht NsInfo_
 
-put_nsInfo :: ConstantPool -> U30 -> NSInfo -> IO ConstantPool
-put_nsInfo cp k v = put_ht NsInfo_ cp k $ VmAbc_NsInfo v
+put_nsInfo :: U30 -> NSInfo -> AVM3 ()
+put_nsInfo k v = put_ht NsInfo_ k $ VmAbc_NsInfo v
 
-get_nsSet :: ConstantPool -> U30 -> IO (Maybe NSSet)
-get_nsSet cp idx = liftM (\(VmAbc_NsSet a) -> a) <$> get_ht NsSet_ cp idx
+get_nsSet :: U30 -> AVM3 (Maybe NSSet)
+get_nsSet = liftM (liftM (\(VmAbc_NsSet a) -> a)) <$> get_ht NsSet_
 
-put_nsSet :: ConstantPool -> U30 -> NSSet -> IO ConstantPool
-put_nsSet cp k v = put_ht NsSet_ cp k $ VmAbc_NsSet v
+put_nsSet :: U30 -> NSSet -> AVM3 ()
+put_nsSet k v = put_ht NsSet_ k $ VmAbc_NsSet v
 
-get_multiname :: ConstantPool -> U30 -> IO (Maybe Multiname)
-get_multiname cp idx = liftM (\(VmAbc_Multiname a) -> a) <$> get_ht Multiname_ cp idx
+get_multiname :: U30 -> AVM3 (Maybe Multiname)
+get_multiname = liftM (liftM (\(VmAbc_Multiname a) -> a)) <$> get_ht Multiname_
 
-put_multiname :: ConstantPool -> U30 -> Multiname -> IO ConstantPool
-put_multiname cp k v = put_ht Multiname_ cp k $ VmAbc_Multiname v
+put_multiname :: U30 -> Multiname -> AVM3 ()
+put_multiname k v = put_ht Multiname_ k $ VmAbc_Multiname v
 
-get_methodSig :: ConstantPool -> U30 -> IO (Maybe MethodSignature)
-get_methodSig cp idx = liftM (\(VmAbc_MethodSig a) -> a) <$> get_ht MethodSig_ cp idx
+get_methodSig :: U30 -> AVM3 (Maybe MethodSignature)
+get_methodSig = liftM (liftM (\(VmAbc_MethodSig a) -> a)) <$> get_ht MethodSig_
 
-put_methodSig :: ConstantPool -> U30 -> MethodSignature -> IO ConstantPool
-put_methodSig cp k v = put_ht MethodSig_ cp k $ VmAbc_MethodSig v
+put_methodSig :: U30 -> MethodSignature -> AVM3 ()
+put_methodSig k v = put_ht MethodSig_ k $ VmAbc_MethodSig v
 
-get_metadata :: ConstantPool -> U30 -> IO (Maybe Metadata)
-get_metadata cp idx = liftM (\(VmAbc_Metadata a) -> a) <$> get_ht Metadata_ cp idx
+get_metadata :: U30 -> AVM3 (Maybe Metadata)
+get_metadata = liftM (liftM (\(VmAbc_Metadata a) -> a)) <$> get_ht Metadata_
 
-put_metadata :: ConstantPool -> U30 -> Metadata -> IO ConstantPool
-put_metadata cp k v = put_ht Metadata_ cp k $ VmAbc_Metadata v
+put_metadata :: U30 -> Metadata -> AVM3 ()
+put_metadata k v = put_ht Metadata_ k $ VmAbc_Metadata v
 
-get_instance :: ConstantPool -> U30 -> IO (Maybe InstanceInfo)
-get_instance cp idx = liftM (\(VmAbc_Instance a) -> a) <$> get_ht Instance_ cp idx
+get_instance :: U30 -> AVM3 (Maybe InstanceInfo)
+get_instance = liftM (liftM (\(VmAbc_Instance a) -> a)) <$> get_ht Instance_
 
-put_instance :: ConstantPool -> U30 -> InstanceInfo -> IO ConstantPool
-put_instance cp k v = put_ht Instance_ cp k $ VmAbc_Instance v
+put_instance :: U30 -> InstanceInfo -> AVM3 ()
+put_instance k v = put_ht Instance_ k $ VmAbc_Instance v
 
-get_class :: ConstantPool -> U30 -> IO (Maybe ClassInfo)
-get_class cp idx = liftM (\(VmAbc_Class a) -> a) <$> get_ht Class_ cp idx
+get_class :: U30 -> AVM3 (Maybe ClassInfo)
+get_class = liftM (liftM (\(VmAbc_Class a) -> a)) <$> get_ht Class_
 
-put_class :: ConstantPool -> U30 -> ClassInfo -> IO ConstantPool
-put_class cp k v = put_ht Class_ cp k $ VmAbc_Class v
+put_class :: U30 -> ClassInfo -> AVM3 ()
+put_class k v = put_ht Class_ k $ VmAbc_Class v
 
-get_script :: ConstantPool -> U30 -> IO (Maybe ScriptInfo)
-get_script cp idx = liftM (\(VmAbc_Script a) -> a) <$> get_ht Script_ cp idx
+get_script :: U30 -> AVM3 (Maybe ScriptInfo)
+get_script = liftM (liftM (\(VmAbc_Script a) -> a)) <$> get_ht Script_
 
-put_script :: ConstantPool -> U30 -> ScriptInfo -> IO ConstantPool
-put_script cp k v = put_ht Script_ cp k $ VmAbc_Script v
+put_script :: U30 -> ScriptInfo -> AVM3 ()
+put_script k v = put_ht Script_ k $ VmAbc_Script v
 
-get_methodBody :: ConstantPool -> U30 -> IO (Maybe MethodBody)
-get_methodBody cp idx = liftM (\(VmAbc_MethodBody a) -> a) <$> get_ht MethodBody_ cp idx
+get_methodBody :: U30 -> AVM3 (Maybe MethodBody)
+get_methodBody = liftM (liftM (\(VmAbc_MethodBody a) -> a)) <$> get_ht MethodBody_
 
-put_methodBody :: ConstantPool -> U30 -> MethodBody -> IO ConstantPool
-put_methodBody cp k v = put_ht MethodBody_ cp k $ VmAbc_MethodBody v
+put_methodBody :: U30 -> MethodBody -> AVM3 ()
+put_methodBody k v = put_ht MethodBody_ k $ VmAbc_MethodBody v
 
-get_ht :: HTPrefix -> ConstantPool -> U30 -> IO (Maybe VmAbc)
-get_ht prefix ht k = do
-  --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
-  H.lookup ht (show prefix ++ show k)
+get_ht :: HTPrefix -> U30 -> AVM3 (Maybe VmAbc)
+get_ht prefix k = do
+  (a,b,c,ht) <- get
+  --lift.putStrLn$ "prefix " ++ show prefix ++ show k
+  lift $ H.lookup ht (show prefix ++ show k)
 
-put_ht :: HTPrefix -> ConstantPool -> U30 -> VmAbc -> IO ConstantPool
-put_ht prefix ht k v = do
-  --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
-  H.insert ht (show prefix ++ show k) v
-  return ht
+put_ht :: HTPrefix -> U30 -> VmAbc -> AVM3 ()
+put_ht prefix k v = do
+  (a,b,c,ht) <- get
+  --lift.putStrLn$ "prefix " ++ show prefix ++ show k
+  lift $ H.insert ht (show prefix ++ show k) v
+  set (a,b,c,ht)

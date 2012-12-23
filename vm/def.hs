@@ -1,26 +1,25 @@
 module Vm.Def where
 
 import Abc.Def
-import Control.Monad.State (StateT)
+import MonadLib
 import Data.Int
 import Data.Word
 import qualified Data.HashTable.IO as H
 
+type ConstantPool = H.BasicHashTable String VmAbc
+type Execution = (Registers, Ops, ScopeStack, ConstantPool)
 type AVM3 = StateT Execution IO
 
 {-data Heapidx_or_VmAbc = Former Int | Latter VmAbc
 type Scope = [Heapidx_or_VmAbc] -- indexes into the heap or values
 type ScopeStack = [Scope]-}
 
-type ConstantPool = H.BasicHashTable String VmAbc
-
---newtype Execution = Execution { env :: (ScopeStack, Registers, IO ConstantPool) }
-newtype Execution = Execution { env :: ([Int], [Int], IO ConstantPool) }
-
 {-
   "The indexing of elements on the local scope stack is the reverse of the
   indexing of elements on the local operand stack."
 -}
+
+data HeapObject = Hn VmObject | H_func VmObject ScopeStack
 
 type VmObject = H.BasicHashTable String VmRt
 --type ScopeStack = [H.BasicHashTable Multiname VmObject]
