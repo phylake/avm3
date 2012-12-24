@@ -12,24 +12,13 @@ type Execution = (Registers, Ops, ScopeStack, ConstantPool)
 type AVM3_State = ML.StateT Execution IO
 type AVM3 = ML.ExceptionT String AVM3_State
 
-{-data Heapidx_or_VmAbc = Former Int | Latter VmAbc
-type Scope = [Heapidx_or_VmAbc] -- indexes into the heap or values
-type ScopeStack = [Scope]-}
-
-{-
-  "The indexing of elements on the local scope stack is the reverse of the
-  indexing of elements on the local operand stack."
--}
-
 data HeapObject = Hn VmObject | H_func VmObject ScopeStack
 
 type VmObject = H.BasicHashTable String VmRt
---type ScopeStack = [H.BasicHashTable Multiname VmObject]
---type ScopeStack = [H.BasicHashTable String VmObject]
 type ScopeStack = [VmObject]
-
 type Registers = [VmRt]
 type Ops = [VmRtOp]
+
 data VmRtOp = O OpCode
             | D VmRt
             deriving (Show)

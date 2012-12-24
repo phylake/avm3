@@ -19,14 +19,6 @@ resolve_nsinfo idx = do
     NSInfo_PrivateNs stringIdx -> get_string stringIdx
     NSInfo_Any -> return "*"
 
-{-
-TODO resolve against
-  1. method closures
-  2. declared traits
-  3. dynamic properties
-  4. prototype chain
-see findpropstrict
--}
 resolve_multiname :: MultinameIdx -> AVM3 String
 resolve_multiname idx = do
   --putStrLn "resolve_multiname"

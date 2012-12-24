@@ -28,7 +28,7 @@ test_file = do
   (either::Either String (), _) <- abc `deepseq`
     (runStateT ([],[],[],ht)$ runExceptionT$ execute_abc abc)
   case either of
-    Left err -> putStrLn err
+    Left err -> Prelude.putStrLn$ "EXCEPTION\n\t" ++ err
     otherwise -> return ()
 
 execute_abc :: Abc -> AVM3 ()
@@ -40,31 +40,37 @@ execute_abc abc = do
   liftIO.putStrLn$ show $ abcNsInfo abc
   --liftIO.putStrLn$ "nssets " ++ (show $ abcNsSet abc)
   liftIO.putStrLn$ show $ abcMultinames abc
-  liftIO.putStrLn$ "\nmethod bodies\n" ++ unlines (map (show.mbCode) $ abcMethodBodies abc)
-  --liftIO.putStrLn$ "scripts length " ++ (show $ length $ abcScripts abc)
+  --liftIO.putStrLn$ "\nmethod bodies\n" ++ unlines (map (show.mbCode) $ abcMethodBodies abc)
+  --liftIO.putStrLn$ "\nscripts\n" ++ unlines (map show$ abcScripts abc)
 
-  ScriptInfo initMeth ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]) <- get_script $ fromIntegral ((length $ abcScripts abc) - 1)
-  liftIO.putStrLn$ unlines$ map show$ abcScripts abc
-  liftIO.putStrLn$ show idx
-  ClassInfo msidx _ <- get_class idx
+  ScriptInfo _ ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]) <- get_script 0
+  {-ClassInfo msidx _ <- get_class idx
   MethodSignature returnT _ name _ _ _ <- get_methodSig msidx
-  MethodBody _ _ _ _ _ mb_Code _ mb_Traits <- get_methodBody msidx
-  liftIO.putStrLn$ show mb_Code
+  MethodBody _ _ _ _ _ mb_Code _ _ <- get_methodBody msidx-}
   
-  (liftIO build_global_scope) >>= set_ss
-  set_ops ((O$ NewClass idx):O PushScope:O ReturnVoid:[])
   liftIO.putStrLn$ "-------------------------------------------"
-  run_method
+  global <- liftIO build_global_scope
+  set_ss [global]
+  let ops = [O$ NewClass idx,O PushScope,O ReturnVoid]
+  run_function [VmRt_Object global] ops
   liftIO.putStrLn$ "-------------------------------------------"
 
   return ()
 
-show_ops :: String -> AVM3 ()
+{-show_ops :: String -> AVM3 ()
 show_ops header = do
   liftIO.putStrLn$ header
-  get_ops >>= liftIO. putStrLn. unlines. map (\s -> "\t" ++ show s)
+  get_ops >>= liftIO. putStrLn. unlines. map (\s -> "\t" ++ show s)-}
 
-build_global_scope :: IO ScopeStack
+show_ops :: String -> Ops -> AVM3 ()
+show_ops header ops = do
+  liftIO.putStrLn$ header
+  liftIO. putStrLn. unlines$ map (\s -> "\t" ++ show s) ops
+
+prep_method_entry :: VmObject -> [OpCode] -> AVM3 Ops
+prep_method_entry this code = return$ (D$ VmRt_Object this):(O SetLocal0):(map O code)
+
+build_global_scope :: IO VmObject
 build_global_scope = do
   int <- H.new
   H.insert int "MAX_VALUE" (VmRt_Int 2147483647)
@@ -72,78 +78,62 @@ build_global_scope = do
   global <- H.new
   H.insert global "int" (VmRt_Object int)
 
-  return [global]
+  return global
 
-{-
-NOTE
-  not parameterizing run_method just yet because it's easy to extract state
-  and operate on a nested level as if the function was parameterized. It's hard
-  to change a bunch of function signatures around as I figure out how this
-  should work
-ASIDE
-  this might be nice
-  type AVM3_2 = StateT (Registers, Ops) (StateT (ScopeStack, ConstantPool) IO)
--}
-run_method :: AVM3 ()
-run_method = do
-  show_ops "run_method"
-  get_ops >>= switch
-  ops <- get_ops
-  case ops of
-    (op:ops') -> run_method
-    otherwise -> return ()
-  where
-    switch :: Ops -> AVM3 ()
-    switch ((D (VmRt_Object v)):(O PushScope):ops) = set_ops ops >> push_scope v
-    switch (_:(O PushScope):ops) = raise "switch - PushScope"
-    switch ((O (NewClass idx)):ops) = set_ops ops >> new_class idx
-    switch ((O (FindProperty idx)):ops) = set_ops ops >> find_property idx
-    switch ((O (GetLex idx)):ops) = set_ops ops >> get_lex idx
-    switch ((O (GetScopeObject idx)):ops) = set_ops ops >> get_scoped_object idx
-    switch ((D (VmRt_Object this)):(O (InitProperty idx)):ops) = set_ops ops >> init_property this idx
-    switch ((O GetLocal0):ops) = do
-      set_ops ops
-      (this:reg) <- get_reg
-      mod_ops$ \ops -> D this:ops
-    switch ((O GetLocal1):ops) = do
-      set_ops ops
-      (this:a:reg) <- get_reg
-      mod_ops$ \ops -> D a:ops
-    switch ((O GetLocal2):ops) = do
-      set_ops ops
-      (this:a:b:reg) <- get_reg
-      mod_ops$ \ops -> D b:ops
-    switch ((O GetLocal3):ops) = do
-      set_ops ops
-      (this:a:b:c:reg) <- get_reg
-      mod_ops$ \ops -> D c:ops
-    switch ((D new):(O SetLocal0):ops) = set_ops ops >> mod_reg (\(this:      reg) -> (         new:reg))
-    switch ((D new):(O SetLocal1):ops) = set_ops ops >> mod_reg (\(this:a:    reg) -> (this:    new:reg))
-    switch ((D new):(O SetLocal2):ops) = set_ops ops >> mod_reg (\(this:a:b:  reg) -> (this:a:  new:reg))
-    switch ((D new):(O SetLocal3):ops) = set_ops ops >> mod_reg (\(this:a:b:c:reg) -> (this:a:b:new:reg))
+run_function :: Registers -> Ops -> AVM3 VmRt
+-- run_function {- 0xA0   -} reg ((D a):(D b):(O Add):ops) = run_function reg ((D$ a+b):ops)
+-- run_function {- 0x30 1 -} reg (_:(O PushScope):ops) = raise "run_function - PushScope"
+run_function {-      0 -} reg2 [] = raise "empty ops"
+run_function {-      1 -} reg2 ((D ret):[]) = return ret
+run_function {- 0x1D   -} reg ((O PopScope):ops) = pop_scope >> run_function reg ops
+run_function {- 0x24   -} reg ((O (PushByte u8)):ops) = run_function reg ((D$ VmRt_Int$ fromIntegral u8):ops)
+run_function {- 0x30 0 -} reg ((D (VmRt_Object v)):(O PushScope):ops) = push_scope v >> run_function reg ops
+run_function {- 0x47   -} reg ((O ReturnVoid):_) = return VmRt_Undefined
+run_function {- 0x48   -} reg ((D v):(O ReturnValue):_) = return v
+run_function {- 0x58   -} reg ((O (NewClass idx)):ops) = new_class idx >> run_function reg ops
+run_function {- 0x5E   -} reg ((O (FindProperty idx)):ops) = find_property idx >> run_function reg ops
+run_function {- 0x60   -} reg ((O (GetLex idx)):ops) = get_lex idx ops >>= run_function reg
+run_function {- 0x65   -} reg ((O (GetScopeObject idx)):ops) = get_scoped_object idx >> run_function reg ops
+run_function {- 0x68   -} reg ((D (VmRt_Object this)):(O (InitProperty idx)):ops) = init_property this idx >> run_function reg ops
+run_function {- 0xD0   -} reg@(r:      []) ((O GetLocal0):ops) = run_function reg (D r:ops)
+run_function {- 0xD1   -} reg@(_:r:    []) ((O GetLocal1):ops) = run_function reg (D r:ops)
+run_function {- 0xD2   -} reg@(_:_:r:  []) ((O GetLocal2):ops) = run_function reg (D r:ops)
+run_function {- 0xD3   -} reg@(_:_:_:r:[]) ((O GetLocal3):ops) = run_function reg (D r:ops)
+run_function {- 0xD4   -} (this:      reg) ((D new):(O SetLocal0):ops) = run_function (         new:reg) ops
+run_function {- 0xD5   -} (this:a:    reg) ((D new):(O SetLocal1):ops) = run_function (this:    new:reg) ops
+run_function {- 0xD6   -} (this:a:b:  reg) ((D new):(O SetLocal2):ops) = run_function (this:a:  new:reg) ops
+run_function {- 0xD7   -} (this:a:b:c:reg) ((D new):(O SetLocal3):ops) = run_function (this:a:b:new:reg) ops
+
+
+
 
 push_scope :: VmObject -> AVM3 ()
 push_scope v = mod_ss ((:)v)
 
-new_class :: ClassInfoIdx -> AVM3 ()
+pop_scope :: AVM3 ()
+pop_scope = mod_ss tail
+
+new_class :: ClassInfoIdx -> AVM3 VmRt
 new_class idx = do
-  show_ops "NewClass"
+  --show_ops "NewClass"
   ClassInfo msi traits <- get_class idx
   MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
-  global <- get_ss >>= return.last
-  klass <- liftIO$ H.new
-  prep_method_entry klass code
+  scope_stack <- get_ss
+  let global = last scope_stack
+  klass <- liftIO$ H.new >>= return.VmRt_Object
+  let ops = map O code
+  liftIO.putStrLn$ "ops: " ++ show ops
+  liftIO.putStrLn$ "running function"
+  run_function [klass] ops
   klass_name <- class_name traits
-  liftIO$ H.insert global klass_name (VmRt_Object klass) -- TODO this won't make it
-  return ()
+  liftIO$ H.insert global klass_name klass
+  set_ss$ init scope_stack ++ [global]
+  return klass
   where
     class_name :: [TraitsInfo] -> AVM3 String
     class_name traits = return "Test"
-    prep_method_entry :: VmObject -> [OpCode] -> AVM3 Ops
-    prep_method_entry this code = return$ (D$ VmRt_Object this):(O SetLocal0):(map O code)
 
-
-{- TODO dynamic multinames -}
+{- TODO dynamic multinames (pattern match Ops) -}
 {-
 TODO resolve against
   1. method closures
@@ -154,10 +144,12 @@ TODO resolve against
 find_property :: MultinameIdx -> AVM3 ()
 find_property idx = do
   name <- resolve_multiname idx
+  liftIO.putStrLn$ "find_property " ++ show name
   attempt1 <- get_ss >>= search_stack name
   obj <- case attempt1 of
     Just obj -> return obj
-    Nothing -> traits_ref
+    --Nothing -> traits_ref
+    Nothing -> raise "couldn't find_property"
   return ()
   where
     traits_ref = undefined
@@ -165,22 +157,27 @@ find_property idx = do
     search_stack :: String -> ScopeStack -> AVM3 (Maybe VmRt)
     search_stack key [] = return Nothing
     search_stack key (top:stack) = do
-      {-list <- H.toList top
-      putStrLn$ show list
-      putStrLn$ "key " ++ key-}
+      {-list <- liftIO$ H.toList top
+      liftIO.putStrLn$ show list
+      liftIO.putStrLn$ "key " ++ key-}
       maybeValue <- liftIO$ H.lookup top key
       case maybeValue of
         Nothing -> search_stack key stack
         Just value -> return$ Just value
 
-get_lex :: MultinameIdx -> AVM3 ()
-get_lex idx = do
-  show_ops "GetLex"
-  mod_ops$ \ops -> ((O$ FindPropStrict idx):(O$ GetProperty idx):ops)
+get_lex :: MultinameIdx -> Ops -> AVM3 Ops
+get_lex idx ops = do
+  --show_ops "GetLex"
+  return$ (O$ FindPropStrict idx):(O$ GetProperty idx):ops
+
+{-
+  "The indexing of elements on the local scope stack is the reverse of the
+  indexing of elements on the local operand stack."
+-}
 
 get_scoped_object :: U8 -> AVM3 ()
 get_scoped_object idx = do
-  show_ops "GetScopeObject"
+  --show_ops "GetScopeObject"
   ss <- get_ss
   mod_ops$ cons$ ss !! (fromIntegral idx)
   where
