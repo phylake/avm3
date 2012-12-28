@@ -23,13 +23,38 @@ data VmRtOp = O OpCode
             | D VmRt
             deriving (Show)
 
+{-
+  Seriously considering a different representation of VmRt_Object to enable
+  pure functions outside of monads in order to keep Emca.Prims classes simple
+  (and implementable). Part of the entire reason to use haskell is to find the
+  path of least resistance toward correctness. If i'm resorting to a series of
+  string lookups I'm hardly leveraging the type system anymore
+
+  What keeps bringing me back to the hashtable is all the name resolution I have
+  to do
+
+  The lookups are primarily on the ScopeStack (i.e. findprop). Could I do a
+  transformation of ScopeStack VmObjects to VmRt_Objects of a pure type on
+  which to operate?
+-}
+
+{-
+TODO
+ 1) the primitives are objects but since they have a fixed set of immutable
+    methods I can pattern match for things like callproperty along the lines of
+    (D vmrt:O CallProperty):ops -> custom_method
+ 2) method closures: Maybe ScopeStack ?
+ 3) refcounts/heap: type RefCount = Int ?
+ 4) consider resolving all strings eagerly to avoid lookups in the hashtable
+-}
 data VmRt = VmRt_Undefined
           | VmRt_Null
+          | VmRt_Boolean Bool
           | VmRt_Int Int32
-          | VmRt_Uint U30
-          | VmRt_Double Double
+          | VmRt_Uint Word32
+          | VmRt_Number Double
           | VmRt_String String
-          | VmRt_Object VmObject
+          | VmRt_Object VmObject {-RefCount-} {-(Maybe ScopeStack)-}
           deriving (Show)
 
 {- 1:1 transformation of Abc to an ADT -}

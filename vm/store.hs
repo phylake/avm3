@@ -52,7 +52,8 @@ build_cp abc = do
   mapM_ (\(idx, a) -> put_instance idx a) $ zip (map fromIntegral [0..length instances]) instances
   mapM_ (\(idx, a) -> put_class idx a) $ zip (map fromIntegral [0..length classes]) classes
   mapM_ (\(idx, a) -> put_script idx a) $ zip (map fromIntegral [0..length scripts]) scripts
-  -- reverse lookup: get_methodBody expects a method signature index
+  -- reverse lookup: get_methodBody expects a method signature index since a
+  -- method body index doesn't exist
   mapM_ (\(idx, a) -> put_methodBody idx a) $ zip (map mbMethod methodBodies) methodBodies
   where
     ints = abcInts abc
