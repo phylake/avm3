@@ -1,7 +1,5 @@
 module Abc.Deserialize (parseAbc) where
 
-{-# LANGUAGE BangPatterns #-}
-
 import Abc.Def
 import Abc.Util
 import Control.Monad.State
@@ -68,12 +66,14 @@ parseAbc = do
     }
 
 common :: Bool -> Parser a -> Parser [a]
-common hasOne f = do
-    u30 <- fromU30LE_vl
-    let u30' = if hasOne -- make sure 0 and 1 == 0
-        then fromIntegral $ (u30 <||> 1) - 1
-        else fromIntegral u30
-    forNState f u30'
+common hasOne f = fromU30LE_vl >>= u30' hasOne >>= forNState f
+    where
+        u30' :: Bool -> U30 -> Parser Int
+        u30' hasOne u30
+            | hasOne == True && u30 == 0 = return 0
+            | hasOne == True && u30 == 1 = return 0
+            | hasOne == True = return$fromIntegral u30-1
+            | otherwise = return$fromIntegral u30
 
 {-
     4.4

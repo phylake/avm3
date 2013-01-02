@@ -1,14 +1,11 @@
-{-# LANGUAGE BangPatterns #-}
 module Abc.Def where
 
 import Control.Monad.State (StateT)
 import Data.Int
-import Data.Hashable
 import Data.Word
 import qualified Data.ByteString.Lazy as DBL
 
-type Parser a = StateT DBL.ByteString IO a
---type Parser a = State DBL.ByteString a
+type Parser = StateT DBL.ByteString IO
 
 type ByteString = DBL.ByteString
 
@@ -88,38 +85,6 @@ data Multiname = {- 0x07 -} Multiname_QName NSInfoIdx StringIdx
                | {- 0x1C -} Multiname_MultinameLA NSSetIdx
                |            Multiname_Any
                deriving (Show)
-
-{-instance Hashable Multiname where
-  hash         (Multiname_QName a b) = hashWithSalt 1 (a+b)
-  hashWithSalt (Multiname_QName a b) = hashWithSalt 1 (a+b)
-  hash         (Multiname_QNameA a b) = hashWithSalt 2 (a+b)
-  hashWithSalt (Multiname_QNameA a b) = hashWithSalt 2 (a+b)
-  hash         (Multiname_RTQName a) = hashWithSalt 3 a
-  hashWithSalt (Multiname_RTQName a) = hashWithSalt 3 a
-  hash         (Multiname_RTQNameA a) = hashWithSalt 4 a
-  hashWithSalt (Multiname_RTQNameA a) = hashWithSalt 4 a
-  hash         (Multiname_RTQNameL) = hashWithSalt 5 1
-  hashWithSalt (Multiname_RTQNameL) = hashWithSalt 5 1
-  hash         (Multiname_RTQNameLA) = hashWithSalt 6 1
-  hashWithSalt (Multiname_RTQNameLA) = hashWithSalt 6 1
-  hash         (Multiname_Multiname a b) = hashWithSalt 7 (a+b)
-  hashWithSalt (Multiname_Multiname a b) = hashWithSalt 7 (a+b)
-  hash         (Multiname_MultinameA a b) = hashWithSalt 8 (a+b)
-  hashWithSalt (Multiname_MultinameA a b) = hashWithSalt 8 (a+b)
-  hash         (Multiname_MultinameL a) = hashWithSalt 9 a
-  hashWithSalt (Multiname_MultinameL a) = hashWithSalt 9 a
-  hash         (Multiname_MultinameLA a) = hashWithSalt 10 a
-  hashWithSalt (Multiname_MultinameLA a) = hashWithSalt 10 a
-  hash         (Multiname_Any) = hashWithSalt 11 1
-  hashWithSalt (Multiname_Any) = hashWithSalt 11 1-}
-
-
-
-
-
-
-
-
 
 {-
     4.5
