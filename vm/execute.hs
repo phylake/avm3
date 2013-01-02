@@ -4,12 +4,15 @@ module Vm.Execute where
 import           Abc.DeepSeq
 import           Abc.Def
 import           Abc.Deserialize
+import           Abc.Json
+import           Abc.Json2
 import           Control.Applicative
 import           Control.DeepSeq
 import           Data.Int
 import           Data.Word
 import           Ecma.Prims
 import           MonadLib hiding (get, set)
+import           Text.JSON
 import           TFish
 import           Util.Misc
 import           Util.Words
@@ -23,9 +26,8 @@ import qualified Data.HashTable.IO as H
 
 test_file = do
   bs <- BS.readFile "abc/Test.abc"
-  abc <- S.evalStateT parseAbc bs
-  {-abc `deepseq` evalStateT (execute_abc abc) $ Execution ([], [], H.new)
-  return ()-}
+  (abc :: Abc) <- S.evalStateT parseAbc bs
+  writeFile "abc/Test.abc.json"$ encode$ abcToJson abc
   ht <- H.new
   (either::Either String (), _) <- abc `deepseq`
     (runStateT ([],[],[],ht)$ runExceptionT$ execute_abc abc)
@@ -44,6 +46,7 @@ execute_abc abc = do
   liftIO.putStrLn$ show $ abcMultinames abc
   --liftIO.putStrLn$ "\nmethod bodies\n" ++ unlines (map (show.mbCode) $ abcMethodBodies abc)
   --liftIO.putStrLn$ "\nscripts\n" ++ unlines (map show$ abcScripts abc)
+  liftIO.putStrLn$ "\nclassinfos\n" ++ unlines (map show$ abcClasses abc)
 
   ScriptInfo _ ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]) <- get_script 0
   {-ClassInfo msidx _ <- get_class idx
@@ -52,9 +55,8 @@ execute_abc abc = do
   
   liftIO.putStrLn$ "-------------------------------------------"
   global <- liftIO build_global_scope
-  set_ss [global]
   let ops = [O$ NewClass idx,O PushScope,O ReturnVoid]
-  run_function [VmRt_Object global] ops
+  run_function [global] [VmRt_Object global] ops
   liftIO.putStrLn$ "-------------------------------------------"
 
   return ()
@@ -82,48 +84,51 @@ build_global_scope = do
 
   return global
 
-run_function :: Registers -> Ops -> AVM3 VmRt
 run_function = r_f
 
-r_f :: Registers -> Ops -> AVM3 VmRt
--- r_f {- 0xA0   -} reg ((D a):(D b):(O Add):ops) = r_f reg ((D$ a+b):ops)
+{-
+ScopeStack is first because i'm replicating as3 closures with
+real haskell closures for now
+-}
+r_f :: ScopeStack -> Registers -> Ops -> AVM3 VmRt
+-- r_f {- 0xA0   -} reg ((D a):(D b):(O Add):ops) = r_f ss reg ((D$ a+b):ops)
 -- r_f {- 0x30 1 -} reg (_:(O PushScope):ops) = raise "r_f - PushScope"
-r_f {-      0 -} reg [] = raise "empty ops"
-r_f {-      1 -} reg (D ret:[]) = return ret
-r_f {- 0x1D   -} reg (O PopScope:ops) = pop_scope >> r_f reg ops
-r_f {- 0x24   -} reg (O (PushByte u8):ops) = r_f reg$ (D$ VmRt_Int$ fromIntegral u8):ops
-r_f {- 0x26   -} reg (O PushTrue:ops) = r_f reg$ (D$ VmRt_Boolean True):ops
-r_f {- 0x27   -} reg (O PushFalse:ops) = r_f reg$ (D$ VmRt_Boolean False):ops
-r_f {- 0x28   -} reg (O PushNaN:ops) = r_f reg$ (D$ VmRt_Number nan):ops
-r_f {- 0x29   -} reg (D _:O Pop:ops) = r_f reg ops
-r_f {- 0x2A   -} reg (D a:O Dup:ops) = r_f reg (D a:D a:ops)
-r_f {- 0x2B   -} reg (D a:D b:O Swap:ops) = r_f reg (D b:D a:ops)
-r_f {- 0x2C   -} reg (O (PushString idx):ops) = get_string idx >>= \v -> r_f reg$ (D$ VmRt_String v):ops
-r_f {- 0x2D   -} reg (O (PushInt idx):ops) = get_int idx >>= \v -> r_f reg$ (D$ VmRt_Int v):ops
-r_f {- 0x2E   -} reg (O (PushUInt idx):ops) = get_uint idx >>= \v -> r_f reg$ (D$ VmRt_Uint v):ops
-r_f {- 0x2F   -} reg (O (PushDouble idx):ops) = get_double idx >>= \v -> r_f reg$ (D$ VmRt_Number v):ops
-r_f {- 0x30 0 -} reg (D (VmRt_Object v):(O PushScope):ops) = push_scope v >> r_f reg ops
-r_f {- 0x47   -} reg (O ReturnVoid:_) = return VmRt_Undefined
-r_f {- 0x48   -} reg (D v:(O ReturnValue):_) = return v
-r_f {- 0x58   -} reg (O (NewClass idx):ops) = new_class idx >> r_f reg ops
-r_f {- 0x5E   -} reg (O (FindProperty idx):ops) = find_property idx >> r_f reg ops
-r_f {- 0x60   -} reg (O (GetLex idx):ops) = r_f reg$ (O$ FindPropStrict idx):(O$ GetProperty idx):ops
-r_f {- 0x65   -} reg (O (GetScopeObject idx):ops) = get_scoped_object idx >> r_f reg ops
-r_f {- 0x68   -} reg (D (VmRt_Object this):(O (InitProperty idx)):ops) = init_property this idx >> r_f reg ops
-r_f {- 0x70   -} reg (D v:O ConvertString:ops) = convert_string v >>= \v -> r_f reg (D v:ops)
-r_f {- 0x73   -} reg (D v:O ConvertInt:ops) = convert_int v >>= \v -> r_f reg (D v:ops)
-r_f {- 0x74   -} reg (D v:O ConvertUInt:ops) = convert_uint v >>= \v -> r_f reg (D v:ops)
-r_f {- 0x75   -} reg (D v:O ConvertDouble:ops) = convert_double v >>= \v -> r_f reg (D v:ops)
-r_f {- 0x76   -} reg (D v:O ConvertBoolean:ops) = convert_boolean v >>= \v -> r_f reg (D v:ops)
-r_f {- 0x77   -} reg (D v:O ConvertObject:ops) = undefined
-r_f {- 0xD0   -} reg@(r:      []) (O GetLocal0:ops) = r_f reg (D r:ops)
-r_f {- 0xD1   -} reg@(_:r:    []) (O GetLocal1:ops) = r_f reg (D r:ops)
-r_f {- 0xD2   -} reg@(_:_:r:  []) (O GetLocal2:ops) = r_f reg (D r:ops)
-r_f {- 0xD3   -} reg@(_:_:_:r:[]) (O GetLocal3:ops) = r_f reg (D r:ops)
-r_f {- 0xD4   -} (this:      reg) (D new:O SetLocal0:ops) = r_f (         new:reg) ops
-r_f {- 0xD5   -} (this:a:    reg) (D new:O SetLocal1:ops) = r_f (this:    new:reg) ops
-r_f {- 0xD6   -} (this:a:b:  reg) (D new:O SetLocal2:ops) = r_f (this:a:  new:reg) ops
-r_f {- 0xD7   -} (this:a:b:c:reg) (D new:O SetLocal3:ops) = r_f (this:a:b:new:reg) ops
+r_f {-      0 -} ss reg [] = raise "empty ops"
+r_f {-      1 -} ss reg (D ret:[]) = return ret
+r_f {- 0x1D   -} (_:ss) reg (O PopScope:ops) = r_f ss reg ops
+r_f {- 0x24   -} ss reg (O (PushByte u8):ops) = r_f ss reg$ (D$ VmRt_Int$ fromIntegral u8):ops
+r_f {- 0x26   -} ss reg (O PushTrue:ops) = r_f ss reg$ (D$ VmRt_Boolean True):ops
+r_f {- 0x27   -} ss reg (O PushFalse:ops) = r_f ss reg$ (D$ VmRt_Boolean False):ops
+r_f {- 0x28   -} ss reg (O PushNaN:ops) = r_f ss reg$ (D$ VmRt_Number nan):ops
+r_f {- 0x29   -} ss reg (D _:O Pop:ops) = r_f ss reg ops
+r_f {- 0x2A   -} ss reg (D a:O Dup:ops) = r_f ss reg (D a:D a:ops)
+r_f {- 0x2B   -} ss reg (D a:D b:O Swap:ops) = r_f ss reg (D b:D a:ops)
+r_f {- 0x2C   -} ss reg (O (PushString idx):ops) = get_string idx >>= \v -> r_f ss reg$ (D$ VmRt_String v):ops
+r_f {- 0x2D   -} ss reg (O (PushInt idx):ops) = get_int idx >>= \v -> r_f ss reg$ (D$ VmRt_Int v):ops
+r_f {- 0x2E   -} ss reg (O (PushUInt idx):ops) = get_uint idx >>= \v -> r_f ss reg$ (D$ VmRt_Uint v):ops
+r_f {- 0x2F   -} ss reg (O (PushDouble idx):ops) = get_double idx >>= \v -> r_f ss reg$ (D$ VmRt_Number v):ops
+r_f {- 0x30 0 -} ss reg (D (VmRt_Object v):(O PushScope):ops) = r_f (v:ss) reg ops
+r_f {- 0x47   -} ss reg (O ReturnVoid:_) = return VmRt_Undefined
+r_f {- 0x48   -} ss reg (D v:(O ReturnValue):_) = return v
+r_f {- 0x58   -} ss reg (O (NewClass idx):ops) = new_class idx >> r_f ss reg ops
+r_f {- 0x5E   -} ss reg (O (FindProperty idx):ops) = find_property idx >> r_f ss reg ops
+r_f {- 0x60   -} ss reg (O (GetLex idx):ops) = r_f ss reg$ (O$ FindPropStrict idx):(O$ GetProperty idx):ops
+r_f {- 0x65   -} ss reg (O (GetScopeObject idx):ops) = get_scoped_object idx >> r_f ss reg ops
+r_f {- 0x68   -} ss reg (D (VmRt_Object this):(O (InitProperty idx)):ops) = init_property this idx >> r_f ss reg ops
+r_f {- 0x70   -} ss reg (D v:O ConvertString:ops) = convert_string v >>= \v -> r_f ss reg (D v:ops)
+r_f {- 0x73   -} ss reg (D v:O ConvertInt:ops) = convert_int v >>= \v -> r_f ss reg (D v:ops)
+r_f {- 0x74   -} ss reg (D v:O ConvertUInt:ops) = convert_uint v >>= \v -> r_f ss reg (D v:ops)
+r_f {- 0x75   -} ss reg (D v:O ConvertDouble:ops) = convert_double v >>= \v -> r_f ss reg (D v:ops)
+r_f {- 0x76   -} ss reg (D v:O ConvertBoolean:ops) = convert_boolean v >>= \v -> r_f ss reg (D v:ops)
+r_f {- 0x77   -} ss reg (D v:O ConvertObject:ops) = undefined
+r_f {- 0xD0   -} ss reg@(r:      []) (O GetLocal0:ops) = r_f ss reg (D r:ops)
+r_f {- 0xD1   -} ss reg@(_:r:    []) (O GetLocal1:ops) = r_f ss reg (D r:ops)
+r_f {- 0xD2   -} ss reg@(_:_:r:  []) (O GetLocal2:ops) = r_f ss reg (D r:ops)
+r_f {- 0xD3   -} ss reg@(_:_:_:r:[]) (O GetLocal3:ops) = r_f ss reg (D r:ops)
+r_f {- 0xD4   -} ss (this:      reg) (D new:O SetLocal0:ops) = r_f ss (         new:reg) ops
+r_f {- 0xD5   -} ss (this:a:    reg) (D new:O SetLocal1:ops) = r_f ss (this:    new:reg) ops
+r_f {- 0xD6   -} ss (this:a:b:  reg) (D new:O SetLocal2:ops) = r_f ss (this:a:  new:reg) ops
+r_f {- 0xD7   -} ss (this:a:b:c:reg) (D new:O SetLocal3:ops) = r_f ss (this:a:b:new:reg) ops
 
 convert_string :: VmRt -> AVM3 VmRt
 convert_string = return. VmRt_String. to_string
@@ -140,12 +145,6 @@ convert_int = return. VmRt_Int. to_int32
 convert_uint :: VmRt -> AVM3 VmRt
 convert_uint = return. VmRt_Uint. to_uint32
 
-push_scope :: VmObject -> AVM3 ()
-push_scope v = mod_ss ((:)v)
-
-pop_scope :: AVM3 ()
-pop_scope = mod_ss tail
-
 new_function :: AVM3 ()
 new_function = undefined
 
@@ -160,10 +159,9 @@ new_class idx = do
   let ops = map O code
   liftIO.putStrLn$ "ops: " ++ show ops
   liftIO.putStrLn$ "running function"
-  run_function [klass] ops
+  run_function [global] [klass] ops
   klass_name <- class_name traits
   liftIO$ H.insert global klass_name klass
-  set_ss$ init scope_stack ++ [global]
   return klass
   where
     class_name :: [TraitsInfo] -> AVM3 String

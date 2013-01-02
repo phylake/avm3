@@ -1,12 +1,8 @@
-module Abc.Json (abcToJson) where
+module Abc.Json () where
 
 import Abc.Def
-import Text.JSON
 import Data.Word
-
--- TODO resolve lookups into something more human-readable
-abcToJson :: Abc -> JSValue
-abcToJson = undefined
+import Text.JSON
 
 kvToObject :: [(String, JSValue)] -> JSValue
 kvToObject = JSObject. toJSObject
@@ -75,7 +71,7 @@ instance JSON InstanceInfo where
     , ("flags", showJSON flags)
     , ("interfaces", toArray ifaces)
     , ("traits", toArray traits)
-    , ("NSInfoIdx", maybe JSNull showJSON ns)
+    , ("ns_info", maybe JSNull showJSON ns)
     ]
 
 instance JSON TraitsInfo where
@@ -114,7 +110,7 @@ instance JSON TraitClass where
   showJSON (TraitClass id cii) = kvToObject
     [
       ("disp_id", showJSON id)
-    , ("ClassInfoIdx", showJSON cii)
+    , ("class_info", showJSON cii)
     ]
 
 instance JSON TraitFunction where
@@ -122,7 +118,7 @@ instance JSON TraitFunction where
   showJSON (TraitFunction id msi) = kvToObject
     [
       ("disp_id", showJSON id)
-    , ("MethodSignatureIdx", showJSON msi)
+    , ("method_id", showJSON msi)
     ]
 
 instance JSON TraitMethod where
@@ -130,7 +126,7 @@ instance JSON TraitMethod where
   showJSON (TraitMethod id msi) = kvToObject
     [
       ("disp_id", showJSON id)
-    , ("MethodSignatureIdx", showJSON msi)
+    , ("method_id", showJSON msi)
     ]
 
 instance JSON ClassInfo where
@@ -153,7 +149,7 @@ instance JSON MethodBody where
   readJSON = undefined
   showJSON (MethodBody init max local initD scopeD code exceptions traits) = kvToObject
     [
-      ("MethodSignatureIdx", showJSON init)
+      ("method_id", showJSON init)
     , ("max_stack", showJSON max)
     , ("local_count", showJSON local)
     , ("init_scope_depth", showJSON initD)

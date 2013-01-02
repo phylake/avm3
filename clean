@@ -2,4 +2,9 @@
 
 find ./ -path "*.hi" | xargs rm -f $1
 find ./ -path "*.o" | xargs rm -f $1
+
+# profiling
 find ./ -path "*.prof" | xargs rm -f $1
+find ./ -path "*.hp" | xargs rm -f $1
+find ./ -path "*.ps" | xargs rm -f $1
+find ./ -path "*.aux" | xargs rm -f $1

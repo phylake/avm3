@@ -43,9 +43,11 @@ TODO
  1) the primitives are objects but since they have a fixed set of immutable
     methods I can pattern match for things like callproperty along the lines of
     (D vmrt:O CallProperty):ops -> custom_method
- 2) method closures: Maybe ScopeStack ?
- 3) refcounts/heap: type RefCount = Int ?
- 4) consider resolving all strings eagerly to avoid lookups in the hashtable
+ 2) method closures
+      Maybe ScopeStack ?
+      (Registers -> Ops -> AVM3 VmRt) ?
+ 3) a heap: type RefCount = Int ?
+ 4) space/time: eagerly resolve all strings, merge method info, etc
 -}
 data VmRt = VmRt_Undefined
           | VmRt_Null
@@ -55,7 +57,18 @@ data VmRt = VmRt_Undefined
           | VmRt_Number Double
           | VmRt_String String
           | VmRt_Object VmObject {-RefCount-} {-(Maybe ScopeStack)-}
-          deriving (Show)
+          | VmRt_Closure (Registers -> Ops -> AVM3 VmRt) -- curried r_f
+
+instance Show VmRt where
+  show VmRt_Undefined   = "VmRt_Undefined"
+  show VmRt_Null        = "VmRt_Null"
+  show (VmRt_Boolean a) = "VmRt_Boolean " ++ show a
+  show (VmRt_Int a)     = "VmRt_Int " ++ show a
+  show (VmRt_Uint a)    = "VmRt_Uint " ++ show a
+  show (VmRt_Number a)  = "VmRt_Number " ++ show a
+  show (VmRt_String a)  = "VmRt_String " ++ show a
+  show (VmRt_Object a)  = "VmRt_Object [Object]"
+  show (VmRt_Closure _) = "VmRt_Closure"
 
 {- 1:1 transformation of Abc to an ADT -}
 data VmAbc = VmAbc_Int Int32
@@ -65,7 +78,7 @@ data VmAbc = VmAbc_Int Int32
            | VmAbc_NsInfo NSInfo
            | VmAbc_NsSet NSSet
            | VmAbc_Multiname Multiname
-           | VmAbc_MethodSig MethodSignature
+           | VmAbc_MethodSig MethodSignature {- Maybe MethodBody -}
            | VmAbc_Metadata Metadata
            | VmAbc_Instance InstanceInfo
            | VmAbc_Class ClassInfo

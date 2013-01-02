@@ -96,7 +96,7 @@ data MethodSignature = MethodSignature {
                                        , msMethodName :: StringIdx -- debug
                                        , msFlags :: Word8
                                        , msOptionInfo :: Maybe [CPC]
-                                       , msParamNames :: Maybe [U30] -- debug
+                                       , msParamNames :: Maybe [StringIdx] -- debug
                                        }
                                        deriving (Show)
 
