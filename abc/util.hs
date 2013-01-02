@@ -1,16 +1,16 @@
 module Abc.Util (
-       returnJ
-   ,   fromU8
-   ,   fromU16
-   ,   fromU16LE
-   ,   fromU32
-   ,   fromU32LE
-   ,   fromDouble
-   ,   fromDoubleLE
-   ,   fromU32LE_vl
-   ,   fromU30LE_vl
-   ,   fromS32LE_vl
-   ,   fromS24LE
+  returnJ
+, fromU8
+, fromU16
+, fromU16LE
+, fromU32
+, fromU32LE
+, fromDouble
+, fromDoubleLE
+, fromU32LE_vl
+, fromU30LE_vl
+, fromS32LE_vl
+, fromS24LE
 ) where
 
 import Abc.Def
@@ -19,33 +19,33 @@ import Data.Int
 import Data.Word
 import Control.Monad.State
 import Util.Words hiding
-    (
-      fromU8
-    , fromU16
-    , fromU16LE
-    , fromU32
-    , fromU32LE
-    , fromDouble
-    , fromDoubleLE
-    , fromU32LE_vl
-    , fromU30LE_vl
-    , fromS32LE_vl
-    , fromS24LE
-    )
+  (
+    fromU8
+  , fromU16
+  , fromU16LE
+  , fromU32
+  , fromU32LE
+  , fromDouble
+  , fromDoubleLE
+  , fromU32LE_vl
+  , fromU30LE_vl
+  , fromS32LE_vl
+  , fromS24LE
+  )
 import qualified Util.Words as Util
-    (
-      fromU8
-    , fromU16
-    , fromU16LE
-    , fromU32
-    , fromU32LE
-    , fromDouble
-    , fromDoubleLE
-    , fromU32LE_vl
-    , fromU30LE_vl
-    , fromS32LE_vl
-    , fromS24LE
-    )
+  (
+    fromU8
+  , fromU16
+  , fromU16LE
+  , fromU32
+  , fromU32LE
+  , fromDouble
+  , fromDoubleLE
+  , fromU32LE_vl
+  , fromU30LE_vl
+  , fromS32LE_vl
+  , fromS24LE
+  )
 
 returnJ :: Monad m => a -> StateT b m (Maybe a)
 returnJ = return. Just
