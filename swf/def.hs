@@ -1,18 +1,22 @@
 module Swf.Def where
 
-import           Control.DeepSeq
-import           Control.Monad.State (StateT, State)
 --import           Data.Functor.Identity
+import           Control.DeepSeq
+import           Control.Monad.Identity (Identity)
+import           Data.Enumerator as E
+import           Data.Enumerator.Binary as EB
+import           Data.Enumerator.List as EL
 import           Data.Int
 import           Data.Word
-import qualified Data.ByteString.Lazy as BS
+import qualified MonadLib as ML
+import qualified Data.ByteString as BS
 
-type ByteString = BS.ByteString
+type State = ML.StateT
 
-type Parser = StateT BS.ByteString IO
+type Parser = Iteratee BS.ByteString IO
 
-type BitParser = State (Float, [Word8])
---type BitParser a = StateT (Float, [Word8]) IO a
+type BitParser = State (Float, [Word8]) Identity
+--type BitParser = Iteratee (Float, [Word8]) Identity
 
 type U8 = Word8
 type U30 = Word32
@@ -55,16 +59,16 @@ data Matrix = Matrix {
                      deriving (Show)
 
 data ColorXForm = ColorXForm {
-                       rM :: Word16
-                     , gM :: Word16
-                     , bM :: Word16
-                     , aM :: Maybe Word16
-                     , rA :: Word16
-                     , gA :: Word16
-                     , bA :: Word16
-                     , aA :: Maybe Word16
-                     }
-                     deriving (Show)
+                               rM :: Word16
+                             , gM :: Word16
+                             , bM :: Word16
+                             , aM :: Maybe Word16
+                             , rA :: Word16
+                             , gA :: Word16
+                             , bA :: Word16
+                             , aA :: Maybe Word16
+                             }
+                             deriving (Show)
 
 {-data SwfFile = SwfFile {
                          version :: Word8
@@ -176,7 +180,7 @@ data Swf = Swf_Header Word8 Word32 Rect Word16 Word16
          | {- 76 -} Swf_SymbolClass [(Word16, String)]
          | {- 77 -} Swf_Metadata
          | {- 78 -} Swf_DefineScalingGrid
-         | {- 82 -} Swf_DoABC Word32 String ByteString
+         | {- 82 -} Swf_DoABC Word32 String BS.ByteString
          | {- 83 -} Swf_DefineShape4
          | {- 84 -} Swf_DefineMorphShape2
          | {- 86 -} Swf_DefineSceneAndFrameLabelData

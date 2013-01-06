@@ -1,15 +1,18 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Swf.Deserialize where
 
 import           Codec.Compression.Zlib
-import           Control.Applicative ((<|>))
-import           Control.Monad.State
 import           Control.Monad
 import           Data.Binary.IEEE754 (wordToFloat)
 import           Data.Bits
 import           Data.Char (digitToInt, intToDigit)
+import           Data.Enumerator as E
+import           Data.Enumerator.Binary as EB
+import           Data.Enumerator.List as EL
 import           Data.Int (Int64)
 import           Data.Maybe (listToMaybe)
 import           Data.Word
+import           MonadLib as ML
 import           Swf.Def
 import           Swf.Util
 import           System.Environment (getArgs)
@@ -20,8 +23,9 @@ import qualified Data.ByteString.Lazy.Char8 as BSC
 
 test_file = do
   args <- getArgs
-  let (Just file) = listToMaybe args <|> Just "swf/file.swf"
-  BS.readFile file >>= evalStateT parse_swf
+  let file = maybe "swf/file.swf" id$ listToMaybe args
+  swf <- run_$ parse_swf >>== EB.enumFile file
+  return ()
 
 {-unzipSwf = do
   (file:[]) <- getArgs
@@ -146,13 +150,13 @@ parse_colorxform alpha = parse_common max_bytes $ cxform_parser alpha
 parse_common :: Int64 -> BitParser a -> Parser a
 parse_common max_bytes parser = do
   bs <- get
-  let (m,(p,_)) = runState parser (0, BS.unpack$ BS.take max_bytes bs)
+  let (m,(p,_)) = runStateT parser (0, BS.unpack$ BS.take max_bytes bs)
   modify$ BS.drop (ceiling$ p/8) -- ceiling for padding
   return m
 
 parse_string :: Parser String
 parse_string = do
-  stringBytes <- StateT$ return. BS.span (/= 0x00)
+  stringBytes <- State$ return. BS.span (/= 0x00)
   modify$ BS.drop 1
   return$ BSC.unpack stringBytes
 
@@ -169,7 +173,7 @@ parse_tag :: Parser Swf
 parse_tag = do
   (RecordHeader tag len) <- parse_record_header
   --liftIO.putStrLn$ "tag " ++ show tag ++ " len " ++ show len
-  tag_bs <- StateT $ return . BS.splitAt (fromIntegral len)
+  tag_bs <- State $ return . BS.splitAt (fromIntegral len)
   bs <- get
   --get >>= liftIO.putStrLn.show
   swf <- withStateT (\_ -> tag_bs) $ case tag of

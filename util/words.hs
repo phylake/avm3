@@ -22,7 +22,11 @@ module Util.Words (
   , fromU32LE_vl
   , fromU30LE_vl
   , fromS24LE
+  , fromS24LE_impl
   , fromS32LE_vl
+  , fromS32LE_vl_impl
+  , foldWords
+  , foldVarLen
   , hasSignalBit
   , varLenUintLE
   , varIntLenBS
@@ -38,7 +42,6 @@ import Data.List (intercalate)
 import Data.Monoid (mappend)
 import Data.Word
 import Numeric (showHex)
-import TFish
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
 
@@ -128,43 +131,43 @@ fromS24LE :: ByteString -> (Int32, ByteString)
 fromS24LE bs =
   let (unpackThese, bs') = BS.splitAt 3 bs in
   (fromIntegral . fromS24LE_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
+
+fromS24LE_impl :: [Word32] -> Word32
+fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
   where
-    fromS24LE_impl :: [Word32] -> Word32
-    fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
-      where
-        sign = (w1 .&. 0x80) `shiftL` 24
-        w1'  = (w1 .&. 0x7f) `shiftL` 16
-        w2'  =  w2 `shiftL` 8
-        w3'  =  w3
+    sign = (w1 .&. 0x80) `shiftL` 24
+    w1'  = (w1 .&. 0x7f) `shiftL` 16
+    w2'  =  w2 `shiftL` 8
+    w3'  =  w3
 
 fromS32LE_vl :: ByteString -> (Int32, ByteString)
 fromS32LE_vl bs =
   let (unpackThese, bs') = BS.splitAt (varIntLenBS bs) bs in
   (fromIntegral . fromS32LE_vl_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
+
+fromS32LE_vl_impl :: [Word32] -> Word32
+fromS32LE_vl_impl (w1:[]) = sign .|. w1'
   where
-    fromS32LE_vl_impl :: [Word32] -> Word32
-    fromS32LE_vl_impl (w1:[]) = sign .|. w1'
-      where
-        sign = (w1 .&. 0x40) `shiftL` 25
-        w1'  = (w1 .&. 0x3f) `shiftL` 0
-    fromS32LE_vl_impl (w2:w1:[]) = sign .|. w1' .|. w2'
-      where
-        sign = (w1 .&. 0x40) `shiftL` 25
-        w1'  = (w1 .&. 0x3f) `shiftL` 7
-        w2'  = (w2 .&. 0x7f) `shiftL` 0
-    fromS32LE_vl_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
-      where
-        sign = (w1 .&. 0x40) `shiftL` 25
-        w1'  = (w1 .&. 0x3f) `shiftL` 14
-        w2'  = (w2 .&. 0x7f) `shiftL` 7
-        w3'  = (w3 .&. 0x7f) `shiftL` 0
-    fromS32LE_vl_impl (w4:w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3' .|. w4'
-      where
-        sign = (w1 .&. 0x40) `shiftL` 25
-        w1'  = (w1 .&. 0x3f) `shiftL` 21
-        w2'  = (w2 .&. 0x7f) `shiftL` 14
-        w3'  = (w3 .&. 0x7f) `shiftL` 7
-        w4'  = (w4 .&. 0x7f) `shiftL` 0
+    sign = (w1 .&. 0x40) `shiftL` 25
+    w1'  = (w1 .&. 0x3f) `shiftL` 0
+fromS32LE_vl_impl (w2:w1:[]) = sign .|. w1' .|. w2'
+  where
+    sign = (w1 .&. 0x40) `shiftL` 25
+    w1'  = (w1 .&. 0x3f) `shiftL` 7
+    w2'  = (w2 .&. 0x7f) `shiftL` 0
+fromS32LE_vl_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
+  where
+    sign = (w1 .&. 0x40) `shiftL` 25
+    w1'  = (w1 .&. 0x3f) `shiftL` 14
+    w2'  = (w2 .&. 0x7f) `shiftL` 7
+    w3'  = (w3 .&. 0x7f) `shiftL` 0
+fromS32LE_vl_impl (w4:w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3' .|. w4'
+  where
+    sign = (w1 .&. 0x40) `shiftL` 25
+    w1'  = (w1 .&. 0x3f) `shiftL` 21
+    w2'  = (w2 .&. 0x7f) `shiftL` 14
+    w3'  = (w3 .&. 0x7f) `shiftL` 7
+    w4'  = (w4 .&. 0x7f) `shiftL` 0
 
 
 foldl' f acc []     = acc

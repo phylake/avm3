@@ -7,9 +7,14 @@ ghc -prof -auto-all -rtsopts=all -fforce-recomp amf.hs
 ./amf +RTS -p -K100M -RTS
 -}
 
-module Amf.Deserialize where
+{-
+Enumeratee == |
+Iteratee == Consumer
+Enumerator == Producer
+Enumerator | Iteratee
+-}
 
-{-# LANGUAGE BangPatterns #-}
+module Amf.Deserialize where
 
 import           Amf.Def
 import           Control.DeepSeq
