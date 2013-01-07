@@ -14,6 +14,7 @@ module Swf.Util (
   , rv_w32
   , rv_w16
   , rv_w8
+  , toStrict
 ) where
 
 import           Control.Monad.Identity
@@ -25,12 +26,16 @@ import           Data.Int
 import           Data.Word
 import           Swf.Def
 import           Util.Misc
-import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
 import qualified MonadLib as ML
 import qualified Util.Words as U
 
+toStrict :: BSL.ByteString -> Parser BS.ByteString
+toStrict = return. BS.pack. BSL.unpack
+
 nWords :: Integer -> Parser [Word8]
-nWords i = EB.take i >>= return. BS.unpack
+nWords i = EB.take i >>= return. BSL.unpack
 
 fromU8 :: Parser Word8
 fromU8 = nWords 1 >>= return. Prelude.head
@@ -54,7 +59,7 @@ fromU30LE_vl = do
 
 fromS24LE :: Parser Int32
 fromS24LE = do
-  bs <- EB.take 3
+  bs <- EB.take 3 >>= toStrict
   let (ret,_) = U.fromS24LE bs
   return ret
 
@@ -67,7 +72,7 @@ varLenUintLE :: Parser Word64
 varLenUintLE = varIntBS >>= return. fst. U.varLenUintLE
 
 varIntBS :: Parser BS.ByteString
-varIntBS = EB.takeWhile U.hasSignalBit
+varIntBS = EB.takeWhile U.hasSignalBit >>= toStrict
 
 unless_flag :: BitParser a -- false action
             -> BitParser a -- true action

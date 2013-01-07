@@ -42,10 +42,8 @@ import Data.List (intercalate)
 import Data.Monoid (mappend)
 import Data.Word
 import Numeric (showHex)
-import qualified Data.ByteString.Lazy as BS
-import qualified Data.ByteString.Lazy.Char8 as BSC
-
-type ByteString = BS.ByteString
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
 
 charToWord8 :: Char -> Word8
 charToWord8 = head . BS.unpack . BSC.singleton
@@ -74,28 +72,28 @@ shuffle_bits shift ws = map map_f $ zip (0:init ws) ws
     map_f = \(w1,w2) -> (w1 `shiftL` l_shift .&. l_mask) .|.
                         (w2 `shiftR` r_shift .&. r_mask)
 
-nWords :: Int64 -> ByteString -> ([Word8], ByteString)
+nWords :: Int -> BS.ByteString -> ([Word8], BS.ByteString)
 nWords n bs = (BS.unpack $ BS.take n bs, BS.drop n bs)
 
-fromU8 :: ByteString -> (Word8, ByteString)
+fromU8 :: BS.ByteString -> (Word8, BS.ByteString)
 fromU8 bs = let ((w:[]), bs') = nWords 1 bs in (w, bs')
 
-fromU16 :: ByteString -> (Word16, ByteString)
+fromU16 :: BS.ByteString -> (Word16, BS.ByteString)
 fromU16 bs = let (ws, bs') = nWords 2 bs in (toWord16 ws, bs')
 
-fromU16LE :: ByteString -> (Word16, ByteString)
+fromU16LE :: BS.ByteString -> (Word16, BS.ByteString)
 fromU16LE bs = let (ws, bs') = nWords 2 bs in (toWord16LE ws, bs')
 
-fromU32 :: ByteString -> (Word32, ByteString)
+fromU32 :: BS.ByteString -> (Word32, BS.ByteString)
 fromU32 bs = let (ws, bs') = nWords 4 bs in (toWord32 ws, bs')
 
-fromU32LE :: ByteString -> (Word32, ByteString)
+fromU32LE :: BS.ByteString -> (Word32, BS.ByteString)
 fromU32LE bs = let (ws, bs') = nWords 4 bs in (toWord32LE ws, bs')
 
-fromDouble :: ByteString -> (Double, ByteString)
+fromDouble :: BS.ByteString -> (Double, BS.ByteString)
 fromDouble bs = let (ws, bs') = nWords 8 bs in (toDouble ws, bs')
 
-fromDoubleLE :: ByteString -> (Double, ByteString)
+fromDoubleLE :: BS.ByteString -> (Double, BS.ByteString)
 fromDoubleLE bs = let (ws, bs') = nWords 8 bs in (toDouble $ reverse ws, bs')
 
 toWord16 :: [Word8] -> Word16
@@ -121,13 +119,13 @@ toDouble = wordToDouble . toWord64
 
 {- variable length integers -}
 
-fromU32LE_vl :: ByteString -> (Word32, ByteString)
+fromU32LE_vl :: BS.ByteString -> (Word32, BS.ByteString)
 fromU32LE_vl bs = let (w64, bs') = varLenUintLE bs in (fromIntegral w64, bs')
 
-fromU30LE_vl :: ByteString -> (Word32, ByteString)
+fromU30LE_vl :: BS.ByteString -> (Word32, BS.ByteString)
 fromU30LE_vl bs = let (w32, bs') = fromU32LE_vl bs in (w32 .&. 0x3fffffff, bs')
 
-fromS24LE :: ByteString -> (Int32, ByteString)
+fromS24LE :: BS.ByteString -> (Int32, BS.ByteString)
 fromS24LE bs =
   let (unpackThese, bs') = BS.splitAt 3 bs in
   (fromIntegral . fromS24LE_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
@@ -140,7 +138,7 @@ fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
     w2'  =  w2 `shiftL` 8
     w3'  =  w3
 
-fromS32LE_vl :: ByteString -> (Int32, ByteString)
+fromS32LE_vl :: BS.ByteString -> (Int32, BS.ByteString)
 fromS32LE_vl bs =
   let (unpackThese, bs') = BS.splitAt (varIntLenBS bs) bs in
   (fromIntegral . fromS32LE_vl_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
@@ -188,13 +186,13 @@ hasSignalBit :: Word8 -> Bool
 hasSignalBit w = w .&. 0x80 == 0x80
 
 {- little-endian -}
-varLenUintLE :: ByteString -> (Word64, ByteString)
+varLenUintLE :: BS.ByteString -> (Word64, BS.ByteString)
 varLenUintLE bs =
   let (foldThese, bs') = BS.splitAt (varIntLenBS bs) bs in
   let vli = BS.foldr (flip foldVarLen) 0 foldThese in
   (vli, bs')
 
-varIntLenBS :: ByteString -> Int64
+varIntLenBS :: BS.ByteString -> Int
 varIntLenBS = (+1) . BS.length . BS.takeWhile hasSignalBit
 
 varIntLen :: [Word8] -> Int

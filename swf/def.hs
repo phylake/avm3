@@ -1,21 +1,20 @@
 module Swf.Def where
 
---import           Data.Functor.Identity
 import           Control.DeepSeq
-import           Control.Monad.Identity (Identity)
 import           Data.Enumerator as E
 import           Data.Enumerator.Binary as EB
 import           Data.Enumerator.List as EL
 import           Data.Int
 import           Data.Word
-import qualified MonadLib as ML
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
+import qualified MonadLib as ML
 
 type State = ML.StateT
 
 type Parser = Iteratee BS.ByteString IO
 
-type BitParser = State (Float, [Word8]) Identity
+type BitParser = State (Float, [Word8]) IO
 --type BitParser = Iteratee (Float, [Word8]) Identity
 
 type U8 = Word8
