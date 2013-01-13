@@ -1,7 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Swf.Deserialize where
 
---import           Codec.Compression.Zlib
+import qualified Codec.Compression.Zlib as Zlib
+import qualified Codec.Compression.GZip as GZip
 import           Codec.Zlib.Enum
 import           Control.Monad
 import           Data.Binary.IEEE754 (wordToFloat)
@@ -21,36 +22,74 @@ import           System.Environment (getArgs)
 import           Util.Misc
 import           Util.Words (word8ToChar, shuffle_bits, toWord32, toWord16)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy.Char8 as BSC
+import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Lazy.Char8 as BSLC
 
-{-unzipSwf = do
-  (file:[]) <- getArgs
-  let (name, ext) = span (\c -> c /= '.') file
-  bs <- BS.readFile file
-  case (parse_header $ nWords 8 bs) of
-    Left err -> putStrLn err
-    Right bs' -> let combined = BS.append (BS.take 8 bs) bs' in
-           BS.writeFile (name ++ "_uncompressed" ++ ext) combined-}
-
-{-fromByteString :: BS.ByteString -> Either String [Swf]
-fromByteString bs =
-  case (parse_header $ nWords 8 bs) >>= parseHeader2 >>= \bs' -> consumeAll ([], bs') of
-    Left err -> Left err
-    Right (swfs, _) -> Right swfs-}
-
+p :: String -> Iteratee a IO ()
 p = tryIO.putStrLn
 
-test_file = do
-  args <- getArgs
-  let file = maybe "swf/file.swf" id$ listToMaybe args
-  
-  gzipFlag <- run_ (EB.head_ >>== EB.enumFile file)
-  putStrLn$ "gzipFlag " ++ show gzipFlag
-  swfs <- run_$ (chooseEnumeratee gzipFlag =$ parse_swf) >>== EB.enumFile file
+test_zip :: IO ()
+test_zip = do
+  let file = "swf/file.swf"
 
-  --swfs <- run_$ parse_swf >>== EB.enumFile file
+  {-gzipFlag <- run_ (EB.head_ >>== EB.enumFile file)
+  putStrLn$ "gzipFlag " ++ show gzipFlag
+  swfs <- run_$ (chooseEnumeratee gzipFlag =$ parse_swf) >>== EB.enumFile file-}
+
+  --(run_$ dropPrint >>== EB.enumFile file) >>= print
+
+  --(run_$ (ungzip =$ printBytes) >>== EB.enumFile "swf/text.txt.zip") >>= print
+
+  {-bs <- BSL.readFile "swf/file.swf"
+  let bs2 = BSL.drop 8 bs
+  let bs3 = Zlib.decompress bs2
+  putStrLn$ show bs3-}
+  
+  {-bs <- BSL.readFile "swf/text.txt.zip"
+  let bs2 = Zlib.decompress bs
+  let cs = BSLC.unpack bs2
+  putStrLn cs-}
+
   return ()
+  where
+    dropPrint :: Iteratee BS.ByteString IO String
+    dropPrint = do
+      EB.drop 8
+      ungzip =$ printBytes
+
+    printBytes :: Iteratee BS.ByteString IO String
+    printBytes = do
+      p "printBytes"
+      continue loop
+      where
+        --loop (Chunks []) = do
+        --  p "Chunks []"
+        --  return ""
+        loop (Chunks (b:bs)) = do
+          p "Chunks (b:bs)"
+          rest <- loop$ Chunks bs
+          let str = BSC.unpack b
+          return$ str ++ rest
+        loop _ = return ""
+
+test :: IO ()
+test = do
+  unzipSwf
+  --let file = "swf/file.swf"
+  let file = "swf/file_uncompressed.swf"
+  
+  swfs <- run_$ parse_swf >>== EB.enumFile file
+  --Prelude.mapM (putStrLn . show) swfs
+  
+  return ()
+  where
+    unzipSwf :: IO ()
+    unzipSwf = do
+      bs <- BSL.readFile "swf/file.swf"
+      let unzipped = Zlib.decompress$ BSL.drop 8 bs
+      let newHeader = BSL.append (BSL.singleton 70) (BSL.drop 1$ BSL.take 8 bs)
+      BSL.writeFile "swf/file_uncompressed.swf"$ BSL.append newHeader unzipped
 
 {-
 data Stream a = Chunks [a] | EOF
@@ -64,72 +103,52 @@ type Enumerator a m b = Step a m b -> Iteratee a m b
 type Enumeratee ao ai m b = Step ai m b -> Iteratee ao m (Step ai m b)
 -}
 
-chooseEnumeratee :: Word8 -> Enumeratee BS.ByteString BS.ByteString IO [Swf]
-chooseEnumeratee w
-  | w == 67 {-'C'-} = ungzip
-  | w == 70 {-'F'-} = {-idEnumeratee-} return
-  | otherwise = fail "can't choose enumeratee"
-
 idEnumeratee :: Enumeratee BS.ByteString BS.ByteString IO [Swf]
-idEnumeratee = return
-
-{-idEnumeratee = checkDone (continue . next) where
-  next :: (Stream BS.ByteString -> Iteratee BS.ByteString IO [Swf])
-       -> Stream BS.ByteString
-       -> Iteratee BS.ByteString IO (Step BS.ByteString IO [Swf])
-  next = undefined-}
+idEnumeratee step@(Continue k) = do
+  p "idEnumeratee"
+  continue loop
+  where
+    loop (Chunks bs@(b:_)) | not (BS.null b) = k (Chunks bs) >>== idEnumeratee
+    loop _ = return step
+idEnumeratee step = return step
 
 parse_swf :: Parser [Swf]
 parse_swf = do
-  header <- parse_header
+  (version, file_length, compressed) <- parse_header1
+  if compressed
+    then ungzip =$ parse_swf2 version file_length
+    else parse_swf2 version file_length
+
+parse_swf2 :: Word8 -> Word32 -> Parser [Swf]
+parse_swf2 version file_length = do
+  header <- parse_header2 version file_length
   tags <- parse_tags
   return$ header:tags
   where
     parse_tags :: Parser [Swf]
     parse_tags = do
       tag <- parse_tag
-      tags <- parse_tags
-      return$ tag:tags
+      case tag of
+        Swf_End -> return [Swf_End]
+        otherwise -> do
+          tags <- parse_tags
+          return$ tag:tags
 
-parse_header :: Parser Swf
-parse_header = do
-  (cf:w:s:version:[]) <- nWords 4
-  file_length <- fromU32LE
-  if (cf == 67 || cf == 70) && w == 87 && s == 83
-    --version `elem` [10..14] -> return $ Left $ "parse_header - invalid version: " ++ show version
-    then return ()
-    else error "parse_header - invalid header"
-  frame_size <- parse_rect
-  frame_rate <- fromU16LE
-  p$ "frame_rate " ++ show frame_rate
-  frame_count <- fromU16LE
-  return$ Swf_Header version file_length frame_size frame_rate frame_count
-
-parse_header1 :: Parser (Word8, Word32)
+parse_header1 :: Parser (Word8, Word32, Bool)
 parse_header1 = do
   (cf:w:s:version:[]) <- nWords 4
   file_length <- fromU32LE
   if (cf == 67 || cf == 70) && w == 87 && s == 83
     --version `elem` [10..14] -> return $ Left $ "parse_header - invalid version: " ++ show version
-    then return (version, file_length)
+    then return (version, file_length, cf == 67)
     else error "parse_header - invalid header"
 
-{-
 parse_header2 :: Word8 -> Word32 -> Parser Swf
 parse_header2 version file_length = do
   frame_size <- parse_rect
   frame_rate <- fromU16LE
-  p$ "frame_rate " ++ show frame_rate
   frame_count <- fromU16LE
   return$ Swf_Header version file_length frame_size frame_rate frame_count
-
-parse_header2 :: Parser (Rect, Word16, Word16)
-parse_header2 = do
-  frame_size <- parse_rect
-  frame_rate <- fromU16LE
-  p$ "frame_rate " ++ show frame_rate
-  frame_count <- fromU16LE
-  return (frame_size, frame_rate, frame_count)-}
 
 parse_record_header :: Parser RecordHeader
 parse_record_header = do
@@ -144,9 +163,9 @@ parse_rect :: Parser Rect
 parse_rect = do
   w <- EB.head_
   let nbits = w `shiftR` (8-5)
-  let wordWidth = ceiling $ ((fromIntegral nbits)*4 + 5)/8
+  let wordWidth = ceiling$ ((fromIntegral nbits)*4 + 0)/8
   ws <- nWords wordWidth
-  (rect :: Rect, _) <- tryIO$ runStateT (5,ws) (rect_parser$ fromIntegral nbits)
+  (rect :: Rect, _) <- tryIO$ runStateT (5,w:ws) (rect_parser$ fromIntegral nbits)
   return rect
   where
     rect_parser :: Float -> BitParser Rect
@@ -214,12 +233,6 @@ parse_colorxform alpha = parse_common max_bytes $ cxform_parser alpha
       , aA = aA
       }
 
-{-peek :: Monad m => Iteratee a m (Maybe a)
-peek = continue loop where
-  loop (Chunks []) = continue loop
-  loop chunk@(Chunks (x:_)) = yield (Just x) chunk
-  loop EOF = yield Nothing EOF-}
-
 {- doesn't consume stream -}
 take2 :: Monad m => Integer -> Iteratee BS.ByteString m BSL.ByteString
 take2 n | n <= 0 = return BSL.empty
@@ -250,7 +263,7 @@ parse_string :: Parser String
 parse_string = do
   stringBytes <- EB.takeWhile (/= 0x00)
   EB.drop 1
-  return$ BSC.unpack stringBytes
+  return$ BSLC.unpack stringBytes
 
 parse_abc :: Parser Swf
 parse_abc = liftM3 Swf_DoABC fromU32LE parse_string (EB.consume >>= toStrict)
@@ -264,14 +277,13 @@ parse_symbol_class = liftM Swf_SymbolClass $ fromU16LE >>= forNState tagNamePair
 parse_tag :: Parser Swf
 parse_tag = do
   (RecordHeader tag len) <- parse_record_header
-  p$ "tag " ++ show tag ++ " len " ++ show len
+  --p$ "tag " ++ show tag ++ " len " ++ show len
   nextBytes <- (EB.take$ fromIntegral len) >>= toStrict
   tryIO$ run_ (tagChoice tag >>== bsEnum nextBytes) -- shotgun approach for now
   where
     bsEnum :: BS.ByteString -> Enumerator BS.ByteString IO Swf
-    bsEnum = loop where
-      loop bs (Continue c) | not (BS.null bs) = c (Chunks [bs])
-      loop _ step = returnI step
+    bsEnum bs (Continue k) | not (BS.null bs) = k (Chunks [bs])
+    bsEnum _ step = returnI step
 
     tagChoice :: Word16 -> Parser Swf
     tagChoice tag
