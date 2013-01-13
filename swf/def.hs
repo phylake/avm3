@@ -121,7 +121,7 @@ data ClipActions = ClipActions {
 
 
 {- !undocumented tag! -}
-data Swf = Swf_Header Word8 Word32 Rect Word16 Word16
+data Swf = Swf_Header Word8 Word32 Rect Float Word16
          | {-  0 -} Swf_End
          | {-  1 -} Swf_ShowFrame
          | {-  2 -} Swf_DefineShape

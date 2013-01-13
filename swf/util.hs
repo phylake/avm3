@@ -1,14 +1,15 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Swf.Util (
     nWords
-  , fromU8
-  , fromU16LE
-  , fromU32LE
-  , fromDoubleLE
-  , fromU32LE_vl
-  , fromU30LE_vl
-  , fromS32LE_vl
-  , fromS24LE
+  , readU8
+  , readU16LE
+  , readFixed8
+  , readU32LE
+  , readDoubleLE
+  , readU32LE_vl
+  , readU30LE_vl
+  , readS32LE_vl
+  , readS24LE
   , unless_flag
   , rv_bool
   , rv_w32
@@ -37,34 +38,43 @@ toStrict = return. BS.pack. BSL.unpack
 nWords :: Integer -> Parser [Word8]
 nWords i = EB.take i >>= return. BSL.unpack
 
-fromU8 :: Parser Word8
-fromU8 = nWords 1 >>= return. Prelude.head
+readU8 :: Parser Word8
+readU8 = nWords 1 >>= return. Prelude.head
 
-fromU16LE :: Parser Word16
-fromU16LE = nWords 2 >>= return. U.toWord16LE
+readU16LE :: Parser Word16
+readU16LE = nWords 2 >>= return. U.toWord16LE
 
-fromU32LE :: Parser Word32
-fromU32LE = nWords 4 >>= return. U.toWord32LE
+readFixed8 :: Parser Float
+readFixed8 = do
+  (w1:w2:[]) <- nWords 2
+  let (decimal :: Float) = fromIntegral w1 / maxDecimalPrecision
+  return$ (fromIntegral w2) + decimal
+  where
+    maxDecimalPrecision :: Float
+    maxDecimalPrecision = 10 ** ceiling(logBase 10 $ 2 ** 8)
 
-fromDoubleLE :: Parser Double
-fromDoubleLE = nWords 8 >>= return. U.toDouble. Prelude.reverse
+readU32LE :: Parser Word32
+readU32LE = nWords 4 >>= return. U.toWord32LE
 
-fromU32LE_vl :: Parser Word32
-fromU32LE_vl = varLenUintLE >>= return. fromIntegral
+readDoubleLE :: Parser Double
+readDoubleLE = nWords 8 >>= return. U.toDouble. Prelude.reverse
 
-fromU30LE_vl :: Parser Word32
-fromU30LE_vl = do
-  w32 <- fromU32LE_vl
+readU32LE_vl :: Parser Word32
+readU32LE_vl = varLenUintLE >>= return. fromIntegral
+
+readU30LE_vl :: Parser Word32
+readU30LE_vl = do
+  w32 <- readU32LE_vl
   return$ w32 .&. 0x3fffffff
 
-fromS24LE :: Parser Int32
-fromS24LE = do
+readS24LE :: Parser Int32
+readS24LE = do
   bs <- EB.take 3 >>= toStrict
   let (ret,_) = U.fromS24LE bs
   return ret
 
-fromS32LE_vl :: Parser Int32
-fromS32LE_vl = do
+readS32LE_vl :: Parser Int32
+readS32LE_vl = do
   bs <- varIntBS
   return. fromIntegral. U.fromS32LE_vl_impl$ Prelude.map fromIntegral$ BS.unpack bs
 
