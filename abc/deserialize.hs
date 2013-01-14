@@ -22,10 +22,10 @@ import Util.Words hiding
   , fromS32LE_vl
   , fromS24LE
   )
-import qualified Data.ByteString.Lazy as BS
-import qualified Data.ByteString.Lazy.Char8 as BSC
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
 
-testFile = BS.readFile "abc/Test.abc" >>= runStateT parseAbc
+testFile = B.readFile "abc/Test.abc" >>= runStateT parseAbc
 
 parseAbc :: Parser Abc
 parseAbc = do
@@ -83,8 +83,8 @@ common hasOne f = fromU30LE_vl >>= u30' hasOne >>= forNState f
 parseStrings :: Parser String
 parseStrings = do
   u30 <- fromU30LE_vl
-  string <- StateT$ return. BS.splitAt (fromIntegral u30)
-  return$ BSC.unpack string
+  string <- StateT$ return. B.splitAt (fromIntegral u30)
+  return$ BC.unpack string
 
 {-
   4.4.1
@@ -383,8 +383,8 @@ parseMethodBody = do
 
   -- TODO there has to be a better way
   mbCodeCount <- fromU30LE_vl
-  bs <- get
-  let (opcodeBytes, bs2) = BS.splitAt (fromIntegral mbCodeCount) bs
+  b <- get
+  let (opcodeBytes, bs2) = B.splitAt (fromIntegral mbCodeCount) b
   put opcodeBytes
   mbCode <- allBytes parseOpCode
   put bs2

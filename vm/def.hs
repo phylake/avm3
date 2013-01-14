@@ -8,7 +8,7 @@ import qualified Data.HashTable.IO as H
 import qualified MonadLib as ML
 
 type ConstantPool = H.BasicHashTable String VmAbc
-type Execution = (Registers, Ops, ScopeStack, ConstantPool)
+type Execution = (ConstantPool)
 type AVM3_State = ML.StateT Execution IO
 type AVM3 = ML.ExceptionT String AVM3_State
 
@@ -95,7 +95,7 @@ get = ML.lift$ ML.get
 set :: Execution -> AVM3 ()
 set = ML.lift . ML.set
 
-get_reg :: AVM3 Registers
+{-get_reg :: AVM3 Registers
 get_reg = get >>= return. t41
 
 set_reg :: Registers -> AVM3 ()
@@ -126,15 +126,13 @@ mod_ss f = get_ss >>= return.f >>= set_ss
 set_ss :: ScopeStack -> AVM3 ()
 set_ss ss = do
   (reg,ops,_,cp) <- get
-  set (reg,ops,ss,cp)
+  set (reg,ops,ss,cp)-}
 
 get_cp :: AVM3 ConstantPool
-get_cp = get >>= return. t44
+get_cp = get
 
 mod_cp :: (ConstantPool -> ConstantPool) -> AVM3 ()
 mod_cp f = get_cp >>= return.f >>= set_cp
 
 set_cp :: ConstantPool -> AVM3 ()
-set_cp cp = do
-  (reg,ops,ss,_) <- get
-  set (reg,ops,ss,cp)
+set_cp = set

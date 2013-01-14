@@ -1,7 +1,7 @@
 module Util.Misc where
 
 import           Control.Monad.State (get)
-import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString as B
 
 instance Integral Float where
   quotRem a b = (fab, (ab - fab)*b)
@@ -27,7 +27,7 @@ forNState f n = if n > 0
 
 allBytes f = do
   bs <- get
-  if BS.null bs
+  if B.null bs
     then return []
     else do
       x <- f

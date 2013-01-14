@@ -21,16 +21,16 @@ import           Vm.Ecma
 import           Vm.Lookups
 import           Vm.Store
 import qualified Control.Monad.State as S
-import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString as B
 import qualified Data.HashTable.IO as H
 
 test_file = do
-  bs <- BS.readFile "abc/Test.abc"
+  bs <- B.readFile "abc/Test.abc"
   (abc :: Abc) <- S.evalStateT parseAbc bs
   writeFile "abc/Test.abc.json"$ encode$ abcToJson abc
   ht <- H.new
   (either::Either String (), _) <- abc `deepseq`
-    (runStateT ([],[],[],ht)$ runExceptionT$ execute_abc abc)
+    (runStateT ht$ runExceptionT$ execute_abc abc)
   case either of
     Left err -> Prelude.putStrLn$ "EXCEPTION\n\t" ++ err
     otherwise -> return ()
@@ -110,10 +110,10 @@ r_f {- 0x2F   -} ss reg (O (PushDouble idx):ops) = get_double idx >>= \v -> r_f 
 r_f {- 0x30 0 -} ss reg (D (VmRt_Object v):(O PushScope):ops) = r_f (v:ss) reg ops
 r_f {- 0x47   -} ss reg (O ReturnVoid:_) = return VmRt_Undefined
 r_f {- 0x48   -} ss reg (D v:(O ReturnValue):_) = return v
-r_f {- 0x58   -} ss reg (O (NewClass idx):ops) = new_class idx >> r_f ss reg ops
-r_f {- 0x5E   -} ss reg (O (FindProperty idx):ops) = find_property idx >> r_f ss reg ops
+r_f {- 0x58   -} ss reg (O (NewClass idx):ops) = new_class ss idx >>= \ss' -> r_f ss' reg ops
+r_f {- 0x5E   -} ss reg (O (FindProperty idx):ops) = find_property ss idx >> r_f ss reg ops
 r_f {- 0x60   -} ss reg (O (GetLex idx):ops) = r_f ss reg$ (O$ FindPropStrict idx):(O$ GetProperty idx):ops
-r_f {- 0x65   -} ss reg (O (GetScopeObject idx):ops) = get_scoped_object idx >> r_f ss reg ops
+r_f {- 0x65   -} ss reg (O (GetScopeObject idx):ops) = r_f ss reg ((D$VmRt_Object$ ss !! fromIntegral idx):ops)
 r_f {- 0x68   -} ss reg (D (VmRt_Object this):(O (InitProperty idx)):ops) = init_property this idx >> r_f ss reg ops
 r_f {- 0x70   -} ss reg (D v:O ConvertString:ops) = convert_string v >>= \v -> r_f ss reg (D v:ops)
 r_f {- 0x73   -} ss reg (D v:O ConvertInt:ops) = convert_int v >>= \v -> r_f ss reg (D v:ops)
@@ -148,21 +148,20 @@ convert_uint = return. VmRt_Uint. to_uint32
 new_function :: AVM3 ()
 new_function = undefined
 
-new_class :: ClassInfoIdx -> AVM3 VmRt
-new_class idx = do
+new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
+new_class scope_stack idx = do
   --show_ops "NewClass"
   ClassInfo msi traits <- get_class idx
   MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
-  scope_stack <- get_ss
   let global = last scope_stack
-  klass <- liftIO$ H.new >>= return.VmRt_Object
+  (klass :: VmRt) <- liftIO$ H.new >>= return.VmRt_Object
   let ops = map O code
   liftIO.putStrLn$ "ops: " ++ show ops
   liftIO.putStrLn$ "running function"
   run_function [global] [klass] ops
   klass_name <- class_name traits
   liftIO$ H.insert global klass_name klass
-  return klass
+  return$ init scope_stack ++ [global]
   where
     class_name :: [TraitsInfo] -> AVM3 String
     class_name traits = return "Test"
@@ -175,11 +174,11 @@ TODO resolve against
   3. dynamic properties
   4. prototype chain
 -}
-find_property :: MultinameIdx -> AVM3 ()
-find_property idx = do
+find_property :: ScopeStack -> MultinameIdx -> AVM3 ()
+find_property ss idx = do
   name <- resolve_multiname idx
-  liftIO.putStrLn$ "find_property " ++ show name
-  attempt1 <- get_ss >>= search_stack name
+  liftIO.putStrLn$ "find_property [" ++ show name ++ "]"
+  attempt1 <- search_stack name ss
   obj <- case attempt1 of
     Just obj -> return obj
     --Nothing -> traits_ref
@@ -204,13 +203,8 @@ find_property idx = do
   indexing of elements on the local operand stack."
 -}
 
-get_scoped_object :: U8 -> AVM3 ()
-get_scoped_object idx = do
-  --show_ops "GetScopeObject"
-  ss <- get_ss
-  mod_ops$ cons$ ss !! (fromIntegral idx)
-  where
-    cons = (:). D. VmRt_Object
+{-get_scoped_object :: ScopeStack -> U8 -> AVM3 Ops
+get_scoped_object ss idx = undefined-}
 
 init_property :: VmObject -> MultinameIdx -> AVM3 ()
 init_property this idx = do
