@@ -8,7 +8,7 @@ import qualified Data.HashTable.IO as H
 import qualified MonadLib as ML
 
 type ConstantPool = H.BasicHashTable String VmAbc
-type Execution = (ConstantPool)
+type Execution = (ConstantPool, Ops)
 type AVM3_State = ML.StateT Execution IO
 type AVM3 = ML.ExceptionT String AVM3_State
 
@@ -21,6 +21,7 @@ type Ops = [VmRtOp]
 
 data VmRtOp = O OpCode
             | D VmRt
+            | T [VmRtOp]
             deriving (Show)
 
 {-
@@ -48,6 +49,7 @@ TODO
       (Registers -> Ops -> AVM3 VmRt) ?
  3) a heap: type RefCount = Int ?
  4) space/time: eagerly resolve all strings, merge method info, etc
+ 5) move Traits off of scripts and onto the global object for find_property
 -}
 data VmRt = VmRt_Undefined
           | VmRt_Null
@@ -58,6 +60,7 @@ data VmRt = VmRt_Undefined
           | VmRt_String String
           | VmRt_Object VmObject {-RefCount-} {-(Maybe ScopeStack)-}
           | VmRt_Closure (Registers -> Ops -> AVM3 VmRt) -- curried r_f
+          | VmRtInternal_Int U30
 
 instance Show VmRt where
   show VmRt_Undefined   = "VmRt_Undefined"
@@ -69,6 +72,7 @@ instance Show VmRt where
   show (VmRt_String a)  = "VmRt_String " ++ show a
   show (VmRt_Object a)  = "VmRt_Object [Object]"
   show (VmRt_Closure _) = "VmRt_Closure"
+  show (VmRtInternal_Int a) = "VmRtInternal_Int " ++ show a
 
 {- 1:1 transformation of Abc to an ADT -}
 data VmAbc = VmAbc_Int Int32
@@ -106,17 +110,6 @@ set_reg reg = do
 mod_reg :: (Registers -> Registers) -> AVM3 ()
 mod_reg f = get_reg >>= return.f >>= set_reg
 
-get_ops :: AVM3 Ops
-get_ops = get >>= return. t42
-
-mod_ops :: (Ops -> Ops) -> AVM3 ()
-mod_ops f = get_ops >>= return.f >>= set_ops
-
-set_ops :: Ops -> AVM3 ()
-set_ops ops = do
-  (reg,_,ss,cp) <- get
-  set (reg,ops,ss,cp)
-
 get_ss :: AVM3 ScopeStack
 get_ss = get >>= return. t43
 
@@ -129,10 +122,37 @@ set_ss ss = do
   set (reg,ops,ss,cp)-}
 
 get_cp :: AVM3 ConstantPool
-get_cp = get
+get_cp = get >>= return. t21
 
 mod_cp :: (ConstantPool -> ConstantPool) -> AVM3 ()
 mod_cp f = get_cp >>= return.f >>= set_cp
 
 set_cp :: ConstantPool -> AVM3 ()
-set_cp = set
+set_cp cp = do
+  (_,ops) <- get
+  set (cp,ops)
+
+get_ops :: AVM3 Ops
+get_ops = get >>= return. t22
+
+mod_ops :: (Ops -> Ops) -> AVM3 ()
+mod_ops f = get_ops >>= return.f >>= set_ops
+
+set_ops :: Ops -> AVM3 ()
+set_ops ops = do
+  (cp,_) <- get
+  set (cp,ops)
+
+
+
+
+
+
+
+
+
+
+
+
+
+

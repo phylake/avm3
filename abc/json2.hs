@@ -1,6 +1,6 @@
 module Abc.Json2 (abcToJson) where
 
-import Abc.Def
+import Abc.Def hiding (trait_var)
 import Abc.Json
 import Data.Word
 import Text.JSON
@@ -23,10 +23,10 @@ abcToJson (Abc i ui d s nsi nss names sigs meta inst klas rx bodies) = kvToObjec
   , ("multinames", JSArray$ map (showJSON. multiname s_res nsi_res nss_res) names)
   , ("method_signatures", JSArray$ map (method_signature m_res s_res) sigs)
   , ("method_bodies", toArray bodies)
-  , ("metadata", toArray meta)
+  , ("metadata", JSArray$ map (metadata s_res) meta)
   , ("instance_infos", toArray inst)
-  , ("class_infos", JSArray$ map (class_info m_res) klas)
-  , ("scripts", toArray rx)
+  , ("class_infos", JSArray$ map (class_info tt_res) klas)
+  , ("scripts", JSArray$ map (script_info tt_res) rx)
   ]
   where
     m_res :: U30 -> String
@@ -37,8 +37,12 @@ abcToJson (Abc i ui d s nsi nss names sigs meta inst klas rx bodies) = kvToObjec
     nsi_res i = nsinfo_raw s_res$ nsi !! fromIntegral i
     nss_res :: U30 -> String
     nss_res i = "NSSET"
+    tt_res :: TraitsInfo -> JSValue
+    tt_res = traits_info m_res (trait_type m_res)
 
-nsinfo :: (U30 -> String) -> NSInfo -> String
+nsinfo :: (U30 -> String) -- string resolution
+       -> NSInfo
+       -> String
 nsinfo s_res nsi@(NSInfo_Namespace a) = "Namespace[" ++ nsinfo_raw s_res nsi ++ "]"
 nsinfo s_res nsi@(NSInfo_PackageNamespace a) = "PackageNamespace[" ++ nsinfo_raw s_res nsi ++ "]"
 nsinfo s_res nsi@(NSInfo_PackageInternalNs a) = "PackageInternalNs[" ++ nsinfo_raw s_res nsi ++ "]"
@@ -48,7 +52,9 @@ nsinfo s_res nsi@(NSInfo_StaticProtectedNs a) = "StaticProtectedNs[" ++ nsinfo_r
 nsinfo s_res nsi@(NSInfo_PrivateNs a) = "PrivateNs[" ++ nsinfo_raw s_res nsi ++ "]"
 nsinfo s_res NSInfo_Any = "Any[" ++ nsinfo_raw s_res NSInfo_Any ++ "]"
 
-nsinfo_raw :: (U30 -> String) -> NSInfo -> String
+nsinfo_raw :: (U30 -> String) -- string resolution
+           -> NSInfo
+           -> String
 nsinfo_raw s_res (NSInfo_Namespace a)          = s_res a
 nsinfo_raw s_res (NSInfo_PackageNamespace a)   = s_res a
 nsinfo_raw s_res (NSInfo_PackageInternalNs a)  = s_res a
@@ -63,8 +69,12 @@ multiname :: (U30 -> String) -- string resolution
           -> (U30 -> String) -- nsset resolution
           -> Multiname
           -> String
-multiname s_res nsi_res nss_res (Multiname_QName a b) = nsi_res a ++ "::" ++ s_res b
-multiname s_res nsi_res nss_res (Multiname_QNameA a b) = nsi_res a ++ "::" ++ s_res b
+multiname s_res nsi_res nss_res (Multiname_QName a b) = case nsi_res a of
+  "" -> s_res b
+  nsinfo -> nsinfo ++ "::" ++ s_res b
+multiname s_res nsi_res nss_res (Multiname_QNameA a b) = case nsi_res a of
+  "" -> s_res b
+  nsinfo -> nsinfo ++ "::" ++ s_res b
 multiname s_res nsi_res nss_res m@(Multiname_RTQName a) = show m
 multiname s_res nsi_res nss_res m@(Multiname_RTQNameA a) = show m
 multiname s_res nsi_res nss_res m@(Multiname_Multiname a b) = show m
@@ -87,14 +97,87 @@ method_signature m_res s_res (MethodSignature ret ptypes name flags options pnam
   , ("options", maybe (JSArray []) toArray options)
   ]
 
-class_info :: (U30 -> String) -- multiname resolution
+metadata :: (U30 -> String) -- string resolution
+         -> Metadata
+         -> JSValue
+metadata s_res (Metadata name kvps) = kvToObject
+  [
+    ("name", showJSON$ s_res name)
+  , ("kvps", kvToObject$ map (\(k,v) -> (s_res k, showJSON$ s_res v)) kvps)
+  ]
+
+traits_info :: (U30 -> String) -- multiname resolution
+            -> (TraitType -> JSValue) -- trait type resolution
+            -> TraitsInfo
+            -> JSValue
+traits_info m_res tt_res (TraitsInfo name final override ttype meta) = kvToObject
+  [
+    ("name", showJSON$ m_res name)
+  , ("final", showJSON$ final)
+  , ("override", showJSON$ override)
+  , ("type", showJSON$ ttype)
+  , ("meta", maybe (JSArray []) toArray meta)
+  ]
+
+trait_type :: (U30 -> String) -- multiname resolution
+           -> TraitType
+           -> JSValue
+trait_type m_res (TT_Var tvar) = trait_var m_res tvar
+trait_type m_res (TT_Const tvar) = trait_var m_res tvar
+trait_type m_res (TT_Method (TraitMethod dispId meth)) = kvToObject$
+  [
+    ("disp_id", showJSON dispId)
+  , ("method_id", showJSON meth)
+  ]
+trait_type m_res (TT_Getter (TraitMethod dispId meth)) = kvToObject$
+  [
+    ("disp_id", showJSON dispId)
+  , ("method_id", showJSON meth)
+  ]
+trait_type m_res (TT_Setter (TraitMethod dispId meth)) = kvToObject$
+  [
+    ("disp_id", showJSON dispId)
+  , ("method_id", showJSON meth)
+  ]
+trait_type m_res (TT_Class (TraitClass id init)) = kvToObject$
+  [
+    ("id", showJSON id)
+  , ("init", showJSON init)
+  ]
+trait_type m_res (TT_Function (TraitFunction dispId func)) = kvToObject$
+  [
+    ("slot_id", showJSON dispId)
+  , ("function_id", showJSON func)
+  ]
+
+trait_var :: (U30 -> String) -- multiname resolution
+         -> TraitVar
+         -> JSValue
+trait_var m_res (TraitVar tsid name idx kind) = kvToObject$
+  [
+    ("id", showJSON tsid)
+  , ("name", showJSON$ m_res name)
+  , ("index", showJSON idx)
+  , ("kind", showJSON$ maybe (-1) id kind)
+  ]
+
+class_info :: (TraitsInfo -> JSValue) -- trait info resolution
            -> ClassInfo
            -> JSValue
-class_info m_res (ClassInfo init traits) = kvToObject
-    [
-      ("init", showJSON$ m_res init)
-    , ("traits", toArray traits)
-    ]
+class_info t_res (ClassInfo init traits) = kvToObject
+  [
+    ("init", showJSON init)
+  , ("traits", JSArray$ map t_res traits)
+  ]
+
+script_info :: (TraitsInfo -> JSValue) -- trait info resolution
+            -> ScriptInfo
+            -> JSValue
+script_info t_res (ScriptInfo init traits) = kvToObject
+  [
+    ("init", showJSON init)
+  , ("traits", JSArray$ map t_res traits)
+  ]
 
 exceptions :: [String] -> Exception -> JSValue
 exceptions s (Exception from to target t varname) = kvToObject

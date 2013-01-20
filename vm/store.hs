@@ -150,7 +150,7 @@ put_methodBody k v = put_ht MethodBody_ k $ VmAbc_MethodBody v
 
 get_ht :: HTPrefix -> U30 -> AVM3 VmAbc
 get_ht prefix k = do
-  ht <- get
+  ht <- get_cp
   --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
   m <- liftIO $ H.lookup ht (show prefix ++ show k)
   case m of
@@ -159,7 +159,7 @@ get_ht prefix k = do
 
 put_ht :: HTPrefix -> U30 -> VmAbc -> AVM3 ()
 put_ht prefix k v = do
-  ht <- get
+  ht <- get_cp
   --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
   liftIO $ H.insert ht (show prefix ++ show k) v
-  set ht
+  set_cp ht
