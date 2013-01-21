@@ -1,7 +1,12 @@
 module Util.Misc where
 
 import           Control.Monad.State (get)
+import           Data.Enumerator
 import qualified Data.ByteString as B
+import qualified MonadLib as ML
+
+instance ML.MonadT (Iteratee a) where
+  lift m = Iteratee (m >>= runIteratee . return)
 
 instance Integral Float where
   quotRem a b = (fab, (ab - fab)*b)
