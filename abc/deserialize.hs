@@ -170,7 +170,7 @@ parseMethodSignatures = do
 
 parseOptionalParams :: Parser (Maybe [CPC])
 parseOptionalParams =
-  fromU30LE_vl >>= forNState optionDetail >>= return. Just
+  fromU30LE_vl >>= forNState optionDetail >>= returnJ
 
 optionDetail :: Parser CPC
 optionDetail = do
@@ -217,7 +217,7 @@ cpcChoice w idx
 
 parseParamNames :: Word32 -> Parser (Maybe [Word32])
 parseParamNames count =
-  forNState fromU30LE_vl count >>= return. Just
+  forNState fromU30LE_vl count >>= returnJ
 
 {-
   4.6
@@ -243,7 +243,7 @@ parseInstance = do
   superName <- fromU30LE_vl
   flags <- fromU8
   protectedNs <- if (flags .&. instf_CLASS_PROTECTEDNS == instf_CLASS_PROTECTEDNS)
-    then fromU30LE_vl >>= return. Just
+    then fromU30LE_vl >>= returnJ
     else return Nothing
   interfaces <- fromU30LE_vl >>= forNState fromU30LE_vl
   iinit <- fromU30LE_vl
@@ -271,7 +271,7 @@ parseTrait = do
   let final = kind .&. 0x10 == 0x10
   let override = kind .&. 0x20 == 0x20
   meta <- if (kind .&. 0x40 == 0x40)
-    then fromU30LE_vl >>= forNState fromU30LE_vl >>= return. Just
+    then fromU30LE_vl >>= forNState fromU30LE_vl >>= returnJ
     else return Nothing
   return TraitsInfo {
     tiName = name
@@ -308,7 +308,7 @@ parseTraitVar f = do
   index <- fromU30LE_vl
   kind <- if index == 0
     then return Nothing
-    else fromU8 >>= return. Just
+    else fromU8 >>= returnJ
   return$ f TraitVar {
     tsId = slot
   , tsName = name
