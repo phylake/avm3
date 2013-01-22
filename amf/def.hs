@@ -1,8 +1,6 @@
 module Amf.Def where
 
 import           Control.DeepSeq
-import           Control.Monad.State (StateT)
-import           Control.Monad.Writer
 import           Data.Enumerator as E
 import           Data.Enumerator.Binary as EB
 import           Data.Enumerator.List as EL
@@ -19,10 +17,8 @@ type U30 = Word32
 type U32 = Word32
 type S24 = Int32
 
-type AmfErr = String
 type U29 = Int
 type Assoc_Value = (UTF_8_vr, Amf)
-type AmfT = (Acc Word8, [Amf])
 
 -- (Strings, Complex Object, Traits)
 type Tables = ([String], [Amf], [Traits])
@@ -31,26 +27,14 @@ type Tables = ([String], [Amf], [Traits])
 type Traits = (UTF_8_vr, [UTF_8_vr], Bool)
 
 class AmfPrim a where
-  fromAmf :: Acc Word8 -> Either AmfErr (Acc Word8, a)
-  fromAmf2 :: Parser a
-  fromAmf2 = undefined
+  fromAmf :: Parser a
 
-{-toAmf :: Acc Amf -> Either AmfErr (Acc Amf, DiffList Word8)
-toAmf = undefined-}
-
-data Acc a = Acc {
+{-data Acc a = Acc {
                    accAs  :: [a]
                  , accBs  :: Int
                  , accTs  :: Tables
                  , accLog :: [String]
-                 }
-
-instance (NFData a) => NFData (Acc a) where
-  rnf (Acc a b c d) = a
-    `deepseq` b
-    `deepseq` c
-    `deepseq` d
-    `deepseq` ()
+                 }-}
 
 data Amf = {- 0x0 -} AmfUndefined {- undefined-marker -}
          | {- 0x1 -} AmfNull      {- null-marker -}
