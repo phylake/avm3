@@ -100,6 +100,7 @@ data PlaceObject = PlaceObject {
 
 data PlaceObject2 = PlaceObject2 {
                                    po2Depth :: Word16
+                                 , po2CharId :: Maybe Word16
                                  , po2Matrix :: Maybe Matrix
                                  , po2Cxform :: Maybe ColorXForm
                                  , po2Ratio :: Maybe Word16
@@ -109,13 +110,137 @@ data PlaceObject2 = PlaceObject2 {
                                  }
                                  deriving (Show)
 
+data ClipEventFlags = ClipEventConstruct
+                    | ClipEventData
+                    | ClipEventDragOut
+                    | ClipEventDragOver
+                    | ClipEventEnterFrame
+                    | ClipEventInitialize
+                    | ClipEventKeyDown
+                    | ClipEventKeyPress
+                    | ClipEventKeyUp
+                    | ClipEventLoad
+                    | ClipEventMouseDown
+                    | ClipEventMouseMove
+                    | ClipEventMouseUp
+                    | ClipEventPress
+                    | ClipEventRelease
+                    | ClipEventReleaseOutside
+                    | ClipEventRollOut
+                    | ClipEventRollOver
+                    | ClipEventUnload
+
 data ClipActions = ClipActions {
-                                 caCharId :: Word16
-                               , caDepth :: Word16
-                               , caMatrix :: Matrix
-                               , caCxform :: ColorXForm
+                                 caAllEventFlags :: ClipEventFlags
+                               , caActionRecords :: [ClipActionRecord]
                                }
                                deriving (Show)
+
+data ClipActionRecord = ClipActionRecord {
+                                           carEventFlags :: ClipEventFlags
+                                         , carKeycode :: Maybe Word8
+                                         , carActions :: [ActionRecord]
+                                         }
+                                         deriving (Show)
+
+data BlendMode = {-0,1 -} Normal
+               | {-  2 -} Layer
+               | {-  3 -} Multiply
+               | {-  4 -} Screen
+               | {-  5 -} Lighten
+               | {-  6 -} Darken
+               | {-  7 -} Difference
+               | {-  8 -} Add
+               | {-  9 -} Subtract
+               | {- 10 -} Invert
+               | {- 11 -} Alpha
+               | {- 12 -} Erase
+               | {- 13 -} Overlay
+               | {- 14 -} Hardlight
+
+data PlaceObject3 = PlaceObject3 {
+                                   po3Depth :: Word16
+                                 , po3ClassName :: Maybe String
+                                 , po3CharId :: Maybe Word16
+                                 , po3Matrix :: Maybe Matrix
+                                 , po3Cxform :: Maybe ColorXForm
+                                 , po3Ratio :: Maybe Word16
+                                 , po3Name :: Maybe String
+                                 , po3ClipDepth :: Maybe Word16
+                                 , po3SurfaceFilterList :: [Filter]
+                                 , po3BlendMode :: BlendMode
+                                 , po3BitmapCache :: Bool
+                                 , po3ClipActions :: Maybe ClipActions
+                                 }
+                                 deriving (Show)
+
+type ColorMatrixFilter = [Word8]
+
+data ConvolutionFilter = ConvolutionFilter {
+                                             convfDivisor :: Float
+                                           , convfBias :: Float
+                                           , convfMatrix :: [Word8]
+                                           , convfDefaultColor :: RGB
+                                           , convfClamp :: Bool
+                                           , convfPreserveAlpha :: Bool
+                                           }
+                                           deriving (Show)
+
+data BlurFilter = BlurFilter {
+                               blurfBlurX :: Float
+                             , blurfBlurY :: Float
+                             , blurfPasses :: Word8
+                             }
+                             deriving (Show)
+
+data DropShadowFilter = DropShadowFilter {
+                                           dsfColor :: RGB
+                                         , dsfBlurX :: Float
+                                         , dsfBlurY :: Float
+                                         , dsfAngle :: Float
+                                         , dsfDistance :: Float
+                                         , dsfStrength :: Float
+                                         , dsfInnerShadow :: Bool
+                                         , dsfKnockout :: Bool
+                                         , dsfPasses :: Word8
+                                         }
+                                         deriving (Show)
+
+data GlowFilter = GlowFilter {
+                               gfColor :: RGB
+                             , gfBlurX :: Float
+                             , gfBlurY :: Float
+                             , gfStrength :: Float
+                             , gfInnerGlow :: Bool
+                             , gfKnockout :: Bool
+                             , gfPasses :: Word8
+                             }
+                             deriving (Show)
+
+data BevelFilter = BevelFilter {
+                                 bevfShadowColor :: RGB
+                               , bevfHighlightColor :: RGB
+                               , bevfBlurX :: Float
+                               , bevfBlurY :: Float
+                               , bevfAngle :: Float
+                               , bevfDistance :: Float
+                               , bevfStrength :: Float
+                               , bevfInnerShadow :: Bool
+                               , bevfKnockout :: Bool
+                               , bevfOnTop :: Bool
+                               , bevfPasses :: Word8
+                               }
+                               deriving (Show)
+
+data Filter = {- 0 -} DropShadow DropShadowFilter
+            | {- 1 -} Blur BlurFilter
+            | {- 2 -} Glow GlowFilter
+            | {- 3 -} Bevel BevelFilter
+            | {- 4 -} Gradient GradientFilter
+            | {- 5 -} Convolution ConvolutionFilter
+            | {- 6 -} ColorMatrix ColorMatrixFilter
+            | {- 7 -} GradientBevel GradientBevelFilter
+
 
 {- chapter 5 Actions -}
 
