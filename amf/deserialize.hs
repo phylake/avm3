@@ -1,7 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Amf.Deserialize where
+module Amf.Deserialize (allFromAmf) where
 
 import           Amf.Def
+import           Amf.Util as U
 import           Control.DeepSeq
 import           Control.Monad.State
 import           Data.Binary.IEEE754 (wordToDouble)
@@ -26,40 +27,42 @@ import qualified MonadLib as ML
 BEGIN test code
 
 -}
+
 testFile :: IO ()
 testFile = do
-  --(amfs :: [Amf], (string, cot, tt)) <- ML.runStateT nilTable (run_$ EB.enumFile "amf/file.amf" $$ all_from_amf)
-  --ML.runStateT nilTable (run_$ EB.enumFile "amf/file.amf" $$ all_from_amf)
-  --let (m :: ML.StateT Tables IO [Amf]) = (run_ (EB.enumFile "amf/file.amf" $$ all_from_amf))
-  let m = (run_ (EB.enumFile "amf/file.amf" $$ all_from_amf))
+  (amfs :: [Amf], (string, cot, tt)) <- run_ (EB.enumFile "amf/file.amf" $$ ML.runStateT nilTable allFromAmf)
   putStrLn "AMFS"
-  --putStrLn $ unlines $ Prelude.map show amfs
-  --putStrLn "TABLES"
-  --putStrLn "Strings"
-  --putStrLn $ unlines $ map show $ t31 $ accTs acc
-  --putStrLn "Complex Objects"
-  --putStrLn $ unlines $ map show $ t32 $ accTs acc
-  --putStrLn "Traits"
-  --putStrLn $ unlines $ map show $ t33 $ accTs acc
+  putStrLn $ unlines $ Prelude.map show amfs
+  putStrLn "TABLES"
+  putStrLn "Strings"
+  putStrLn $ unlines $ Prelude.map show string
+  putStrLn "Complex Objects"
+  putStrLn $ unlines $ Prelude.map show cot
+  putStrLn "Traits"
+  putStrLn $ unlines $ Prelude.map show tt
   return ()
 
-all_from_amf :: Parser [Amf]
-all_from_amf = do
-  w <- peek
-  case w of
-    Nothing -> return []
-    Just _ -> do
-      (amf :: Amf) <- fromAmf
-      rest <- all_from_amf
-      return$ amf:rest
+p :: String -> ML.StateT Tables (Iteratee ByteString IO) ()
+p = ML.lift . ML.lift . putStrLn
+
 {-
 
 END test code
 
 -}
 
+allFromAmf :: Parser [Amf]
+allFromAmf = do
+  w <- U.peek
+  case w of
+    Nothing -> return []
+    otherwise -> do
+      (amf :: Amf) <- fromAmf
+      rest <- allFromAmf
+      return$ amf:rest
+
 instance AmfPrim Amf where
-  fromAmf = EB.head_ >>= fromAmfImpl where
+  fromAmf = U.head_ >>= fromAmfImpl where
     fromAmfImpl :: Word8 -> Parser Amf
     fromAmfImpl w
       | w == 0x0 = return AmfUndefined
@@ -108,7 +111,7 @@ fromU29BRef :: U29 -> Parser Amf
 fromU29BRef = return . AmfByteArray . U29B_Ref
 
 fromU29BValue :: U29 -> Parser Amf
-fromU29BValue len = EB.take (fromIntegral len) >>=
+fromU29BValue len = U.take (fromIntegral len) >>=
                     return. BL.unpack >>= return . AmfByteArray . U29B_Value
 
 {-
@@ -234,9 +237,9 @@ instance AmfPrim UTF_8_vr where
     let lenOrIdx = u29 `shiftR` 1
     if u29 .&. 1 == 0
       {- ref - lenOrIdx used as index -}
-      then return$ U29S_Ref$ fromIntegral lenOrIdx
+      then return . U29S_Ref$ fromIntegral lenOrIdx
       {- value - lenOrIdx used as length -}
-      else EB.take (fromIntegral lenOrIdx) >>=
+      else U.take (fromIntegral lenOrIdx) >>=
            return . BLC.unpack >>= pushST >>= return . U29S_Value
 
 fromStringType :: Parser Amf
@@ -250,7 +253,7 @@ utf8_empty = ""
 -}
 
 instance AmfPrim Double where
-  fromAmf = EB.take 8 >>= return . wordToDouble . toWord64 . BL.unpack
+  fromAmf = U.take 8 >>= return . wordToDouble . toWord64 . BL.unpack
 
 fromDoubleType :: Parser Amf
 fromDoubleType = fromAmf >>= return. AmfDouble
@@ -260,10 +263,13 @@ fromDoubleType = fromAmf >>= return. AmfDouble
 -}
 
 instance AmfPrim Int where
-  fromAmf = EB.takeWhile hasSignalBit >>= return . fromIntegral . fromU29 . BL.unpack
+  fromAmf = do
+    w <- U.take 1
+    ws <- U.takeWhile hasSignalBit
+    return . fromIntegral . fromU29 $ BL.unpack (BL.append w ws)
 
 fromIntegerType :: Parser Amf
-fromIntegerType = fromAmf >>= return. AmfInt
+fromIntegerType = fromAmf >>= return . AmfInt
 
 {- the number of bytes an Int will occupy once serialized -}
 --deserializedU29Length :: (Real a) => a -> Int
@@ -320,30 +326,30 @@ toStrict = return . B.pack . BL.unpack
 
 pushST :: String -> Parser String
 pushST a = do
-  (st, cot, tt) <- ML.lift$ ML.get
-  ML.lift$ ML.set (a : st, cot, tt)
+  (st, cot, tt) <- ML.get
+  ML.set (a : st, cot, tt)
   return a
 
 pushCOT :: Amf -> Parser Amf
 pushCOT a = do
-  (st, cot, tt) <- ML.lift$ ML.get
-  ML.lift$ ML.set (st, a : cot, tt)
+  (st, cot, tt) <- ML.get
+  ML.set (st, a : cot, tt)
   return a
 
 pushTT :: Traits -> Parser Traits
 pushTT a = do
-  (st, cot, tt) <- ML.lift$ ML.get
-  ML.lift$ ML.set (st, cot, a : tt)
+  (st, cot, tt) <- ML.get
+  ML.set (st, cot, a : tt)
   return a
 
 getST :: Parser [String]
-getST = ML.lift$ ML.get >>= return . t31
+getST = ML.get >>= return . t31
 
 getCOT :: Parser [Amf]
-getCOT = ML.lift$ ML.get >>= return . t32
+getCOT = ML.get >>= return . t32
 
 getTT :: Parser [Traits]
-getTT = ML.lift$ ML.get >>= return . t33
+getTT = ML.get >>= return . t33
 
 nilTable :: Tables
 nilTable = ([], [], [])

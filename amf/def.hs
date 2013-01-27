@@ -10,7 +10,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified MonadLib as ML
 
-type Parser = Iteratee B.ByteString (ML.StateT Tables IO)
+type Parser = ML.StateT Tables (Iteratee B.ByteString IO)
 
 type U8 = Word8
 type U30 = Word32
