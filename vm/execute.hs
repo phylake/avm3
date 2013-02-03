@@ -12,7 +12,7 @@ import           Data.Int
 import           Data.Maybe (listToMaybe)
 import           Data.Word
 import           Ecma.Prims
-import           MonadLib hiding (get, set)
+import           MonadLib as ML hiding (get, set)
 import           Text.JSON
 import           TFish
 import           Util.Misc
@@ -29,7 +29,10 @@ p :: String -> AVM3 ()
 p = liftIO.putStrLn
 
 returnJ :: a -> AVM3 (Maybe a)
-returnJ = return.Just
+returnJ = return. Just
+
+returnN :: AVM3 (Maybe a)
+returnN = return Nothing
 
 avm_prefix :: String
 avm_prefix = "avm3internal_"
@@ -69,23 +72,51 @@ execute_abc abc = do
   p$ "-------------------------------------------"
   global <- liftIO build_global_scope
   let ops = [O$ NewClass idx,O PushScope,O ReturnVoid]
-  run_function [global] [VmRt_Object global] ops
+  (c, _) <- run_function [global] [VmRt_Object global] ops
+  case c of
+    Yield v -> p$ show v
+    otherwise -> raise "didn't yield anything"
   p$ "-------------------------------------------"
 
   return ()
 
-{-show_ops :: String -> AVM3 ()
-show_ops header = do
-  p$ header
-  get_ops >>= liftIO. putStrLn. unlines. map (\s -> "\t" ++ show s)-}
+run_function :: ScopeStack -> Registers -> Ops -> AVM3 (VmCont, Ops)
+run_function ss reg ops = do
+  p$ "run_function"
+  --p$ unlines$ map ((++)"\t" . show) ops
+  p$ "\tops\n\t" ++ show ops
+  (c, ops2) <- next_cont ops
+  (c2, ops3) <- case c of
+    NoMatch -> do
+      let (dataOps, rest) = splitAt 1 ops
+      p$ "NoMatch"
+      p$ "\t" ++ show dataOps
+      mod_ops (++dataOps)
+      run_function ss reg rest
+    Yield v -> return (Yield v, [])
+    OpsMod f -> run_function ss reg (f ops2)
+    OpsModM f -> f ss >>= return . flip (,) ops2
+    OpsMod2 f -> run_function ss reg (f reg ops2)
+    RegMod f -> run_function ss (f reg) ops2
+    StackMod f -> run_function (f ss) reg ops2
+    FindProp idx -> do
+      vmrt <- find_property idx ss
+      return (Yield vmrt, ops2)
+  case c2 of
+    NoMatch -> return (c2, ops3)
+    otherwise -> do
+      dataOps <- get_ops
+      p$ "Reassembling"
+      p$ "\tdataOps     " ++ show dataOps
+      p$ "\tops3        " ++ show ops3
+      p$ "\treassembled " ++ show (dataOps ++ ops3)
+      set_ops []
+      return (c2, dataOps ++ ops3)
 
 show_ops :: String -> Ops -> AVM3 ()
 show_ops header ops = do
   p$ header
   liftIO. putStrLn. unlines$ map (\s -> "\t" ++ show s) ops
-
-prep_method_entry :: VmObject -> [OpCode] -> AVM3 Ops
-prep_method_entry this code = return$ (D$ VmRt_Object this):(O SetLocal0):(map O code)
 
 build_global_scope :: IO VmObject
 build_global_scope = do
@@ -97,86 +128,83 @@ build_global_scope = do
 
   return global
 
-run_function = r_f
+next_cont = n_c
 
 {-
 ScopeStack is first because i'm replicating as3 closures with
 real haskell closures for now
 -}
-r_f :: ScopeStack -> Registers -> Ops -> AVM3 (VmRt, Ops)
--- r_f {- 0xA0   -} reg ((D a):(D b):(O Add):ops) = r_f ss reg ((D$ a+b):ops)
--- r_f {- 0x30 1 -} reg (_:(O PushScope):ops) = raise "r_f - PushScope"
-r_f {-      0 -} ss reg [] = raise "empty ops"
-r_f {-      1 -} ss reg (D ret:[]) = return (ret, [])
-r_f {- 0x1D   -} (_:ss) reg (O PopScope:ops) = r_f ss reg ops
-r_f {- 0x24   -} ss reg (O (PushByte u8):ops) = do
-  p$ "PushByte " ++ show u8
-  r_f ss reg$ T[D. VmRt_Int$ fromIntegral u8]:ops
-r_f {- 0x26   -} ss reg (O PushTrue:ops) = r_f ss reg$ (D$ VmRt_Boolean True):ops
-r_f {- 0x27   -} ss reg (O PushFalse:ops) = r_f ss reg$ (D$ VmRt_Boolean False):ops
-r_f {- 0x28   -} ss reg (O PushNaN:ops) = r_f ss reg$ (D$ VmRt_Number nan):ops
-r_f {- 0x29   -} ss reg (D _:O Pop:ops) = r_f ss reg ops
-r_f {- 0x2A   -} ss reg (D a:O Dup:ops) = r_f ss reg (D a:D a:ops)
-r_f {- 0x2B   -} ss reg (D a:D b:O Swap:ops) = r_f ss reg (D b:D a:ops)
-r_f {- 0x2C   -} ss reg (O (PushString idx):ops) = get_string idx >>= \v -> r_f ss reg$ T[D$ VmRt_String v]:ops
-r_f {- 0x2D   -} ss reg (O (PushInt idx):ops) = get_int idx >>= \v -> r_f ss reg$ T[D$ VmRt_Int v]:ops
-r_f {- 0x2E   -} ss reg (O (PushUInt idx):ops) = get_uint idx >>= \v -> r_f ss reg$ T[D$ VmRt_Uint v]:ops
-r_f {- 0x2F   -} ss reg (O (PushDouble idx):ops) = get_double idx >>= \v -> r_f ss reg$ T[D$ VmRt_Number v]:ops
-r_f {- 0x30 0 -} ss reg (D (VmRt_Object v):(O PushScope):ops) = r_f (v:ss) reg ops
-r_f {- 0x47   -} ss reg (O ReturnVoid:ops) = return (VmRt_Undefined, ops)
-r_f {- 0x48   -} ss reg (D v:(O ReturnValue):ops) = return (v, ops)
-r_f {- 0x58   -} ss reg (O (NewClass idx):ops) = new_class ss idx >>= \ss' -> r_f ss' reg ops
-r_f {- 0x5E   -} ss reg (O (FindProperty idx):ops) = find_property ss idx >>= \v -> r_f ss reg$ T[D v]:ops
-r_f {- 0x60   -} ss reg (O (GetLex idx):ops) = r_f ss reg$ T[O$ FindPropStrict idx,O$ GetProperty idx]:ops
-r_f {- 0x65   -} ss reg (O (GetScopeObject idx):ops) = r_f ss reg ((D$VmRt_Object$ ss !! fromIntegral idx):ops)
-r_f {- 0x68   -} ss reg (D (VmRt_Object this):D vmrt:O (InitProperty idx):ops) = init_property this idx vmrt >>= \v -> r_f ss reg$ T[D v]:ops
-r_f {- 0x70   -} ss reg (D v:O ConvertString:ops) = convert_string v >>= \v -> r_f ss reg$ T[D v]:ops
-r_f {- 0x73   -} ss reg (D v:O ConvertInt:ops) = convert_int v >>= \v -> r_f ss reg$ T[D v]:ops
-r_f {- 0x74   -} ss reg (D v:O ConvertUInt:ops) = convert_uint v >>= \v -> r_f ss reg$ T[D v]:ops
-r_f {- 0x75   -} ss reg (D v:O ConvertDouble:ops) = convert_double v >>= \v -> r_f ss reg$ T[D v]:ops
-r_f {- 0x76   -} ss reg (D v:O ConvertBoolean:ops) = convert_boolean v >>= \v -> r_f ss reg$ T[D v]:ops
-r_f {- 0x77   -} ss reg (D v:O ConvertObject:ops) = undefined
-r_f {- 0xD0   -} ss reg@(r:      []) (O GetLocal0:ops) = r_f ss reg (D r:ops)
-r_f {- 0xD1   -} ss reg@(_:r:    []) (O GetLocal1:ops) = r_f ss reg (D r:ops)
-r_f {- 0xD2   -} ss reg@(_:_:r:  []) (O GetLocal2:ops) = r_f ss reg (D r:ops)
-r_f {- 0xD3   -} ss reg@(_:_:_:r:[]) (O GetLocal3:ops) = r_f ss reg (D r:ops)
-r_f {- 0xD4   -} ss (this:      reg) (D new:O SetLocal0:ops) = r_f ss (         new:reg) ops
-r_f {- 0xD5   -} ss (this:a:    reg) (D new:O SetLocal1:ops) = r_f ss (this:    new:reg) ops
-r_f {- 0xD6   -} ss (this:a:b:  reg) (D new:O SetLocal2:ops) = r_f ss (this:a:  new:reg) ops
-r_f {- 0xD7   -} ss (this:a:b:c:reg) (D new:O SetLocal3:ops) = r_f ss (this:a:b:new:reg) ops
-r_f ss reg (T midOps:rest) = do
-  topOps <- get_ops
+n_c :: Ops -> AVM3 (VmCont, Ops)
+-- n_c {- 0xA0   -} reg ((D a):(D b):(O Add):ops) = n_c ss reg ((D$ a+b):ops)
+-- n_c {- 0x30 1 -} reg (_:(O PushScope):ops) = raise "n_c - PushScope"
+n_c {-      0 -} [] = raise "empty ops"
+n_c {-      1 -} (D ret:[]) = yield [] ret
+n_c {- 0x1D   -} (O PopScope:ops) = mod_ss ops tail
+n_c {- 0x24   -} (O (PushByte u8):ops) = cons_vmrt ops$ VmRt_Int$ fromIntegral u8
+n_c {- 0x26   -} (O PushTrue:ops) = cons_vmrt ops$ VmRt_Boolean True
+n_c {- 0x27   -} (O PushFalse:ops) = cons_vmrt ops$ VmRt_Boolean False
+n_c {- 0x28   -} (O PushNaN:ops) = cons_vmrt ops$ VmRt_Number nan
+n_c {- 0x29   -} (D _:O Pop:ops) = ops_mod ops id
+n_c {- 0x2A   -} (D a:O Dup:ops) = ops_mod ops$ (:)(D a) . (:)(D a)
+n_c {- 0x2B   -} (D a:D b:O Swap:ops) = ops_mod ops$ (:)(D b) . (:)(D a)
+n_c {- 0x2C   -} (O (PushString idx):ops) = get_string idx >>= cons_vmrt ops . VmRt_String
+n_c {- 0x2D   -} (O (PushInt idx):ops) = get_int idx >>= cons_vmrt ops . VmRt_Int
+n_c {- 0x2E   -} (O (PushUInt idx):ops) = get_uint idx >>= cons_vmrt ops . VmRt_Uint
+n_c {- 0x2F   -} (O (PushDouble idx):ops) = get_double idx >>= cons_vmrt ops . VmRt_Number
+n_c {- 0x30 0 -} (D (VmRt_Object v):(O PushScope):ops) = mod_ss ops$ (:)v
+n_c {- 0x47   -} (O ReturnVoid:ops) = yield ops VmRt_Undefined
+n_c {- 0x48   -} (D v:(O ReturnValue):ops) = yield ops v
+--n_c {- 0x58   -} ss reg (O (NewClass idx):ops) = new_class ss idx >>= \ss' -> n_c ss' reg ops
+n_c {- 0x5E   -} (O (FindProperty idx):ops) = return (FindProp idx, ops)
+--n_c {- 0x60   -} ss reg (O (GetLex idx):ops) = n_c ss reg$ T[O$ FindPropStrict idx,O$ GetProperty idx]:ops
+--n_c {- 0x65   -} ss reg (O (GetScopeObject idx):ops) = n_c ss reg ((D$VmRt_Object$ ss !! fromIntegral idx):ops)
+--n_c {- 0x68   -} ss reg (D vmrt:D (VmRt_Object this):O (InitProperty idx):ops) = init_property this idx vmrt >>= \v -> n_c ss reg$ T[D v]:ops
+n_c {- 0x70   -} (D v:O ConvertString:ops) = ops_mod ops$ (:)(convert_string v)
+n_c {- 0x73   -} (D v:O ConvertInt:ops) = ops_mod ops$ (:)(convert_int v)
+n_c {- 0x74   -} (D v:O ConvertUInt:ops) = ops_mod ops$ (:)(convert_uint v)
+n_c {- 0x75   -} (D v:O ConvertDouble:ops) = ops_mod ops$ (:)(convert_double v)
+n_c {- 0x76   -} (D v:O ConvertBoolean:ops) = ops_mod ops$ (:)(convert_boolean v)
+n_c {- 0x77   -} (D v:O ConvertObject:ops) = ML.raise "NI: ConvertObject"
+n_c {- 0xD0   -} (O GetLocal0:ops) = ops_mod2 ops$ \reg -> (:)(D$ reg !! 0)
+n_c {- 0xD1   -} (O GetLocal1:ops) = ops_mod2 ops$ \reg -> (:)(D$ reg !! 1)
+n_c {- 0xD2   -} (O GetLocal2:ops) = ops_mod2 ops$ \reg -> (:)(D$ reg !! 2)
+n_c {- 0xD3   -} (O GetLocal3:ops) = ops_mod2 ops$ \reg -> (:)(D$ reg !! 3)
+n_c {- 0xD4   -} (D new:O SetLocal0:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
+n_c {- 0xD5   -} (D new:O SetLocal1:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
+n_c {- 0xD6   -} (D new:O SetLocal2:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
+n_c {- 0xD7   -} (D new:O SetLocal3:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
+n_c _ = return (NoMatch, [])
+{-n_c ss reg (T topOps:rest) = do
+  midOps <- get_ops
   set_ops []
-  p$ "\tmidOps      " ++ show midOps
   p$ "\ttopOps      " ++ show topOps
+  p$ "\tmidOps      " ++ show midOps
   p$ "\treassembled " ++ show (topOps ++ midOps ++ rest)
-  r_f ss reg (topOps ++ midOps ++ rest)
-r_f ss reg ops = do
-  --p$ "\tinexhaustive pattern for ops  " ++ show ops
+  n_c ss reg (topOps ++ midOps ++ rest)
+n_c ss reg ops = do
   let (dataOps, rest) = splitAt 1 ops
   mod_ops (++dataOps)
-  --p$ "\tdataOps " ++ show dataOps
-  r_f ss reg rest
+  n_c ss reg rest-}
 
-convert_string :: VmRt -> AVM3 VmRt
-convert_string = return. VmRt_String. to_string
+convert_string :: VmRt -> VmRtOp
+convert_string = D . VmRt_String . to_string
 
-convert_double :: VmRt -> AVM3 VmRt
-convert_double = return. VmRt_Number. to_number
+convert_double :: VmRt -> VmRtOp
+convert_double = D . VmRt_Number . to_number
 
-convert_boolean :: VmRt -> AVM3 VmRt
-convert_boolean = return. VmRt_Boolean. to_boolean
+convert_boolean :: VmRt -> VmRtOp
+convert_boolean = D . VmRt_Boolean . to_boolean
 
-convert_int :: VmRt -> AVM3 VmRt
-convert_int = return. VmRt_Int. to_int32
+convert_int :: VmRt -> VmRtOp
+convert_int = D . VmRt_Int . to_int32
 
-convert_uint :: VmRt -> AVM3 VmRt
-convert_uint = return. VmRt_Uint. to_uint32
+convert_uint :: VmRt -> VmRtOp
+convert_uint = D . VmRt_Uint . to_uint32
 
 new_function :: AVM3 ()
 new_function = undefined
 
-new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
+{-new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
 new_class scope_stack idx = do
   p "NewClass"
   
@@ -191,14 +219,14 @@ new_class scope_stack idx = do
   
   let global = last scope_stack
   p$ "\trunning function"
-  run_function [global] [VmRt_Object klass] ops
+  next_cont [global] [VmRt_Object klass] ops
   p$ "\t##############    FUNCTION RAN SUCCESSFULLY"
   klass_name <- class_name traits
   liftIO$ H.insert global klass_name$ VmRt_Object klass
   return$ init scope_stack ++ [global]
   where
     class_name :: [TraitsInfo] -> AVM3 String
-    class_name traits = return "Test"
+    class_name traits = return "Test"-}
 
 {- TODO dynamic multinames (pattern match Ops) -}
 {-
@@ -208,8 +236,8 @@ TODO resolve against
   3. dynamic properties
   4. prototype chain
 -}
-find_property :: ScopeStack -> MultinameIdx -> AVM3 VmRt
-find_property ss idx = do
+find_property :: MultinameIdx -> ScopeStack -> AVM3 VmRt
+find_property idx ss = do
   name <- resolve_multiname idx
   p$ "FindProperty [" ++ show idx ++ " " ++ name ++ "]"
   --p$ "\tscope_stack length " ++ (show$ length ss)
@@ -257,7 +285,11 @@ find_property ss idx = do
 {-get_scoped_object :: ScopeStack -> U8 -> AVM3 Ops
 get_scoped_object ss idx = undefined-}
 
-init_property :: VmObject -> MultinameIdx -> VmRt -> AVM3 VmRt
+{-
+TODO this doesn't go back onto the stack but needs to be updated in memory on
+the object to which this object is attached
+-}
+{-init_property :: VmObject -> MultinameIdx -> VmRt -> AVM3 VmRt
 init_property this idx value = do
   name <- resolve_multiname idx
   p$ "InitProperty [" ++ show idx ++ " " ++ name ++ "]"
@@ -266,7 +298,7 @@ init_property this idx value = do
     Nothing -> do
       liftIO$ H.insert this name value
       return$ VmRt_Object this
-    otherwise -> raise$ "init_property - property [" ++ name ++ "] exists"
+    otherwise -> raise$ "init_property - property [" ++ name ++ "] exists"-}
 
 
 

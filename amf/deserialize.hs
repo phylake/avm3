@@ -3,11 +3,9 @@ module Amf.Deserialize (allFromAmf) where
 
 import           Amf.Def
 import           Amf.Util as U
-import           Control.DeepSeq
-import           Control.Monad.State
+import           Control.Monad
 import           Data.Binary.IEEE754 (wordToDouble)
 import           Data.Bits
-import           Data.ByteString (ByteString)
 import           Data.Char (digitToInt, intToDigit)
 import           Data.Enumerator as E
 import           Data.Enumerator.Binary as EB
@@ -42,7 +40,7 @@ testFile = do
   putStrLn $ unlines $ Prelude.map show tt
   return ()
 
-p :: String -> ML.StateT Tables (Iteratee ByteString IO) ()
+p :: String -> ML.StateT Tables (Iteratee B.ByteString IO) ()
 p = ML.lift . ML.lift . putStrLn
 
 {-

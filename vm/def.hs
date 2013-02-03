@@ -19,9 +19,17 @@ type ScopeStack = [VmObject]
 type Registers = [VmRt]
 type Ops = [VmRtOp]
 
+data VmCont = NoMatch
+            | Yield VmRt
+            | OpsMod (Ops -> Ops)
+            | OpsModM (ScopeStack -> AVM3 VmCont) -- maybe works for find_property, new_class
+            | OpsMod2 (Registers -> Ops -> Ops)
+            | RegMod (Registers -> Registers)
+            | StackMod (ScopeStack -> ScopeStack)
+            | FindProp MultinameIdx
+
 data VmRtOp = O OpCode
             | D VmRt
-            | T [VmRtOp]
             deriving (Show)
 
 {-
@@ -93,33 +101,15 @@ data VmAbc = VmAbc_Int Int32
 liftIO :: IO a -> AVM3 a
 liftIO = ML.lift . ML.lift
 
+{-
+  Monad helpers
+-}
+
 get :: AVM3 Execution
 get = ML.lift$ ML.get
 
 set :: Execution -> AVM3 ()
 set = ML.lift . ML.set
-
-{-get_reg :: AVM3 Registers
-get_reg = get >>= return. t41
-
-set_reg :: Registers -> AVM3 ()
-set_reg reg = do
-  (_,ops,ss,cp) <- get
-  set (reg,ops,ss,cp)
-
-mod_reg :: (Registers -> Registers) -> AVM3 ()
-mod_reg f = get_reg >>= return.f >>= set_reg
-
-get_ss :: AVM3 ScopeStack
-get_ss = get >>= return. t43
-
-mod_ss :: (ScopeStack -> ScopeStack) -> AVM3 ()
-mod_ss f = get_ss >>= return.f >>= set_ss
-
-set_ss :: ScopeStack -> AVM3 ()
-set_ss ss = do
-  (reg,ops,_,cp) <- get
-  set (reg,ops,ss,cp)-}
 
 get_cp :: AVM3 ConstantPool
 get_cp = get >>= return. t21
@@ -143,6 +133,27 @@ set_ops ops = do
   (cp,_) <- get
   set (cp,ops)
 
+{-
+  VmCont helpers
+-}
+
+yield :: Ops -> VmRt -> AVM3 (VmCont, Ops)
+yield ops c = return$ (Yield c, ops)
+
+ops_mod :: Ops -> (Ops -> Ops) -> AVM3 (VmCont, Ops)
+ops_mod ops c = return$ (OpsMod c, ops)
+
+cons_vmrt :: Ops -> VmRt -> AVM3 (VmCont, Ops)
+cons_vmrt ops = return . flip (,) ops . OpsMod . (:) . D
+
+ops_mod2 :: Ops -> (Registers -> Ops -> Ops) -> AVM3 (VmCont, Ops)
+ops_mod2 ops c = return$ (OpsMod2 c, ops)
+
+reg_mod :: Ops -> (Registers -> Registers) -> AVM3 (VmCont, Ops)
+reg_mod ops c = return$ (RegMod c, ops)
+
+mod_ss :: Ops -> (ScopeStack -> ScopeStack) -> AVM3 (VmCont, Ops)
+mod_ss ops c = return$ (StackMod c, ops)
 
 
 
