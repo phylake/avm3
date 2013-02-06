@@ -23,6 +23,9 @@ import           Vm.Lookups
 import           Vm.Store
 import qualified Control.Monad.State as S
 import qualified Data.ByteString as B
+import qualified Data.Enumerator as E
+import qualified Data.Enumerator.Binary as EB
+import qualified Data.Enumerator.List as EL
 import qualified Data.HashTable.IO as H
 
 p :: String -> AVM3 ()
@@ -41,8 +44,7 @@ pfx_class_info_idx :: String
 pfx_class_info_idx = avm_prefix ++ "class_info_idx"
 
 test_file = do
-  bs <- B.readFile "abc/Test.abc"
-  (abc :: Abc) <- S.evalStateT parseAbc bs
+  (abc :: Abc) <- E.run_ (EB.enumFile "abc/Test.abc" E.$$ parseAbc)
   --writeFile "abc/Test.abc.json"$ encode$ abcToJson abc
   ht <- H.new
   (either::Either String (), _) <- abc `deepseq`

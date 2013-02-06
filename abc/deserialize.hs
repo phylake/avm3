@@ -2,8 +2,11 @@ module Abc.Deserialize (parseAbc) where
 
 import Abc.Def
 import Abc.Util
-import Control.Monad.State
+import Control.Monad
 import Data.Bits
+import Data.Enumerator as E
+import Data.Enumerator.Binary as EB
+import Data.Enumerator.List as EL
 import Data.Int (Int32)
 import Data.Word
 import TFish
@@ -23,9 +26,14 @@ import Util.Words hiding
   , fromS24LE
   )
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy.Char8 as BLC
 
-testFile = B.readFile "abc/Test.abc" >>= runStateT parseAbc
+testFile = run_ (EB.enumFile "abc/Test.abc" $$ parseAbc)
+
+p :: String -> Parser ()
+p = tryIO . putStrLn
 
 parseAbc :: Parser Abc
 parseAbc = do
@@ -72,8 +80,8 @@ common hasOne f = fromU30LE_vl >>= u30' hasOne >>= forNState f
     u30' hasOne u30
       | hasOne == True && u30 == 0 = return 0
       | hasOne == True && u30 == 1 = return 0
-      | hasOne == True = return$fromIntegral u30-1
-      | otherwise = return$fromIntegral u30
+      | hasOne == True = return $ fromIntegral u30-1
+      | otherwise = return $ fromIntegral u30
 
 {-
   4.4
@@ -83,8 +91,7 @@ common hasOne f = fromU30LE_vl >>= u30' hasOne >>= forNState f
 parseStrings :: Parser String
 parseStrings = do
   u30 <- fromU30LE_vl
-  string <- StateT$ return. B.splitAt (fromIntegral u30)
-  return$ BC.unpack string
+  EB.take (fromIntegral u30) >>= return . BLC.unpack
 
 {-
   4.4.1
@@ -230,7 +237,7 @@ parseMetadata = do
   pairs <- fromU30LE_vl
   keys <- forNState fromU30LE_vl pairs
   values <- forNState fromU30LE_vl pairs
-  return$ Metadata name$ zip keys values
+  return$ Metadata name$ Prelude.zip keys values
 
 {-
   4.7
@@ -380,15 +387,9 @@ parseMethodBody = do
   mbLocalCount <- fromU30LE_vl
   mbInitScopeDepth <- fromU30LE_vl
   mbMaxScopeDepth <- fromU30LE_vl
-
-  -- TODO there has to be a better way
   mbCodeCount <- fromU30LE_vl
-  b <- get
-  let (opcodeBytes, bs2) = B.splitAt (fromIntegral mbCodeCount) b
-  put opcodeBytes
-  mbCode <- allBytes parseOpCode
-  put bs2
-
+  opcodeBytes <- EB.take (fromIntegral mbCodeCount)
+  mbCode <- tryIO$ run_ (enumList 1 (BL.toChunks opcodeBytes) $$ parseOpCode)
   mbExceptions <- fromU30LE_vl >>= forNState parseException
   mbTraits <- fromU30LE_vl >>= forNState parseTrait
   return MethodBody {
@@ -402,8 +403,15 @@ parseMethodBody = do
   , mbTraits = mbTraits
   }
 
-parseOpCode :: Parser OpCode
-parseOpCode = fromU8 >>= parseOpCodeChoice
+parseOpCode :: Parser [OpCode]
+parseOpCode = do
+  w <- E.peek
+  case w of
+    Nothing -> return []
+    otherwise -> do
+      op <- fromU8 >>= parseOpCodeChoice
+      ops <- parseOpCode
+      return (op:ops)
 
 parseOpCodeChoice :: Word8 -> Parser OpCode
 parseOpCodeChoice w

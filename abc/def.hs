@@ -1,14 +1,14 @@
 module Abc.Def where
 
-import Control.Monad.State (StateT)
-import Data.Int
-import Data.Word
+import           Data.Enumerator as E
+import           Data.Enumerator.Binary as EB
+import           Data.Enumerator.List as EL
+import           Data.Int
+import           Data.Word
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
-type Parser = StateT B.ByteString IO
-
---type ByteString = BL.ByteString
+type Parser = Iteratee B.ByteString IO
 
 type U8 = Word8
 type U30 = Word32

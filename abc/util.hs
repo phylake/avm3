@@ -1,5 +1,6 @@
 module Abc.Util (
   returnJ
+, toStrict
 , fromU8
 , fromU16
 , fromU16LE
@@ -14,10 +15,13 @@ module Abc.Util (
 ) where
 
 import Abc.Def
-import Data.ByteString.Lazy (ByteString)
+import Data.Enumerator as E
+import Data.Enumerator.Binary as EB
+import Data.Enumerator.List as EL
 import Data.Int
 import Data.Word
-import Control.Monad.State
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import Util.Words hiding
   (
     fromU8
@@ -47,49 +51,65 @@ import qualified Util.Words as Util
   , fromS24LE
   )
 
-returnJ :: Monad m => a -> StateT b m (Maybe a)
-returnJ = return. Just
+returnJ :: Monad m => a -> Iteratee b m (Maybe a)
+returnJ = return . Just
+
+toStrict :: BL.ByteString -> Parser B.ByteString
+toStrict = return . B.pack . BL.unpack
+{-# INLINE toStrict #-}
 
 fromU8 :: Parser Word8
-fromU8 = StateT $ return . Util.fromU8
+fromU8 = take' 1 >>= return . fst . Util.fromU8
 {-# INLINE fromU8 #-}
 
 fromU16 :: Parser Word16
-fromU16 = StateT $ return . Util.fromU16
+fromU16 = take' 2 >>= return . fst . Util.fromU16
 {-# INLINE fromU16 #-}
 
 fromU16LE :: Parser Word16
-fromU16LE = StateT $ return . Util.fromU16LE
+fromU16LE = take' 2 >>= return . fst . Util.fromU16LE
 {-# INLINE fromU16LE #-}
 
 fromU32 :: Parser Word32
-fromU32 = StateT $ return . Util.fromU32
+fromU32 = take' 4 >>= return . fst . Util.fromU32
 {-# INLINE fromU32 #-}
 
 fromU32LE :: Parser Word32
-fromU32LE = StateT $ return . Util.fromU32LE
+fromU32LE = take' 4 >>= return . fst . Util.fromU32LE
 {-# INLINE fromU32LE #-}
 
 fromDouble :: Parser Double
-fromDouble = StateT $ return . Util.fromDouble
+fromDouble = take' 8 >>= return . fst . Util.fromDouble
 {-# INLINE fromDouble #-}
 
 fromDoubleLE :: Parser Double
-fromDoubleLE = StateT $ return . Util.fromDoubleLE
+fromDoubleLE = take' 8 >>= return . fst . Util.fromDoubleLE
 {-# INLINE fromDoubleLE #-}
 
 fromU32LE_vl :: Parser Word32
-fromU32LE_vl = StateT $ return . Util.fromU32LE_vl
+fromU32LE_vl = do
+  ws <- EB.takeWhile hasSignalBit >>= toStrict
+  w <- EB.take 1 >>= toStrict
+  return . fst $ Util.fromU32LE_vl $ B.append ws w
 {-# INLINE fromU32LE_vl #-}
 
 fromU30LE_vl :: Parser Word32
-fromU30LE_vl = StateT $ return . Util.fromU30LE_vl
+fromU30LE_vl = do
+  ws <- EB.takeWhile hasSignalBit >>= toStrict
+  w <- EB.take 1 >>= toStrict
+  return . fst $ Util.fromU30LE_vl $ B.append ws w
 {-# INLINE fromU30LE_vl #-}
 
 fromS32LE_vl :: Parser Int32
-fromS32LE_vl = StateT $ return . Util.fromS32LE_vl
+fromS32LE_vl = do
+  ws <- EB.takeWhile hasSignalBit >>= toStrict
+  w <- EB.take 1 >>= toStrict
+  return . fst $ Util.fromS32LE_vl $ B.append ws w
 {-# INLINE fromS32LE_vl #-}
 
 fromS24LE :: Parser Int32
-fromS24LE = StateT $ return . Util.fromS24LE
+fromS24LE = take' 3 >>= return . fst . Util.fromS24LE
 {-# INLINE fromS24LE #-}
+
+take' :: Integer -> Parser B.ByteString
+take' i = EB.take i >>= toStrict
