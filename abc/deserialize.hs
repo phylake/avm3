@@ -129,14 +129,14 @@ multinameChoice :: Word8 -> Parser Multiname
 multinameChoice w
   | w == cpc_QName = multinameDouble Multiname_QName
   | w == cpc_QNameA = multinameDouble Multiname_QNameA
-  | w == cpc_RTQName = fromU30LE_vl >>= return. Multiname_RTQName
-  | w == cpc_RTQNameA = fromU30LE_vl >>= return. Multiname_RTQNameA
+  | w == cpc_RTQName = liftM Multiname_RTQName fromU30LE_vl
+  | w == cpc_RTQNameA = liftM Multiname_RTQNameA fromU30LE_vl
   | w == cpc_RTQNameL = return Multiname_RTQNameL
   | w == cpc_RTQNameLA = return Multiname_RTQNameLA
   | w == cpc_Multiname = multinameDouble Multiname_Multiname
   | w == cpc_MultinameA = multinameDouble Multiname_MultinameA
-  | w == cpc_MultinameL = fromU30LE_vl >>= return. Multiname_MultinameL
-  | w == cpc_MultinameLA = fromU30LE_vl >>= return. Multiname_MultinameLA
+  | w == cpc_MultinameL = liftM Multiname_MultinameL fromU30LE_vl
+  | w == cpc_MultinameLA = liftM Multiname_MultinameLA fromU30LE_vl
 
 multinameDouble :: (Word32 -> Word32 -> Multiname) -> Parser Multiname
 multinameDouble f = do
@@ -418,29 +418,29 @@ parseOpCodeChoice w
   | w == 0x01 = return Breakpoint
   | w == 0x02 = return Nop
   | w == 0x03 = return Throw
-  | w == 0x04 = fromU30LE_vl >>= return. GetSuper
-  | w == 0x05 = fromU30LE_vl >>= return. SetSuper
-  | w == 0x06 = fromU30LE_vl >>= return. DefaultXmlNamespace
+  | w == 0x04 = liftM GetSuper fromU30LE_vl
+  | w == 0x05 = liftM SetSuper fromU30LE_vl
+  | w == 0x06 = liftM DefaultXmlNamespace fromU30LE_vl
   | w == 0x07 = return DefaultXmlNamespaceL
-  | w == 0x08 = fromU30LE_vl >>= return. Kill
+  | w == 0x08 = liftM Kill fromU30LE_vl
   | w == 0x09 = return Label
   {-| w == 0x0A = return-}
   {-| w == 0x0B = return-}
-  | w == 0x0C = fromS24LE >>= return. IfNotLessThan
-  | w == 0x0D = fromS24LE >>= return. IfNotLessEqual
-  | w == 0x0E = fromS24LE >>= return. IfNotGreaterThan
-  | w == 0x0F = fromS24LE >>= return. IfNotGreaterEqual
-  | w == 0x10 = fromS24LE >>= return. Jump
-  | w == 0x11 = fromS24LE >>= return. IfTrue
-  | w == 0x12 = fromS24LE >>= return. IfFalse
-  | w == 0x13 = fromS24LE >>= return. IfEqual
-  | w == 0x14 = fromS24LE >>= return. IfNotEqual
-  | w == 0x15 = fromS24LE >>= return. IfLessThan
-  | w == 0x16 = fromS24LE >>= return. IfLessEqual
-  | w == 0x17 = fromS24LE >>= return. IfGreaterThan
-  | w == 0x18 = fromS24LE >>= return. IfGreaterEqual
-  | w == 0x19 = fromS24LE >>= return. IfStrictEqual
-  | w == 0x1A = fromS24LE >>= return. IfStrictNotEqual
+  | w == 0x0C = liftM IfNotLessThan fromS24LE
+  | w == 0x0D = liftM IfNotLessEqual fromS24LE
+  | w == 0x0E = liftM IfNotGreaterThan fromS24LE
+  | w == 0x0F = liftM IfNotGreaterEqual fromS24LE
+  | w == 0x10 = liftM Jump fromS24LE
+  | w == 0x11 = liftM IfTrue fromS24LE
+  | w == 0x12 = liftM IfFalse fromS24LE
+  | w == 0x13 = liftM IfEqual fromS24LE
+  | w == 0x14 = liftM IfNotEqual fromS24LE
+  | w == 0x15 = liftM IfLessThan fromS24LE
+  | w == 0x16 = liftM IfLessEqual fromS24LE
+  | w == 0x17 = liftM IfGreaterThan fromS24LE
+  | w == 0x18 = liftM IfGreaterEqual fromS24LE
+  | w == 0x19 = liftM IfStrictEqual fromS24LE
+  | w == 0x1A = liftM IfStrictNotEqual fromS24LE
   | w == 0x1B = do
     defaultOffset <- fromS24LE
     caseOffsets <- fromU30LE_vl >>= forNState fromS24LE
@@ -453,20 +453,20 @@ parseOpCodeChoice w
   | w == 0x21 = return PushUndefined
   | w == 0x22 = return PushConstant
   | w == 0x23 = return NextValue
-  | w == 0x24 = fromU8 >>= return. PushByte
-  | w == 0x25 = fromU30LE_vl >>= return. PushShort
+  | w == 0x24 = liftM PushByte fromU8
+  | w == 0x25 = liftM PushShort fromU30LE_vl
   | w == 0x26 = return PushTrue
   | w == 0x27 = return PushFalse
   | w == 0x28 = return PushNaN
   | w == 0x29 = return Pop
   | w == 0x2A = return Dup
   | w == 0x2B = return Swap
-  | w == 0x2C = fromU30LE_vl >>= return. PushString
-  | w == 0x2D = fromU30LE_vl >>= return. PushInt
-  | w == 0x2E = fromU30LE_vl >>= return. PushUInt
-  | w == 0x2F = fromU30LE_vl >>= return. PushDouble
+  | w == 0x2C = liftM PushString fromU30LE_vl
+  | w == 0x2D = liftM PushInt fromU30LE_vl
+  | w == 0x2E = liftM PushUInt fromU30LE_vl
+  | w == 0x2F = liftM PushDouble fromU30LE_vl
   | w == 0x30 = return PushScope
-  | w == 0x31 = fromU30LE_vl >>= return. PushNamespace
+  | w == 0x31 = liftM PushNamespace fromU30LE_vl
   | w == 0x32 = return$ HasNext2 0 0
   | w == 0x33 = return PushDecimal
   | w == 0x34 = return PushDNaN
@@ -481,77 +481,53 @@ parseOpCodeChoice w
   {-| w == 0x3D = return SetFloat-}
   {-| w == 0x3E = return SetDouble-}
   {-| w == 0x3F = return-}
-  | w == 0x40 = fromU30LE_vl >>= return. NewFunction
-  | w == 0x41 = fromU30LE_vl >>= return. Call
-  | w == 0x42 = fromU30LE_vl >>= return. Construct
-  | w == 0x43 = do
-    index <- fromU30LE_vl
-    argCount <- fromU30LE_vl
-    return$ CallMethod index argCount
-  | w == 0x44 = do
-    index <- fromU30LE_vl
-    argCount <- fromU30LE_vl
-    return$ CallStatic index argCount
-  | w == 0x45 = do
-    index <- fromU30LE_vl
-    argCount <- fromU30LE_vl
-    return$ CallSuper index argCount
-  | w == 0x46 = do
-    index <- fromU30LE_vl
-    argCount <- fromU30LE_vl
-    return$ CallProperty index argCount
+  | w == 0x40 = liftM NewFunction fromU30LE_vl
+  | w == 0x41 = liftM Call fromU30LE_vl
+  | w == 0x42 = liftM Construct fromU30LE_vl
+  | w == 0x43 = liftM2 CallMethod fromU30LE_vl fromU30LE_vl
+  | w == 0x44 = liftM2 CallStatic fromU30LE_vl fromU30LE_vl
+  | w == 0x45 = liftM2 CallSuper fromU30LE_vl fromU30LE_vl
+  | w == 0x46 = liftM2 CallProperty fromU30LE_vl fromU30LE_vl
   | w == 0x47 = return ReturnVoid
   | w == 0x48 = return ReturnValue
-  | w == 0x49 = fromU30LE_vl >>= return. ConstructSuper
-  | w == 0x4A = do
-    index <- fromU30LE_vl
-    argCount <- fromU30LE_vl
-    return$ ConstructProp index argCount
+  | w == 0x49 = liftM ConstructSuper fromU30LE_vl
+  | w == 0x4A = liftM2 ConstructProp fromU30LE_vl fromU30LE_vl
   | w == 0x4B = return CallSuperId
-  | w == 0x4C = do
-    index <- fromU30LE_vl
-    argCount <- fromU30LE_vl
-    return$ CallPropLex index argCount
+  | w == 0x4C = liftM2 CallPropLex fromU30LE_vl fromU30LE_vl
   | w == 0x4D = return CallInterface
-  | w == 0x4E = do
-    index <- fromU30LE_vl
-    argCount <- fromU30LE_vl
-    return$ CallSuperVoid index argCount
-  | w == 0x4F = do
-    index <- fromU30LE_vl
-    argCount <- fromU30LE_vl
-    return$ CallPropVoid index argCount
+  | w == 0x4E = liftM2 CallSuperVoid fromU30LE_vl fromU30LE_vl
+  | w == 0x4F = liftM2 CallPropVoid fromU30LE_vl fromU30LE_vl
   {-| w == 0x50 = return Sign1-}
   {-| w == 0x51 = return Sign8-}
   {-| w == 0x52 = return Sign16-}
   | w == 0x53 = return ApplyType
-  | w == 0x55 = fromU30LE_vl >>= return. NewObject
-  | w == 0x56 = fromU30LE_vl >>= return. NewArray
+  | w == 0x55 = liftM NewObject fromU30LE_vl
+  | w == 0x56 = liftM NewArray fromU30LE_vl
   | w == 0x57 = return NewActivation
-  | w == 0x58 = fromU30LE_vl >>= return. NewClass
-  | w == 0x59 = fromU30LE_vl >>= return. GetDescendants
-  | w == 0x5A = fromU30LE_vl >>= return. NewCatch
+  | w == 0x58 = liftM NewClass fromU30LE_vl
+  | w == 0x59 = liftM GetDescendants fromU30LE_vl
+  | w == 0x5A = liftM NewCatch fromU30LE_vl
   | w == 0x5B = return FindPropGlobalStrict
   | w == 0x5C = return FindPropGlobal
-  | w == 0x5D = fromU30LE_vl >>= return. FindPropStrict
-  | w == 0x5E = fromU30LE_vl >>= return. FindProperty
+  | w == 0x5D = liftM FindPropStrict fromU30LE_vl
+  | w == 0x5E = liftM FindProperty fromU30LE_vl
   | w == 0x5F = return FindDef
-  | w == 0x60 = fromU30LE_vl >>= return. GetLex
-  | w == 0x61 = fromU30LE_vl >>= return. SetProperty
-  | w == 0x62 = fromU30LE_vl >>= return. GetLocal
-  | w == 0x63 = fromU30LE_vl >>= return. SetLocal
+  | w == 0x60 = liftM GetLex fromU30LE_vl
+  | w == 0x61 = liftM SetProperty fromU30LE_vl
+  | w == 0x62 = liftM GetLocal fromU30LE_vl
+  | w == 0x63 = liftM SetLocal fromU30LE_vl
   | w == 0x64 = return GetGlobalScope
-  | w == 0x65 = fromU8 >>= return. GetScopeObject
-  | w == 0x66 = fromU30LE_vl >>= return. GetProperty
+  | w == 0x65 = liftM GetScopeObject fromU8
+  | w == 0x66 = liftM GetProperty fromU30LE_vl
   | w == 0x67 = return GetPropertyLate
-  | w == 0x68 = fromU30LE_vl >>= return. InitProperty
+  | w == 0x68 = liftM InitProperty fromU30LE_vl
   | w == 0x69 = return SetPropertyLate
-  | w == 0x6A = fromU30LE_vl >>= return. DeleteProperty
+  | w == 0x6A = liftM DeleteProperty fromU30LE_vl
   | w == 0x6B = return DeletePropertyLate
-  | w == 0x6C = fromU30LE_vl >>= return. GetSlot
-  | w == 0x6D = fromU30LE_vl >>= return. SetSlot
-  | w == 0x6E = fromU30LE_vl >>= return. GetGlobalSlot
-  | w == 0x6F = fromU30LE_vl >>= return. SetGlobalSlot
+  | w == 0x6C = liftM GetSlot fromU30LE_vl
+  | w == 0x6D = liftM SetSlot fromU30LE_vl
+  | w == 0x6E = liftM GetGlobalSlot fromU30LE_vl
+  | w == 0x6F = liftM SetGlobalSlot fromU30LE_vl
   | w == 0x70 = return ConvertString
   | w == 0x71 = return EscXmlElem
   | w == 0x72 = return EscXmlAttr
@@ -568,13 +544,13 @@ parseOpCodeChoice w
   {-| w == 0x7D = return-}
   {-| w == 0x7E = return-}
   {-| w == 0x7F = return-}
-  | w == 0x80 = fromU30LE_vl >>= return. Coerce
+  | w == 0x80 = liftM Coerce fromU30LE_vl
   | w == 0x81 = return CoerceBoolean
   | w == 0x82 = return CoerceAny
   | w == 0x83 = return CoerceInt
   | w == 0x84 = return CoerceDouble
   | w == 0x85 = return CoerceString
-  | w == 0x86 = fromU30LE_vl >>= return. AsType
+  | w == 0x86 = liftM AsType fromU30LE_vl
   | w == 0x87 = return AsTypeLate
   | w == 0x88 = return CoerceUInt
   | w == 0x89 = return CoerceObject
@@ -585,10 +561,10 @@ parseOpCodeChoice w
   {-| w == 0x8E = return-}
   {-| w == 0x8F = return negate_p-}
   | w == 0x90 = return Negate
-  | w == 0x91 = fromU30LE_vl >>= return. Increment
+  | w == 0x91 = liftM Increment fromU30LE_vl
   | w == 0x92 = return IncLocal
   | w == 0x93 = return Decrement
-  | w == 0x94 = fromU30LE_vl >>= return. DecLocal
+  | w == 0x94 = liftM DecLocal fromU30LE_vl
   | w == 0x95 = return TypeOf
   | w == 0x96 = return Not
   | w == 0x97 = return BitNot
@@ -618,7 +594,7 @@ parseOpCodeChoice w
   | w == 0xAF = return GreaterThan
   | w == 0xB0 = return GreaterEquals
   | w == 0xB1 = return InstanceOf
-  | w == 0xB2 = fromU30LE_vl >>= return. IsType
+  | w == 0xB2 = liftM IsType fromU30LE_vl
   | w == 0xB3 = return IsTypeLate
   | w == 0xB4 = return In
   {-| w == 0xB5 = return-}
@@ -634,8 +610,8 @@ parseOpCodeChoice w
   {-| w == 0xBF = return-}
   | w == 0xC0 = return IncrementInt
   | w == 0xC1 = return DecrementInt
-  | w == 0xC2 = fromU30LE_vl >>= return. IncLocalInt
-  | w == 0xC3 = fromU30LE_vl >>= return. DecLocalInt
+  | w == 0xC2 = liftM IncLocalInt fromU30LE_vl
+  | w == 0xC3 = liftM DecLocalInt fromU30LE_vl
   | w == 0xC4 = return NegateInt
   | w == 0xC5 = return AddInt
   | w == 0xC6 = return SubtractInt
@@ -685,8 +661,8 @@ parseOpCodeChoice w
     reg <- fromU8
     extra <- fromU30LE_vl
     return$ Debug debugType index reg extra
-  | w == 0xF0 = fromU30LE_vl >>= return. DebugLine
-  | w == 0xF1 = fromU30LE_vl >>= return. DebugFile
+  | w == 0xF0 = liftM DebugLine fromU30LE_vl
+  | w == 0xF1 = liftM DebugFile fromU30LE_vl
   | w == 0xF2 = return BreakpointLine
   {-| w == 0xF3 = return timestamp-}
   {-| w == 0xF5 = return verifypass-}
