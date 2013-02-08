@@ -40,8 +40,8 @@ returnN = return Nothing
 avm_prefix :: String
 avm_prefix = "avm3internal_"
 
-pfx_class_info_idx :: String
-pfx_class_info_idx = avm_prefix ++ "class_info_idx"
+pfx_class_info_idx :: VmRtP
+pfx_class_info_idx = ClassIdx$ avm_prefix ++ "class_info_idx"
 
 test_file = do
   (abc :: Abc) <- E.run_ (EB.enumFile "abc/Test.abc" E.$$ parseAbc)
@@ -98,22 +98,30 @@ run_function ss reg ops = do
     Yield v -> return (Yield v, [])
     OpsMod f -> run_function ss reg (f ops2)
     OpsModM f -> f ss >>= return . flip (,) ops2
-    OpsMod2 f -> run_function ss reg (f reg ops2)
+    OpsModR f -> run_function ss reg (f reg ops2)
+    OpsModS f -> run_function ss reg (f ss ops2)
     RegMod f -> run_function ss (f reg) ops2
     StackMod f -> run_function (f ss) reg ops2
-    FindProp idx -> do
-      vmrt <- find_property idx ss
-      return (Yield vmrt, ops2)
+    FindProp idx -> find_property idx ss >>= cons_vmrt ops2
+    InitProp idx this vmrt -> do
+      init_property this idx vmrt
+      return (OpsMod id, ops2)
+    NewKlass idx -> do
+      ss2 <- new_class ss idx
+      return (StackMod$ \_ -> ss2, ops2)
   case c2 of
     NoMatch -> return (c2, ops3)
     otherwise -> do
       dataOps <- get_ops
-      p$ "Reassembling"
-      p$ "\tdataOps     " ++ show dataOps
-      p$ "\tops3        " ++ show ops3
-      p$ "\treassembled " ++ show (dataOps ++ ops3)
-      set_ops []
-      return (c2, dataOps ++ ops3)
+      if length dataOps > 0
+        then do
+          p$ "Reassembling"
+          p$ "\tdataOps     " ++ show dataOps
+          p$ "\tops3        " ++ show ops3
+          p$ "\treassembled " ++ show (dataOps ++ ops3)
+          set_ops []
+          return (c2, dataOps ++ ops3)
+        else return (c2, ops3)
 
 show_ops :: String -> Ops -> AVM3 ()
 show_ops header ops = do
@@ -122,11 +130,11 @@ show_ops header ops = do
 
 build_global_scope :: IO VmObject
 build_global_scope = do
-  int <- H.new
-  H.insert int "MAX_VALUE" (VmRt_Int 2147483647)
+  (int :: VmObject) <- H.new
+  H.insert int (Ext "MAX_VALUE") (VmRt_Int 2147483647)
 
-  global <- H.new
-  H.insert global "int" (VmRt_Object int)
+  (global :: VmObject) <- H.new
+  H.insert global (Ext "int") (VmRt_Object int)
 
   return global
 
@@ -156,37 +164,26 @@ n_c {- 0x2F   -} (O (PushDouble idx):ops) = get_double idx >>= cons_vmrt ops . V
 n_c {- 0x30 0 -} (D (VmRt_Object v):(O PushScope):ops) = mod_ss ops$ (:)v
 n_c {- 0x47   -} (O ReturnVoid:ops) = yield ops VmRt_Undefined
 n_c {- 0x48   -} (D v:(O ReturnValue):ops) = yield ops v
---n_c {- 0x58   -} ss reg (O (NewClass idx):ops) = new_class ss idx >>= \ss' -> n_c ss' reg ops
+n_c {- 0x58   -} (O (NewClass idx):ops) = return (NewKlass idx, ops)
 n_c {- 0x5E   -} (O (FindProperty idx):ops) = return (FindProp idx, ops)
---n_c {- 0x60   -} ss reg (O (GetLex idx):ops) = n_c ss reg$ T[O$ FindPropStrict idx,O$ GetProperty idx]:ops
---n_c {- 0x65   -} ss reg (O (GetScopeObject idx):ops) = n_c ss reg ((D$VmRt_Object$ ss !! fromIntegral idx):ops)
---n_c {- 0x68   -} ss reg (D vmrt:D (VmRt_Object this):O (InitProperty idx):ops) = init_property this idx vmrt >>= \v -> n_c ss reg$ T[D v]:ops
+n_c {- 0x60   -} (O (GetLex idx):ops) = ops_mod ops$ (:)(O$ FindPropStrict idx) . (:)(O$ GetProperty idx)
+n_c {- 0x65   -} (O (GetScopeObject idx):ops) = return ((OpsModS (\ss -> (:)(D$VmRt_Object$ ss !! fromIntegral idx))), ops)
+n_c {- 0x68   -} (D vmrt:D (VmRt_Object this):O (InitProperty idx):ops) = return (InitProp idx this vmrt, ops)
 n_c {- 0x70   -} (D v:O ConvertString:ops) = ops_mod ops$ (:)(convert_string v)
 n_c {- 0x73   -} (D v:O ConvertInt:ops) = ops_mod ops$ (:)(convert_int v)
 n_c {- 0x74   -} (D v:O ConvertUInt:ops) = ops_mod ops$ (:)(convert_uint v)
 n_c {- 0x75   -} (D v:O ConvertDouble:ops) = ops_mod ops$ (:)(convert_double v)
 n_c {- 0x76   -} (D v:O ConvertBoolean:ops) = ops_mod ops$ (:)(convert_boolean v)
 n_c {- 0x77   -} (D v:O ConvertObject:ops) = ML.raise "NI: ConvertObject"
-n_c {- 0xD0   -} (O GetLocal0:ops) = ops_mod2 ops$ \reg -> (:)(D$ reg !! 0)
-n_c {- 0xD1   -} (O GetLocal1:ops) = ops_mod2 ops$ \reg -> (:)(D$ reg !! 1)
-n_c {- 0xD2   -} (O GetLocal2:ops) = ops_mod2 ops$ \reg -> (:)(D$ reg !! 2)
-n_c {- 0xD3   -} (O GetLocal3:ops) = ops_mod2 ops$ \reg -> (:)(D$ reg !! 3)
+n_c {- 0xD0   -} (O GetLocal0:ops) = ops_modR ops$ \reg -> (:)(D$ reg !! 0)
+n_c {- 0xD1   -} (O GetLocal1:ops) = ops_modR ops$ \reg -> (:)(D$ reg !! 1)
+n_c {- 0xD2   -} (O GetLocal2:ops) = ops_modR ops$ \reg -> (:)(D$ reg !! 2)
+n_c {- 0xD3   -} (O GetLocal3:ops) = ops_modR ops$ \reg -> (:)(D$ reg !! 3)
 n_c {- 0xD4   -} (D new:O SetLocal0:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
 n_c {- 0xD5   -} (D new:O SetLocal1:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
 n_c {- 0xD6   -} (D new:O SetLocal2:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
 n_c {- 0xD7   -} (D new:O SetLocal3:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
-n_c _ = return (NoMatch, [])
-{-n_c ss reg (T topOps:rest) = do
-  midOps <- get_ops
-  set_ops []
-  p$ "\ttopOps      " ++ show topOps
-  p$ "\tmidOps      " ++ show midOps
-  p$ "\treassembled " ++ show (topOps ++ midOps ++ rest)
-  n_c ss reg (topOps ++ midOps ++ rest)
-n_c ss reg ops = do
-  let (dataOps, rest) = splitAt 1 ops
-  mod_ops (++dataOps)
-  n_c ss reg rest-}
+n_c ops = return (NoMatch, ops)
 
 convert_string :: VmRt -> VmRtOp
 convert_string = D . VmRt_String . to_string
@@ -206,7 +203,7 @@ convert_uint = D . VmRt_Uint . to_uint32
 new_function :: AVM3 ()
 new_function = undefined
 
-{-new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
+new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
 new_class scope_stack idx = do
   p "NewClass"
   
@@ -217,18 +214,19 @@ new_class scope_stack idx = do
   p$ "\tops: " ++ show ops
   
   (klass :: VmObject) <- liftIO$ H.new
-  liftIO$ H.insert klass pfx_class_info_idx (VmRtInternal_Int idx)
+  -- store this class's identity in it
+  liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
   
   let global = last scope_stack
   p$ "\trunning function"
-  next_cont [global] [VmRt_Object klass] ops
+  run_function [global] [VmRt_Object klass] ops
   p$ "\t##############    FUNCTION RAN SUCCESSFULLY"
   klass_name <- class_name traits
-  liftIO$ H.insert global klass_name$ VmRt_Object klass
+  liftIO$ H.insert global (Ext klass_name)$ VmRt_Object klass
   return$ init scope_stack ++ [global]
   where
     class_name :: [TraitsInfo] -> AVM3 String
-    class_name traits = return "Test"-}
+    class_name traits = return "Test"
 
 {- TODO dynamic multinames (pattern match Ops) -}
 {-
@@ -243,7 +241,7 @@ find_property idx ss = do
   name <- resolve_multiname idx
   p$ "FindProperty [" ++ show idx ++ " " ++ name ++ "]"
   --p$ "\tscope_stack length " ++ (show$ length ss)
-  attempt1 <- search_stack name ss
+  attempt1 <- search_stack (Ext name) ss
   case attempt1 of
     Just obj -> return obj
     Nothing -> do
@@ -258,7 +256,7 @@ find_property idx ss = do
     traits_ref idx name (top:stack) = do
       maybeClassInfoIdx <- liftIO$ H.lookup top pfx_class_info_idx
       case maybeClassInfoIdx of
-        Just (VmRtInternal_Int class_idx) -> do
+        Just (VmRtInternalInt class_idx) -> do
           ClassInfo msi traits <- get_class class_idx
           let matchingTraits = filter (\(TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits
           --p$ "got class info of pfx_class_info_idx"
@@ -268,7 +266,7 @@ find_property idx ss = do
             otherwise -> raise "traits_ref - too many matching traits"
         otherwise -> traits_ref idx name stack
 
-    search_stack :: String -> ScopeStack -> AVM3 (Maybe VmRt)
+    search_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
     search_stack key [] = return Nothing
     search_stack key (top:stack) = do
       {-list <- liftIO$ H.toList top
@@ -287,20 +285,16 @@ find_property idx ss = do
 {-get_scoped_object :: ScopeStack -> U8 -> AVM3 Ops
 get_scoped_object ss idx = undefined-}
 
-{-
-TODO this doesn't go back onto the stack but needs to be updated in memory on
-the object to which this object is attached
--}
-{-init_property :: VmObject -> MultinameIdx -> VmRt -> AVM3 VmRt
+init_property :: VmObject -> MultinameIdx -> VmRt -> AVM3 ()
 init_property this idx value = do
   name <- resolve_multiname idx
   p$ "InitProperty [" ++ show idx ++ " " ++ name ++ "]"
-  maybeProp <- liftIO$ H.lookup this name
+  maybeProp <- liftIO$ H.lookup this (Ext name)
   case maybeProp of
     Nothing -> do
-      liftIO$ H.insert this name value
-      return$ VmRt_Object this
-    otherwise -> raise$ "init_property - property [" ++ name ++ "] exists"-}
+      liftIO$ H.insert this (Ext name) value
+      return ()
+    otherwise -> raise$ "init_property - property [" ++ name ++ "] exists"
 
 
 

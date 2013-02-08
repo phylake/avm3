@@ -1,6 +1,7 @@
 module Vm.Def where
 
 import           Abc.Def
+import           Data.Hashable
 import           Data.Int
 import           Data.Word
 import           Util.Misc
@@ -14,19 +15,30 @@ type AVM3 = ML.ExceptionT String AVM3_State
 
 data HeapObject = Hn VmObject | H_func VmObject ScopeStack
 
-type VmObject = H.BasicHashTable String VmRt
+type VmObject = H.BasicHashTable VmRtP VmRt
 type ScopeStack = [VmObject]
 type Registers = [VmRt]
 type Ops = [VmRtOp]
 
+data VmRtP = Ext String -- all run time, external properties
+           | ClassIdx String -- the identity of the class
+           deriving (Eq, Show)
+
+instance Hashable VmRtP where
+  hashWithSalt salt (Ext a) = hashWithSalt salt$ "Ext" ++ a
+  hashWithSalt salt (ClassIdx a) = hashWithSalt salt$ "ClassIdx" ++ a
+
 data VmCont = NoMatch
             | Yield VmRt
-            | OpsMod (Ops -> Ops)
-            | OpsModM (ScopeStack -> AVM3 VmCont) -- maybe works for find_property, new_class
-            | OpsMod2 (Registers -> Ops -> Ops)
-            | RegMod (Registers -> Registers)
-            | StackMod (ScopeStack -> ScopeStack)
-            | FindProp MultinameIdx
+            | OpsMod !(Ops -> Ops)
+            | OpsModR !(Registers -> Ops -> Ops)
+            | OpsModS !(ScopeStack -> Ops -> Ops)
+            | OpsModM !(ScopeStack -> AVM3 VmCont) -- maybe works for find_property, new_class
+            | RegMod !(Registers -> Registers)
+            | StackMod !(ScopeStack -> ScopeStack)
+            | FindProp !MultinameIdx
+            | InitProp !MultinameIdx VmObject VmRt
+            | NewKlass !MultinameIdx
 
 data VmRtOp = O OpCode
             | D VmRt
@@ -68,7 +80,7 @@ data VmRt = VmRt_Undefined
           | VmRt_String String
           | VmRt_Object VmObject {-RefCount-} {-(Maybe ScopeStack)-}
           | VmRt_Closure (Registers -> Ops -> AVM3 VmRt) -- curried r_f
-          | VmRtInternal_Int U30
+          | VmRtInternalInt U30
 
 instance Show VmRt where
   show VmRt_Undefined   = "VmRt_Undefined"
@@ -80,7 +92,7 @@ instance Show VmRt where
   show (VmRt_String a)  = "VmRt_String " ++ show a
   show (VmRt_Object a)  = "VmRt_Object [Object]"
   show (VmRt_Closure _) = "VmRt_Closure"
-  show (VmRtInternal_Int a) = "VmRtInternal_Int " ++ show a
+  show (VmRtInternalInt a) = "VmRtInternalInt " ++ show a
 
 {- 1:1 transformation of Abc to an ADT -}
 data VmAbc = VmAbc_Int Int32
@@ -146,8 +158,11 @@ ops_mod ops c = return$ (OpsMod c, ops)
 cons_vmrt :: Ops -> VmRt -> AVM3 (VmCont, Ops)
 cons_vmrt ops = return . flip (,) ops . OpsMod . (:) . D
 
-ops_mod2 :: Ops -> (Registers -> Ops -> Ops) -> AVM3 (VmCont, Ops)
-ops_mod2 ops c = return$ (OpsMod2 c, ops)
+ops_modR :: Ops -> (Registers -> Ops -> Ops) -> AVM3 (VmCont, Ops)
+ops_modR ops c = return$ (OpsModR c, ops)
+
+ops_modS :: Ops -> (ScopeStack -> Ops -> Ops) -> AVM3 (VmCont, Ops)
+ops_modS ops c = return$ (OpsModS c, ops)
 
 reg_mod :: Ops -> (Registers -> Registers) -> AVM3 (VmCont, Ops)
 reg_mod ops c = return$ (RegMod c, ops)
