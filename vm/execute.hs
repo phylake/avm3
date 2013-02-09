@@ -84,16 +84,29 @@ execute_abc abc = do
 
 run_function :: ScopeStack -> Registers -> Ops -> AVM3 (VmCont, Ops)
 run_function ss reg ops = do
-  p$ "run_function"
-  --p$ unlines$ map ((++)"\t" . show) ops
-  p$ "\tops\n\t" ++ show ops
-  (c, ops2) <- next_cont ops
-  (c2, ops3) <- case c of
+  p "run_function"
+  show_ops "ops" ops
+
+  dataOps <- get_ops
+  show_ops "dataOps" dataOps
+  p ""
+  (c, ops2) <- case length dataOps of
+    0 -> next_cont ops
+    otherwise -> do
+      -- attempt a match with the buffered ops
+      (attemptCont, attemptOps) <- next_cont (dataOps ++ ops)
+      case attemptCont of
+        NoMatch -> do
+          next_cont ops
+        otherwise -> do
+          set_ops []
+          return (attemptCont, attemptOps)
+  
+  case c of
     NoMatch -> do
-      let (dataOps, rest) = splitAt 1 ops
-      p$ "NoMatch"
-      p$ "\t" ++ show dataOps
-      mod_ops (++dataOps)
+      let (dataOps, rest) = splitAt 1 ops2
+      --show_ops "NoMatch" dataOps
+      mod_ops (dataOps++)
       run_function ss reg rest
     Yield v -> return (Yield v, [])
     OpsMod f -> run_function ss reg (f ops2)
@@ -102,31 +115,24 @@ run_function ss reg ops = do
     OpsModS f -> run_function ss reg (f ss ops2)
     RegMod f -> run_function ss (f reg) ops2
     StackMod f -> run_function (f ss) reg ops2
-    FindProp idx -> find_property idx ss >>= cons_vmrt ops2
+    FindProp idx -> do
+      (OpsMod f, _) <- find_property idx ss >>= cons_vmrt ops2
+      run_function ss reg (f ops2)
     InitProp idx this vmrt -> do
       init_property this idx vmrt
-      return (OpsMod id, ops2)
+      run_function ss reg ops2
     NewKlass idx -> do
       ss2 <- new_class ss idx
-      return (StackMod$ \_ -> ss2, ops2)
-  case c2 of
-    NoMatch -> return (c2, ops3)
-    otherwise -> do
-      dataOps <- get_ops
-      if length dataOps > 0
-        then do
-          p$ "Reassembling"
-          p$ "\tdataOps     " ++ show dataOps
-          p$ "\tops3        " ++ show ops3
-          p$ "\treassembled " ++ show (dataOps ++ ops3)
-          set_ops []
-          return (c2, dataOps ++ ops3)
-        else return (c2, ops3)
+      run_function ss2 reg ops2
 
 show_ops :: String -> Ops -> AVM3 ()
 show_ops header ops = do
-  p$ header
-  liftIO. putStrLn. unlines$ map (\s -> "\t" ++ show s) ops
+  case length ops of
+    0 -> do
+      p$ header ++ " []"
+    otherwise -> do
+      p$ header
+      p$ unlines$ map (\s -> "\t" ++ show s) ops
 
 build_global_scope :: IO VmObject
 build_global_scope = do
@@ -141,8 +147,12 @@ build_global_scope = do
 next_cont = n_c
 
 {-
-ScopeStack is first because i'm replicating as3 closures with
-real haskell closures for now
+REMEMBER the stack order here is the REVERSE of the docs
+  docs
+  bottom, mid, top => newvalue
+
+  pattern
+  top, mid, bottom => newvalue
 -}
 n_c :: Ops -> AVM3 (VmCont, Ops)
 -- n_c {- 0xA0   -} reg ((D a):(D b):(O Add):ops) = n_c ss reg ((D$ a+b):ops)
@@ -165,6 +175,7 @@ n_c {- 0x30 0 -} (D (VmRt_Object v):(O PushScope):ops) = mod_ss ops$ (:)v
 n_c {- 0x47   -} (O ReturnVoid:ops) = yield ops VmRt_Undefined
 n_c {- 0x48   -} (D v:(O ReturnValue):ops) = yield ops v
 n_c {- 0x58   -} (O (NewClass idx):ops) = return (NewKlass idx, ops)
+n_c {- 0x5D   -} (O (FindPropStrict idx):ops) = return (FindProp idx, ops) -- TODO this need error checking
 n_c {- 0x5E   -} (O (FindProperty idx):ops) = return (FindProp idx, ops)
 n_c {- 0x60   -} (O (GetLex idx):ops) = ops_mod ops$ (:)(O$ FindPropStrict idx) . (:)(O$ GetProperty idx)
 n_c {- 0x65   -} (O (GetScopeObject idx):ops) = return ((OpsModS (\ss -> (:)(D$VmRt_Object$ ss !! fromIntegral idx))), ops)
@@ -205,22 +216,23 @@ new_function = undefined
 
 new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
 new_class scope_stack idx = do
-  p "NewClass"
+  p$ "########## NewClass " ++ show idx
   
   ClassInfo msi traits <- get_class idx
   
   MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
   let ops = map O code
-  p$ "\tops: " ++ show ops
+  --p$ "\tops: " ++ show ops
   
   (klass :: VmObject) <- liftIO$ H.new
   -- store this class's identity in it
   liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
   
   let global = last scope_stack
-  p$ "\trunning function"
-  run_function [global] [VmRt_Object klass] ops
-  p$ "\t##############    FUNCTION RAN SUCCESSFULLY"
+  --p$ "\trunning function"
+  (c, ops2) <- run_function [global] [VmRt_Object klass] ops
+  p$ show ops2
+  p$ "########## " ++ show idx
   klass_name <- class_name traits
   liftIO$ H.insert global (Ext klass_name)$ VmRt_Object klass
   return$ init scope_stack ++ [global]
@@ -243,11 +255,15 @@ find_property idx ss = do
   --p$ "\tscope_stack length " ++ (show$ length ss)
   attempt1 <- search_stack (Ext name) ss
   case attempt1 of
-    Just obj -> return obj
+    Just obj -> do
+      --p$ "found obj in attempt1"
+      return obj
     Nothing -> do
       attempt2 <- traits_ref idx name ss
       case attempt2 of
-        Just obj -> return obj
+        Just obj -> do
+          --p$ "found obj in attempt2"
+          return obj
         Nothing -> raise "find_property - couldn't find_property"
   --return ()
   where
@@ -259,7 +275,7 @@ find_property idx ss = do
         Just (VmRtInternalInt class_idx) -> do
           ClassInfo msi traits <- get_class class_idx
           let matchingTraits = filter (\(TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits
-          --p$ "got class info of pfx_class_info_idx"
+          --p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
           case length matchingTraits of
             0 -> return Nothing
             1 -> returnJ$ VmRt_Object top
@@ -271,7 +287,7 @@ find_property idx ss = do
     search_stack key (top:stack) = do
       {-list <- liftIO$ H.toList top
       p$ show list
-      p$ "key " ++ key-}
+      p$ "key " ++ show key-}
       maybeValue <- liftIO$ H.lookup top key
       case maybeValue of
         Nothing -> search_stack key stack
