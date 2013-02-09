@@ -230,7 +230,9 @@ new_class scope_stack idx = do
   
   let global = last scope_stack
   --p$ "\trunning function"
+  bufferedOps <- get_ops
   (c, ops2) <- run_function [global] [VmRt_Object klass] ops
+  set_ops bufferedOps
   p$ show ops2
   p$ "########## " ++ show idx
   klass_name <- class_name traits
@@ -247,6 +249,7 @@ TODO resolve against
   2. declared traits (on the method body, instance info?, class info?)
   3. dynamic properties
   4. prototype chain
+  5. script traits (global object (for classes))
 -}
 find_property :: MultinameIdx -> ScopeStack -> AVM3 VmRt
 find_property idx ss = do
@@ -267,6 +270,20 @@ find_property idx ss = do
         Nothing -> raise "find_property - couldn't find_property"
   --return ()
   where
+    search_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
+    search_stack key [] = return Nothing
+    search_stack key@(Ext str) (top:stack) = do
+      if str == "Foo"
+        then do
+          list <- liftIO$ H.toList top
+          p$ show list
+          p$ "key " ++ show key
+        else return ()
+      maybeValue <- liftIO$ H.lookup top key
+      case maybeValue of
+        Nothing -> search_stack key stack
+        Just value -> returnJ$ VmRt_Object top
+
     traits_ref :: MultinameIdx -> String -> ScopeStack -> AVM3 (Maybe VmRt)
     traits_ref idx name [] = return Nothing
     traits_ref idx name (top:stack) = do
@@ -281,17 +298,6 @@ find_property idx ss = do
             1 -> returnJ$ VmRt_Object top
             otherwise -> raise "traits_ref - too many matching traits"
         otherwise -> traits_ref idx name stack
-
-    search_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
-    search_stack key [] = return Nothing
-    search_stack key (top:stack) = do
-      {-list <- liftIO$ H.toList top
-      p$ show list
-      p$ "key " ++ show key-}
-      maybeValue <- liftIO$ H.lookup top key
-      case maybeValue of
-        Nothing -> search_stack key stack
-        Just value -> returnJ$ VmRt_Object top
 
 {-
   "The indexing of elements on the local scope stack is the reverse of the
