@@ -84,17 +84,18 @@ execute_abc abc = do
 
 run_function :: ScopeStack -> Registers -> Ops -> AVM3 (VmCont, Ops)
 run_function ss reg ops = do
-  p "run_function"
-  show_ops "ops" ops
+  bufOps <- get_ops
 
-  dataOps <- get_ops
-  show_ops "dataOps" dataOps
-  p ""
-  (c, ops2) <- case length dataOps of
+  p "run_function"
+  let aboveSp = unlines$ map (\s -> "\t" ++ show s) bufOps
+  let belowSp = unlines$ map (\s -> "\t" ++ show s) ops
+  p$ aboveSp ++ "\t--------------------\n" ++ belowSp
+  
+  (c, ops2) <- case length bufOps of
     0 -> next_cont ops
     otherwise -> do
       -- attempt a match with the buffered ops
-      (attemptCont, attemptOps) <- next_cont (dataOps ++ ops)
+      (attemptCont, attemptOps) <- next_cont (bufOps ++ ops)
       case attemptCont of
         NoMatch -> do
           next_cont ops
@@ -104,19 +105,26 @@ run_function ss reg ops = do
   
   case c of
     NoMatch -> do
-      let (dataOps, rest) = splitAt 1 ops2
-      --show_ops "NoMatch" dataOps
-      mod_ops (dataOps++)
+      let (bufOps, rest) = splitAt 1 ops2
+      --show_ops "NoMatch" bufOps
+      mod_ops (bufOps++)
       run_function ss reg rest
     Yield v -> return (Yield v, [])
-    OpsMod f -> run_function ss reg (f ops2)
-    OpsModM f -> f ss >>= return . flip (,) ops2
+    OpsMod (n, f) -> case n of
+      0 -> run_function ss reg (f ops2)
+      otherwise -> if length bufOps < (fromIntegral n)
+        then raise$ "buffered ops length < " ++ show n
+        else do
+          let (nOps, rest) = splitAt (fromIntegral n) bufOps
+          set_ops rest
+          run_function ss reg (f nOps ++ ops2)
+    --OpsModM f -> f ss >>= return . flip (,) ops2
     OpsModR f -> run_function ss reg (f reg ops2)
     OpsModS f -> run_function ss reg (f ss ops2)
     RegMod f -> run_function ss (f reg) ops2
     StackMod f -> run_function (f ss) reg ops2
     FindProp idx -> do
-      (OpsMod f, _) <- find_property idx ss >>= cons_vmrt ops2
+      (OpsMod (_, f), _) <- find_property idx ss >>= cons_vmrt []
       run_function ss reg (f ops2)
     InitProp idx this vmrt -> do
       init_property this idx vmrt
@@ -124,11 +132,6 @@ run_function ss reg ops = do
     NewClassC idx -> do
       ss2 <- new_class ss idx
       run_function ss2 reg ops2
-    NewArrayC argCount -> do
-      let (array, newDataOps) = splitAt (fromIntegral argCount) dataOps
-      let array2 = map (\(D a) -> a)$ reverse array
-      set_ops newDataOps
-      run_function ss reg$ (D$ VmRt_Array array2):ops2
 
 show_ops :: String -> Ops -> AVM3 ()
 show_ops header ops = do
@@ -179,8 +182,7 @@ n_c {- 0x2F   -} (O (PushDouble idx):ops) = get_double idx >>= cons_vmrt ops . V
 n_c {- 0x30 0 -} (D (VmRt_Object v):(O PushScope):ops) = mod_ss ops$ (:)v
 n_c {- 0x47   -} (O ReturnVoid:ops) = yield ops VmRt_Undefined
 n_c {- 0x48   -} (D v:(O ReturnValue):ops) = yield ops v
---n_c {- 0x56   -} (O (NewArray args):ops) = return (OpsMod2$ new_array args, ops)
-n_c {- 0x56   -} (O (NewArray args):ops) = return (NewArrayC args, ops)
+n_c {- 0x56   -} (O (NewArray args):ops) = return (OpsMod (args, new_array), ops)
 n_c {- 0x58   -} (O (NewClass idx):ops) = return (NewClassC idx, ops)
 n_c {- 0x5D   -} (O (FindPropStrict idx):ops) = return (FindProp idx, ops) -- TODO this need error checking
 n_c {- 0x5E   -} (O (FindProperty idx):ops) = return (FindProp idx, ops)
@@ -221,11 +223,10 @@ convert_uint = D . VmRt_Uint . to_uint32
 new_function :: AVM3 ()
 new_function = undefined
 
-{-new_array :: U30 -> Ops -> Ops
-new_array argCount ops = (D$ VmRt_Array array):rest
+new_array :: Ops -> Ops
+new_array ops = [D$ VmRt_Array array]
   where
-    array = map (\(D a) -> a)$ reverse$ take (fromIntegral argCount) ops
-    rest = drop (fromIntegral argCount) ops-}
+    array = map (\(D a) -> a)$ reverse ops
 
 new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
 new_class scope_stack idx = do

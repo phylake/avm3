@@ -32,16 +32,15 @@ instance Hashable VmRtP where
 
 data VmCont = NoMatch
             | Yield VmRt
-            | OpsMod !(Ops -> Ops)
-            | OpsModR !(Registers -> Ops -> Ops)
-            | OpsModS !(ScopeStack -> Ops -> Ops)
-            | OpsModM !(ScopeStack -> AVM3 VmCont) -- maybe works for find_property, new_class
-            | RegMod !(Registers -> Registers)
-            | StackMod !(ScopeStack -> ScopeStack)
-            | FindProp !MultinameIdx
-            | InitProp !MultinameIdx VmObject VmRt
-            | NewClassC !MultinameIdx
-            | NewArrayC !U30
+            | OpsMod (U30, (Ops -> Ops))
+            | OpsModR (Registers -> Ops -> Ops)
+            | OpsModS (ScopeStack -> Ops -> Ops)
+            -- | OpsModM (ScopeStack -> AVM3 VmCont) -- maybe works for find_property, new_class
+            | RegMod (Registers -> Registers)
+            | StackMod (ScopeStack -> ScopeStack)
+            | FindProp MultinameIdx
+            | InitProp MultinameIdx VmObject VmRt
+            | NewClassC MultinameIdx
 
 data VmRtOp = O OpCode
             | D VmRt
@@ -158,10 +157,10 @@ yield :: Ops -> VmRt -> AVM3 (VmCont, Ops)
 yield ops c = return$ (Yield c, ops)
 
 ops_mod :: Ops -> (Ops -> Ops) -> AVM3 (VmCont, Ops)
-ops_mod ops c = return$ (OpsMod c, ops)
+ops_mod ops c = return$ (OpsMod (0, c), ops)
 
 cons_vmrt :: Ops -> VmRt -> AVM3 (VmCont, Ops)
-cons_vmrt ops = return . flip (,) ops . OpsMod . (:) . D
+cons_vmrt ops = return . flip (,) ops . OpsMod . (,) 0 . (:) . D
 
 ops_modR :: Ops -> (Registers -> Ops -> Ops) -> AVM3 (VmCont, Ops)
 ops_modR ops c = return$ (OpsModR c, ops)
