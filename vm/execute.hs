@@ -97,17 +97,15 @@ run_function ss reg ops = do
       -- attempt a match with the buffered ops
       (attemptCont, attemptOps) <- next_cont (bufOps ++ ops)
       case attemptCont of
-        NoMatch -> do
-          next_cont ops
+        NoMatch -> next_cont ops
         otherwise -> do
           set_ops []
           return (attemptCont, attemptOps)
   
   case c of
     NoMatch -> do
-      let (bufOps, rest) = splitAt 1 ops2
-      --show_ops "NoMatch" bufOps
-      mod_ops (bufOps++)
+      let (addBufOps, rest) = splitAt 1 ops2
+      mod_ops (addBufOps++)
       run_function ss reg rest
     Yield v -> return (Yield v, [])
     OpsMod (n, f) -> case n of
@@ -124,8 +122,8 @@ run_function ss reg ops = do
     RegMod f -> run_function ss (f reg) ops2
     StackMod f -> run_function (f ss) reg ops2
     FindProp idx -> do
-      (OpsMod (_, f), _) <- find_property idx ss >>= cons_vmrt []
-      run_function ss reg (f ops2)
+      vmrt <- find_property idx ss
+      run_function ss reg (D vmrt:ops2)
     InitProp idx this vmrt -> do
       init_property this idx vmrt
       run_function ss reg ops2
@@ -243,10 +241,12 @@ new_class scope_stack idx = do
   liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
   
   let global = last scope_stack
-  --p$ "\trunning function"
-  bufferedOps <- get_ops
-  (c, ops2) <- run_function [global] [VmRt_Object klass] ops
-  set_ops bufferedOps
+  -- TODO this sucks
+  bufOps <- get_ops
+  set_ops []
+  (_, ops2) <- run_function [global] [VmRt_Object klass] ops
+  set_ops$ ops2 ++ bufOps
+  
   p$ show ops2
   p$ "########## " ++ show idx
   klass_name <- class_name traits

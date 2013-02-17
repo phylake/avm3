@@ -10,8 +10,10 @@ import qualified MonadLib as ML
 
 type ConstantPool = H.BasicHashTable String VmAbc
 
-type StackIndex = Int
-type Execution2 = (ConstantPool, [[(StackIndex, Ops)]])
+type AboveStackPointer = Ops
+type BelowStackPointer = Ops
+type FunctionStack = [(AboveStackPointer, BelowStackPointer)]
+type Execution2 = (ConstantPool, FunctionStack)
 
 type Execution = (ConstantPool, Ops)
 type AVM3_State = ML.StateT Execution IO
@@ -41,6 +43,7 @@ data VmCont = NoMatch
             | FindProp MultinameIdx
             | InitProp MultinameIdx VmObject VmRt
             | NewClassC MultinameIdx
+            | CallPropVoidC MultinameIdx
 
 data VmRtOp = O OpCode
             | D VmRt
@@ -65,7 +68,7 @@ data VmRtOp = O OpCode
 TODO
  1) the primitives are objects but since they have a fixed set of immutable
     methods I can pattern match for things like callproperty along the lines of
-    (D vmrt:O CallProperty):ops -> custom_method
+    (D (VmRt_Int int32):O CallProperty):ops -> custom_method
  2) method closures
       Maybe ScopeStack ?
       (Registers -> Ops -> AVM3 VmRt) ?
