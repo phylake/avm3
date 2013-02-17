@@ -9,11 +9,13 @@ import qualified Data.HashTable.IO as H
 import qualified MonadLib as ML
 
 type ConstantPool = H.BasicHashTable String VmAbc
+
+type StackIndex = Int
+type Execution2 = (ConstantPool, [[(StackIndex, Ops)]])
+
 type Execution = (ConstantPool, Ops)
 type AVM3_State = ML.StateT Execution IO
 type AVM3 = ML.ExceptionT String AVM3_State
-
-data HeapObject = Hn VmObject | H_func VmObject ScopeStack
 
 type VmObject = H.BasicHashTable VmRtP VmRt
 type ScopeStack = [VmObject]
@@ -38,7 +40,8 @@ data VmCont = NoMatch
             | StackMod !(ScopeStack -> ScopeStack)
             | FindProp !MultinameIdx
             | InitProp !MultinameIdx VmObject VmRt
-            | NewKlass !MultinameIdx
+            | NewClassC !MultinameIdx
+            | NewArrayC !U30
 
 data VmRtOp = O OpCode
             | D VmRt
@@ -78,6 +81,7 @@ data VmRt = VmRt_Undefined
           | VmRt_Uint Word32
           | VmRt_Number Double
           | VmRt_String String
+          | VmRt_Array [VmRt]
           | VmRt_Object VmObject {-RefCount-} {-(Maybe ScopeStack)-}
           | VmRt_Closure (Registers -> Ops -> AVM3 VmRt) -- curried r_f
           | VmRtInternalInt U30
@@ -90,6 +94,7 @@ instance Show VmRt where
   show (VmRt_Uint a)    = "VmRt_Uint " ++ show a
   show (VmRt_Number a)  = "VmRt_Number " ++ show a
   show (VmRt_String a)  = "VmRt_String " ++ show a
+  show (VmRt_Array a)   = "VmRt_Array " ++ show a
   show (VmRt_Object a)  = "VmRt_Object [Object]"
   show (VmRt_Closure _) = "VmRt_Closure"
   show (VmRtInternalInt a) = "VmRtInternalInt " ++ show a

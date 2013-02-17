@@ -121,9 +121,14 @@ run_function ss reg ops = do
     InitProp idx this vmrt -> do
       init_property this idx vmrt
       run_function ss reg ops2
-    NewKlass idx -> do
+    NewClassC idx -> do
       ss2 <- new_class ss idx
       run_function ss2 reg ops2
+    NewArrayC argCount -> do
+      let (array, newDataOps) = splitAt (fromIntegral argCount) dataOps
+      let array2 = map (\(D a) -> a)$ reverse array
+      set_ops newDataOps
+      run_function ss reg$ (D$ VmRt_Array array2):ops2
 
 show_ops :: String -> Ops -> AVM3 ()
 show_ops header ops = do
@@ -174,7 +179,9 @@ n_c {- 0x2F   -} (O (PushDouble idx):ops) = get_double idx >>= cons_vmrt ops . V
 n_c {- 0x30 0 -} (D (VmRt_Object v):(O PushScope):ops) = mod_ss ops$ (:)v
 n_c {- 0x47   -} (O ReturnVoid:ops) = yield ops VmRt_Undefined
 n_c {- 0x48   -} (D v:(O ReturnValue):ops) = yield ops v
-n_c {- 0x58   -} (O (NewClass idx):ops) = return (NewKlass idx, ops)
+--n_c {- 0x56   -} (O (NewArray args):ops) = return (OpsMod2$ new_array args, ops)
+n_c {- 0x56   -} (O (NewArray args):ops) = return (NewArrayC args, ops)
+n_c {- 0x58   -} (O (NewClass idx):ops) = return (NewClassC idx, ops)
 n_c {- 0x5D   -} (O (FindPropStrict idx):ops) = return (FindProp idx, ops) -- TODO this need error checking
 n_c {- 0x5E   -} (O (FindProperty idx):ops) = return (FindProp idx, ops)
 n_c {- 0x60   -} (O (GetLex idx):ops) = ops_mod ops$ (:)(O$ FindPropStrict idx) . (:)(O$ GetProperty idx)
@@ -213,6 +220,12 @@ convert_uint = D . VmRt_Uint . to_uint32
 
 new_function :: AVM3 ()
 new_function = undefined
+
+{-new_array :: U30 -> Ops -> Ops
+new_array argCount ops = (D$ VmRt_Array array):rest
+  where
+    array = map (\(D a) -> a)$ reverse$ take (fromIntegral argCount) ops
+    rest = drop (fromIntegral argCount) ops-}
 
 new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
 new_class scope_stack idx = do
@@ -262,7 +275,7 @@ find_property idx ss = do
       --p$ "found obj in attempt1"
       return obj
     Nothing -> do
-      attempt2 <- traits_ref idx name ss
+      attempt2 <- traits_ref idx ss
       case attempt2 of
         Just obj -> do
           --p$ "found obj in attempt2"
@@ -284,9 +297,9 @@ find_property idx ss = do
         Nothing -> search_stack key stack
         Just value -> returnJ$ VmRt_Object top
 
-    traits_ref :: MultinameIdx -> String -> ScopeStack -> AVM3 (Maybe VmRt)
-    traits_ref idx name [] = return Nothing
-    traits_ref idx name (top:stack) = do
+    traits_ref :: MultinameIdx -> ScopeStack -> AVM3 (Maybe VmRt)
+    traits_ref idx [] = return Nothing
+    traits_ref idx (top:stack) = do
       maybeClassInfoIdx <- liftIO$ H.lookup top pfx_class_info_idx
       case maybeClassInfoIdx of
         Just (VmRtInternalInt class_idx) -> do
@@ -297,7 +310,7 @@ find_property idx ss = do
             0 -> return Nothing
             1 -> returnJ$ VmRt_Object top
             otherwise -> raise "traits_ref - too many matching traits"
-        otherwise -> traits_ref idx name stack
+        otherwise -> traits_ref idx stack
 
 {-
   "The indexing of elements on the local scope stack is the reverse of the
