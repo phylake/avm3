@@ -74,62 +74,11 @@ execute_abc abc = do
   p$ "-------------------------------------------"
   global <- liftIO build_global_scope
   let ops = [O$ NewClass idx,O PushScope,O ReturnVoid]
-  (c, _) <- run_function [global] [VmRt_Object global] ops
-  case c of
-    Yield v -> p$ show v
-    otherwise -> raise "didn't yield anything"
+  push_activation (0, ops, [global], [VmRt_Object global])
+  vmrt <- r_f
   p$ "-------------------------------------------"
 
   return ()
-
-run_function :: ScopeStack -> Registers -> Ops -> AVM3 (VmCont, Ops)
-run_function ss reg ops = do
-  bufOps <- get_ops
-
-  p "run_function"
-  let aboveSp = unlines$ map (\s -> "\t" ++ show s) bufOps
-  let belowSp = unlines$ map (\s -> "\t" ++ show s) ops
-  p$ aboveSp ++ "\t--------------------\n" ++ belowSp
-  
-  (c, ops2) <- case length bufOps of
-    0 -> next_cont ops
-    otherwise -> do
-      -- attempt a match with the buffered ops
-      (attemptCont, attemptOps) <- next_cont (bufOps ++ ops)
-      case attemptCont of
-        NoMatch -> next_cont ops
-        otherwise -> do
-          set_ops []
-          return (attemptCont, attemptOps)
-  
-  case c of
-    NoMatch -> do
-      let (addBufOps, rest) = splitAt 1 ops2
-      mod_ops (addBufOps++)
-      run_function ss reg rest
-    Yield v -> return (Yield v, [])
-    OpsMod (n, f) -> case n of
-      0 -> run_function ss reg (f ops2)
-      otherwise -> if length bufOps < (fromIntegral n)
-        then raise$ "buffered ops length < " ++ show n
-        else do
-          let (nOps, rest) = splitAt (fromIntegral n) bufOps
-          set_ops rest
-          run_function ss reg (f nOps ++ ops2)
-    --OpsModM f -> f ss >>= return . flip (,) ops2
-    OpsModR f -> run_function ss reg (f reg ops2)
-    OpsModS f -> run_function ss reg (f ss ops2)
-    RegMod f -> run_function ss (f reg) ops2
-    StackMod f -> run_function (f ss) reg ops2
-    FindProp idx -> do
-      vmrt <- find_property idx ss
-      run_function ss reg (D vmrt:ops2)
-    InitProp idx this vmrt -> do
-      init_property this idx vmrt
-      run_function ss reg ops2
-    NewClassC idx -> do
-      ss2 <- new_class ss idx
-      run_function ss2 reg ops2
 
 show_ops :: String -> Ops -> AVM3 ()
 show_ops header ops = do
@@ -150,7 +99,10 @@ build_global_scope = do
 
   return global
 
-next_cont = n_c
+{-
+  Since interrupts wait for the stack to wind down I don't have to handle them
+  explicitly in run_function
+-}
 
 {-
 REMEMBER the stack order here is the REVERSE of the docs
@@ -160,48 +112,113 @@ REMEMBER the stack order here is the REVERSE of the docs
   pattern
   top, mid, bottom => newvalue
 -}
-n_c :: Ops -> AVM3 (VmCont, Ops)
--- n_c {- 0xA0   -} reg ((D a):(D b):(O Add):ops) = n_c ss reg ((D$ a+b):ops)
--- n_c {- 0x30 1 -} reg (_:(O PushScope):ops) = raise "n_c - PushScope"
-n_c {-      0 -} [] = raise "empty ops"
-n_c {-      1 -} (D ret:[]) = yield [] ret
-n_c {- 0x1D   -} (O PopScope:ops) = mod_ss ops tail
-n_c {- 0x24   -} (O (PushByte u8):ops) = cons_vmrt ops$ VmRt_Int$ fromIntegral u8
-n_c {- 0x26   -} (O PushTrue:ops) = cons_vmrt ops$ VmRt_Boolean True
-n_c {- 0x27   -} (O PushFalse:ops) = cons_vmrt ops$ VmRt_Boolean False
-n_c {- 0x28   -} (O PushNaN:ops) = cons_vmrt ops$ VmRt_Number nan
-n_c {- 0x29   -} (D _:O Pop:ops) = ops_mod ops id
-n_c {- 0x2A   -} (D a:O Dup:ops) = ops_mod ops$ (:)(D a) . (:)(D a)
-n_c {- 0x2B   -} (D a:D b:O Swap:ops) = ops_mod ops$ (:)(D b) . (:)(D a)
-n_c {- 0x2C   -} (O (PushString idx):ops) = get_string idx >>= cons_vmrt ops . VmRt_String
-n_c {- 0x2D   -} (O (PushInt idx):ops) = get_int idx >>= cons_vmrt ops . VmRt_Int
-n_c {- 0x2E   -} (O (PushUInt idx):ops) = get_uint idx >>= cons_vmrt ops . VmRt_Uint
-n_c {- 0x2F   -} (O (PushDouble idx):ops) = get_double idx >>= cons_vmrt ops . VmRt_Number
-n_c {- 0x30 0 -} (D (VmRt_Object v):(O PushScope):ops) = mod_ss ops$ (:)v
-n_c {- 0x47   -} (O ReturnVoid:ops) = yield ops VmRt_Undefined
-n_c {- 0x48   -} (D v:(O ReturnValue):ops) = yield ops v
-n_c {- 0x56   -} (O (NewArray args):ops) = return (OpsMod (args, new_array), ops)
-n_c {- 0x58   -} (O (NewClass idx):ops) = return (NewClassC idx, ops)
-n_c {- 0x5D   -} (O (FindPropStrict idx):ops) = return (FindProp idx, ops) -- TODO this need error checking
-n_c {- 0x5E   -} (O (FindProperty idx):ops) = return (FindProp idx, ops)
-n_c {- 0x60   -} (O (GetLex idx):ops) = ops_mod ops$ (:)(O$ FindPropStrict idx) . (:)(O$ GetProperty idx)
-n_c {- 0x65   -} (O (GetScopeObject idx):ops) = return ((OpsModS (\ss -> (:)(D$VmRt_Object$ ss !! fromIntegral idx))), ops)
-n_c {- 0x68   -} (D vmrt:D (VmRt_Object this):O (InitProperty idx):ops) = return (InitProp idx this vmrt, ops)
-n_c {- 0x70   -} (D v:O ConvertString:ops) = ops_mod ops$ (:)(convert_string v)
-n_c {- 0x73   -} (D v:O ConvertInt:ops) = ops_mod ops$ (:)(convert_int v)
-n_c {- 0x74   -} (D v:O ConvertUInt:ops) = ops_mod ops$ (:)(convert_uint v)
-n_c {- 0x75   -} (D v:O ConvertDouble:ops) = ops_mod ops$ (:)(convert_double v)
-n_c {- 0x76   -} (D v:O ConvertBoolean:ops) = ops_mod ops$ (:)(convert_boolean v)
-n_c {- 0x77   -} (D v:O ConvertObject:ops) = ML.raise "NI: ConvertObject"
-n_c {- 0xD0   -} (O GetLocal0:ops) = ops_modR ops$ \reg -> (:)(D$ reg !! 0)
-n_c {- 0xD1   -} (O GetLocal1:ops) = ops_modR ops$ \reg -> (:)(D$ reg !! 1)
-n_c {- 0xD2   -} (O GetLocal2:ops) = ops_modR ops$ \reg -> (:)(D$ reg !! 2)
-n_c {- 0xD3   -} (O GetLocal3:ops) = ops_modR ops$ \reg -> (:)(D$ reg !! 3)
-n_c {- 0xD4   -} (D new:O SetLocal0:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
-n_c {- 0xD5   -} (D new:O SetLocal1:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
-n_c {- 0xD6   -} (D new:O SetLocal2:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
-n_c {- 0xD7   -} (D new:O SetLocal3:ops) = reg_mod ops$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
-n_c ops = return (NoMatch, ops)
+r_f :: AVM3 VmRt
+r_f = do
+  (_, ((sp,ops,ss,reg):_)) <- get
+
+  p "run_function"
+  let (aboveSp, (vmrtOp:belowSp)) = splitAt sp ops
+  p$ (unlines$ map (\s -> "\t" ++ show s) aboveSp)
+    ++ "\t--------------------" ++ show sp ++ "\n"
+    ++ (unlines$ map (\s -> "\t" ++ show s) (vmrtOp:belowSp))
+
+  case vmrtOp of
+    (D _) -> mod_sp (+1)
+    (O op) -> do
+      let ops2 = aboveSp ++ belowSp
+      set_ops ops2
+      case op of
+        PopScope -> pop_ss
+        PushByte u8 -> push$ D$ VmRt_Int$ fromIntegral u8
+        PushTrue -> push$ D$ VmRt_Boolean True
+        PushFalse -> push$ D$ VmRt_Boolean False
+        PushNaN -> push$ D$ VmRt_Number nan
+        Pop -> pop >> return ()
+        Dup -> get_ops >>= push . head
+        Swap -> do
+          a <- pop
+          b <- pop
+          push a
+          push b
+        PushString idx -> get_string idx >>= push . D . VmRt_String
+        PushInt idx -> get_int idx >>= push . D . VmRt_Int
+        PushUInt idx -> get_uint idx >>= push . D . VmRt_Uint
+        PushDouble idx -> get_double idx >>= push . D . VmRt_Number
+        PushScope -> do
+          D (VmRt_Object v) <- pop
+          push_ss v
+        ReturnVoid -> set_sp (-1) >> push (D VmRt_Undefined)
+        ReturnValue -> set_sp (-1)
+        NewArray args -> do
+          nArgs <- replicateM (fromIntegral args) pop
+          push$ D$ VmRt_Array$ map (\(D a) -> a)$ reverse nArgs
+        NewClass idx -> do
+          p$ "########## NewClass " ++ show idx
+          ClassInfo msi traits <- get_class idx
+          
+          MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
+          let ops = map O code
+          --p$ "\tops: " ++ show ops
+          
+          (klass :: VmObject) <- liftIO$ H.new
+          -- store this class's identity in it
+          liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
+          
+          let global = last ss
+          push_activation (0, ops, [global], [VmRt_Object klass])
+          r_f
+          pop_activation
+
+          liftIO$ H.insert global (Ext "Test")$ VmRt_Object klass
+          p$ "########## " ++ show idx
+        FindPropStrict idx -> find_property idx ss >>= push . D -- TODO this need error checking
+        FindProperty idx -> find_property idx ss >>= push . D -- TODO this need error checking
+        GetLex idx -> do
+          push$ O$ GetProperty idx
+          push$ O$ FindPropStrict idx
+        GetScopeObject idx -> push$ D$ VmRt_Object$ ss !! fromIntegral idx 
+        InitProperty idx -> do
+          (D vmrt) <- pop
+          (D (VmRt_Object this)) <- pop
+          init_property this idx vmrt
+        ConvertString -> do
+          (D v) <- pop
+          push$ convert_string v
+        ConvertInt -> do
+          (D v) <- pop
+          push$ convert_int v
+        ConvertUInt -> do
+          (D v) <- pop
+          push$ convert_uint v
+        ConvertDouble -> do
+          (D v) <- pop
+          push$ convert_double v
+        ConvertBoolean -> do
+          (D v) <- pop
+          push$ convert_boolean v
+        ConvertObject -> ML.raise "NI: ConvertObject"
+        GetLocal0 -> push$ D$ reg !! 0
+        GetLocal1 -> push$ D$ reg !! 1
+        GetLocal2 -> push$ D$ reg !! 2
+        GetLocal3 -> push$ D$ reg !! 3
+        SetLocal0 -> do
+          D new <- pop
+          mod_reg$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
+        SetLocal1 -> do
+          D new <- pop
+          mod_reg$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
+        SetLocal2 -> do
+          D new <- pop
+          mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
+        SetLocal3 -> do
+          D new <- pop
+          mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
+        _ -> mod_sp (+1)
+  
+  (_, ((newsp,newops,_,_):_)) <- get
+  case newsp of
+    -1 -> let (D ret:_) = newops in return ret
+    otherwise -> r_f
 
 convert_string :: VmRt -> VmRtOp
 convert_string = D . VmRt_String . to_string
@@ -220,41 +237,6 @@ convert_uint = D . VmRt_Uint . to_uint32
 
 new_function :: AVM3 ()
 new_function = undefined
-
-new_array :: Ops -> Ops
-new_array ops = [D$ VmRt_Array array]
-  where
-    array = map (\(D a) -> a)$ reverse ops
-
-new_class :: ScopeStack -> ClassInfoIdx -> AVM3 ScopeStack
-new_class scope_stack idx = do
-  p$ "########## NewClass " ++ show idx
-  
-  ClassInfo msi traits <- get_class idx
-  
-  MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
-  let ops = map O code
-  --p$ "\tops: " ++ show ops
-  
-  (klass :: VmObject) <- liftIO$ H.new
-  -- store this class's identity in it
-  liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
-  
-  let global = last scope_stack
-  -- TODO this sucks
-  bufOps <- get_ops
-  set_ops []
-  (_, ops2) <- run_function [global] [VmRt_Object klass] ops
-  set_ops$ ops2 ++ bufOps
-  
-  p$ show ops2
-  p$ "########## " ++ show idx
-  klass_name <- class_name traits
-  liftIO$ H.insert global (Ext klass_name)$ VmRt_Object klass
-  return$ init scope_stack ++ [global]
-  where
-    class_name :: [TraitsInfo] -> AVM3 String
-    class_name traits = return "Test"
 
 {- TODO dynamic multinames (pattern match Ops) -}
 {-

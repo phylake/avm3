@@ -22,6 +22,7 @@ instance Integral Double where
       fab = floor ab
   toInteger = floor
 
+-- TODO found replicateM. get rid of this
 forNState :: (Ord n, Num n, Monad m) => m a -> n -> m [a]
 forNState f n = if n > 0
   then do

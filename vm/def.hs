@@ -9,20 +9,17 @@ import qualified Data.HashTable.IO as H
 import qualified MonadLib as ML
 
 type ConstantPool = H.BasicHashTable String VmAbc
-
-type AboveStackPointer = Ops
-type BelowStackPointer = Ops
-type FunctionStack = [(AboveStackPointer, BelowStackPointer)]
-type Execution2 = (ConstantPool, FunctionStack)
-
-type Execution = (ConstantPool, Ops)
-type AVM3_State = ML.StateT Execution IO
-type AVM3 = ML.ExceptionT String AVM3_State
-
 type VmObject = H.BasicHashTable VmRtP VmRt
 type ScopeStack = [VmObject]
 type Registers = [VmRt]
 type Ops = [VmRtOp]
+type Heap = Int -- TODO need one of these ;)
+
+type FunctionStack = [(Int, Ops, ScopeStack, Registers)]
+type Execution = (ConstantPool, FunctionStack)
+
+type AVM3_State = ML.StateT Execution IO
+type AVM3 = ML.ExceptionT String AVM3_State
 
 data VmRtP = Ext String -- all run time, external properties
            | ClassIdx String -- the identity of the class
@@ -31,19 +28,6 @@ data VmRtP = Ext String -- all run time, external properties
 instance Hashable VmRtP where
   hashWithSalt salt (Ext a) = hashWithSalt salt$ "Ext" ++ a
   hashWithSalt salt (ClassIdx a) = hashWithSalt salt$ "ClassIdx" ++ a
-
-data VmCont = NoMatch
-            | Yield VmRt
-            | OpsMod (U30, (Ops -> Ops))
-            | OpsModR (Registers -> Ops -> Ops)
-            | OpsModS (ScopeStack -> Ops -> Ops)
-            -- | OpsModM (ScopeStack -> AVM3 VmCont) -- maybe works for find_property, new_class
-            | RegMod (Registers -> Registers)
-            | StackMod (ScopeStack -> ScopeStack)
-            | FindProp MultinameIdx
-            | InitProp MultinameIdx VmObject VmRt
-            | NewClassC MultinameIdx
-            | CallPropVoidC MultinameIdx
 
 data VmRtOp = O OpCode
             | D VmRt
@@ -130,58 +114,86 @@ get = ML.lift$ ML.get
 set :: Execution -> AVM3 ()
 set = ML.lift . ML.set
 
+push_activation :: (Int, Ops, ScopeStack, Registers) -> AVM3 ()
+push_activation f = do
+  (cp, fs) <- get
+  set (cp, f:fs)
+
+pop_activation :: AVM3 ()
+pop_activation = do
+  (cp, (_:fs)) <- get
+  set (cp, fs)
+
+push :: VmRtOp -> AVM3 ()
+push op = do
+  (cp, ((sp,ops,ss,reg):fs)) <- get
+  set (cp, ((sp+1,op:ops,ss,reg):fs))
+
+pop :: AVM3 VmRtOp
+pop = do
+  (cp, ((sp,(op:ops),ss,reg):fs)) <- get
+  set (cp, ((sp-1,ops,ss,reg):fs))
+  return op
+
+-- ConstantPool
+
 get_cp :: AVM3 ConstantPool
 get_cp = get >>= return. t21
-
-mod_cp :: (ConstantPool -> ConstantPool) -> AVM3 ()
-mod_cp f = get_cp >>= return.f >>= set_cp
 
 set_cp :: ConstantPool -> AVM3 ()
 set_cp cp = do
   (_,ops) <- get
   set (cp,ops)
 
+-- Ops
+
 get_ops :: AVM3 Ops
-get_ops = get >>= return. t22
+get_ops = do
+  (cp, ((sp,ops,ss,reg):fs)) <- get
+  return ops
 
 mod_ops :: (Ops -> Ops) -> AVM3 ()
-mod_ops f = get_ops >>= return.f >>= set_ops
+mod_ops f = do
+  (cp, ((sp,ops,ss,reg):fs)) <- get
+  set (cp, ((sp,f ops,ss,reg):fs))
 
 set_ops :: Ops -> AVM3 ()
-set_ops ops = do
-  (cp,_) <- get
-  set (cp,ops)
+set_ops ops = mod_ops$ \_ -> ops
 
-{-
-  VmCont helpers
--}
+-- StackPointer
 
-yield :: Ops -> VmRt -> AVM3 (VmCont, Ops)
-yield ops c = return$ (Yield c, ops)
+mod_sp :: (Int -> Int) -> AVM3 ()
+mod_sp f = do
+  (cp, ((sp,ops,ss,reg):fs)) <- get
+  set (cp, ((f sp,ops,ss,reg):fs))
 
-ops_mod :: Ops -> (Ops -> Ops) -> AVM3 (VmCont, Ops)
-ops_mod ops c = return$ (OpsMod (0, c), ops)
+set_sp :: Int -> AVM3 ()
+set_sp sp = mod_sp$ \_ -> sp
 
-cons_vmrt :: Ops -> VmRt -> AVM3 (VmCont, Ops)
-cons_vmrt ops = return . flip (,) ops . OpsMod . (,) 0 . (:) . D
+-- ScopeStack
 
-ops_modR :: Ops -> (Registers -> Ops -> Ops) -> AVM3 (VmCont, Ops)
-ops_modR ops c = return$ (OpsModR c, ops)
+get_ss :: AVM3 ScopeStack
+get_ss = do
+  (cp, ((a,b,ss,reg):fs)) <- get
+  return ss
 
-ops_modS :: Ops -> (ScopeStack -> Ops -> Ops) -> AVM3 (VmCont, Ops)
-ops_modS ops c = return$ (OpsModS c, ops)
+mod_ss :: (ScopeStack -> ScopeStack) -> AVM3 ()
+mod_ss f = do
+  (cp, ((a,b,ss,reg):fs)) <- get
+  set (cp, (a,b,f ss,reg):fs)
 
-reg_mod :: Ops -> (Registers -> Registers) -> AVM3 (VmCont, Ops)
-reg_mod ops c = return$ (RegMod c, ops)
+push_ss :: VmObject -> AVM3 ()
+push_ss = mod_ss . (:)
 
-mod_ss :: Ops -> (ScopeStack -> ScopeStack) -> AVM3 (VmCont, Ops)
-mod_ss ops c = return$ (StackMod c, ops)
+pop_ss :: AVM3 ()
+pop_ss = mod_ss tail
 
+-- Registers
 
-
-
-
-
+mod_reg :: (Registers -> Registers) -> AVM3 ()
+mod_reg f = do
+  (cp, ((a,b,ss,reg):fs)) <- get
+  set (cp, (a,b,ss,f reg):fs)
 
 
 

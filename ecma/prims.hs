@@ -24,7 +24,7 @@ class Enumerable a where
 class Configurable a where
   configurable :: a -> Bool
 
-class Get a where
+{-class Get a where
   get :: a -> a
 
 class Set a where
@@ -34,7 +34,7 @@ class (Enumerable a, Configurable a) => CommonProperties a where
 
 class (CommonProperties a, Writable a) => NamedDataProperties a where
 
-class (CommonProperties a, Get a, Set a) => NamedDataAccessorProperties a where
+class (CommonProperties a, Get a, Set a) => NamedDataAccessorProperties a where-}
 
 -- 8.10.2
 
