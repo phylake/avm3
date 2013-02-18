@@ -1,5 +1,6 @@
 module Util.Misc where
 
+import           Control.Monad (replicateM)
 import           Control.Monad.State (get)
 import           Data.Enumerator
 import qualified Data.ByteString as B
@@ -23,13 +24,16 @@ instance Integral Double where
   toInteger = floor
 
 -- TODO found replicateM. get rid of this
-forNState :: (Ord n, Num n, Monad m) => m a -> n -> m [a]
+{-forNState :: (Ord n, Num n, Monad m) => m a -> n -> m [a]
 forNState f n = if n > 0
   then do
     x <- f
     xs <- forNState f (n-1)
     return $ x:xs
-  else do return []
+  else do return []-}
+
+replicateM' :: (Monad m, Integral i) => m a -> i -> m [a]
+replicateM' m i = Control.Monad.replicateM (fromIntegral i) m
 
 allBytes f = do
   bs <- get

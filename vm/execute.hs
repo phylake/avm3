@@ -73,7 +73,7 @@ execute_abc abc = do
   
   p$ "-------------------------------------------"
   global <- liftIO build_global_scope
-  let ops = [O$ NewClass idx,O PushScope,O ReturnVoid]
+  let ops = [O$ NewClass idx,O ReturnVoid]
   push_activation (0, ops, [global], [VmRt_Object global])
   vmrt <- r_f
   p$ "-------------------------------------------"
@@ -116,104 +116,134 @@ r_f :: AVM3 VmRt
 r_f = do
   (_, ((sp,ops,ss,reg):_)) <- get
 
-  p "run_function"
-  let (aboveSp, (vmrtOp:belowSp)) = splitAt sp ops
-  p$ (unlines$ map (\s -> "\t" ++ show s) aboveSp)
-    ++ "\t--------------------" ++ show sp ++ "\n"
-    ++ (unlines$ map (\s -> "\t" ++ show s) (vmrtOp:belowSp))
+  let (aboveSp, belowSp) = splitAt sp ops
+  case take 1 belowSp of
+    [] -> set_sp (-1)
+    (vmrtOp:[]) -> case vmrtOp of
+      (D _) -> mod_sp (+1)
+      (O op) -> do
+        p "run_function"
+        p$ (unlines$ map (\s -> "\t" ++ show s) aboveSp)
+          ++ "\t--------------------" ++ show sp ++ "\n"
+          ++ (unlines$ map (\s -> "\t" ++ show s) belowSp)
+        let ops2 = aboveSp ++ (drop 1 belowSp)
+        set_ops ops2
+        case op of
+    {-1D-}PopScope -> pop_ss
+    {-24-}PushByte u8 -> push$ D$ VmRt_Int$ fromIntegral u8
+    {-26-}PushTrue -> push$ D$ VmRt_Boolean True
+    {-27-}PushFalse -> push$ D$ VmRt_Boolean False
+    {-28-}PushNaN -> push$ D$ VmRt_Number nan
+    {-29-}Pop -> pop >> return ()
+    {-2A-}Dup -> get_ops >>= push . head
+    {-2B-}Swap -> do
+            a <- pop
+            b <- pop
+            push a
+            push b
+    {-2C-}PushString idx -> get_string idx >>= push . D . VmRt_String
+    {-2D-}PushInt idx -> get_int idx >>= push . D . VmRt_Int
+    {-2E-}PushUInt idx -> get_uint idx >>= push . D . VmRt_Uint
+    {-2F-}PushDouble idx -> get_double idx >>= push . D . VmRt_Number
+    {-30-}PushScope -> do
+            D (VmRt_Object v) <- pop
+            push_ss v
+    {-47-}ReturnVoid -> set_sp (-1) >> push (D VmRt_Undefined)
+    {-48-}ReturnValue -> set_sp (-1)
+    {-4F-}CallPropVoid idx args -> do -- TODO check for [ns] [name]
+            nArgs <- replicateM (fromIntegral args) pop
+            D (VmRt_Object this) <- pop
+            
+            p$ "CallPropVoid"
+            list <- liftIO$ H.toList this
+            p$ show list
+            
+            maybeClassInfoIdx <- liftIO$ H.lookup this pfx_class_info_idx
+            TraitsInfo _ _ _ (TT_Method (TraitMethod _ methodId)) _ <- case maybeClassInfoIdx of
+              Just (VmRtInternalInt classIdx) -> do
+                ClassInfo _ traits <- get_class classIdx
+                let matchingTraits = filter (\(TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits
+                p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
+                case length matchingTraits of
+                  0 -> raise "CallPropVoid - couldn't find matchingTraits"
+                  1 -> return$ head matchingTraits
+                  otherwise -> raise "CallPropVoid - too many matching traits"
+              otherwise -> do
+                name <- resolve_multiname idx
+                proplist <- liftIO$ H.toList this
+                raise$ "couldn't find " ++ name ++ " on " ++ show proplist
+            
+            MethodBody _ _ _ _ _ code _ _ <- get_methodBody methodId
+            p$ show code
+            push_activation (0, map O code, [last ss], [VmRt_Object this])
+            r_f
+            pop_activation
 
-  case vmrtOp of
-    (D _) -> mod_sp (+1)
-    (O op) -> do
-      let ops2 = aboveSp ++ belowSp
-      set_ops ops2
-      case op of
-        PopScope -> pop_ss
-        PushByte u8 -> push$ D$ VmRt_Int$ fromIntegral u8
-        PushTrue -> push$ D$ VmRt_Boolean True
-        PushFalse -> push$ D$ VmRt_Boolean False
-        PushNaN -> push$ D$ VmRt_Number nan
-        Pop -> pop >> return ()
-        Dup -> get_ops >>= push . head
-        Swap -> do
-          a <- pop
-          b <- pop
-          push a
-          push b
-        PushString idx -> get_string idx >>= push . D . VmRt_String
-        PushInt idx -> get_int idx >>= push . D . VmRt_Int
-        PushUInt idx -> get_uint idx >>= push . D . VmRt_Uint
-        PushDouble idx -> get_double idx >>= push . D . VmRt_Number
-        PushScope -> do
-          D (VmRt_Object v) <- pop
-          push_ss v
-        ReturnVoid -> set_sp (-1) >> push (D VmRt_Undefined)
-        ReturnValue -> set_sp (-1)
-        NewArray args -> do
-          nArgs <- replicateM (fromIntegral args) pop
-          push$ D$ VmRt_Array$ map (\(D a) -> a)$ reverse nArgs
-        NewClass idx -> do
-          p$ "########## NewClass " ++ show idx
-          ClassInfo msi traits <- get_class idx
-          
-          MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
-          let ops = map O code
-          --p$ "\tops: " ++ show ops
-          
-          (klass :: VmObject) <- liftIO$ H.new
-          -- store this class's identity in it
-          liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
-          
-          let global = last ss
-          push_activation (0, ops, [global], [VmRt_Object klass])
-          r_f
-          pop_activation
+            return ()
+    {-56-}NewArray args -> do
+            nArgs <- replicateM (fromIntegral args) pop
+            push$ D$ VmRt_Array$ map (\(D a) -> a)$ reverse nArgs
+    {-58-}NewClass idx -> do
+            p$ "########## NewClass " ++ show idx
+            ClassInfo msi traits <- get_class idx
+            
+            MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
+            --p$ "\tops: " ++ show code
+            
+            (klass :: VmObject) <- liftIO$ H.new
+            -- store this class's identity in it
+            liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
+            
+            let global = last ss
+            push_activation (0, map O code, [global], [VmRt_Object klass])
+            r_f
+            pop_activation
 
-          liftIO$ H.insert global (Ext "Test")$ VmRt_Object klass
-          p$ "########## " ++ show idx
-        FindPropStrict idx -> find_property idx ss >>= push . D -- TODO this need error checking
-        FindProperty idx -> find_property idx ss >>= push . D -- TODO this need error checking
-        GetLex idx -> do
-          push$ O$ GetProperty idx
-          push$ O$ FindPropStrict idx
-        GetScopeObject idx -> push$ D$ VmRt_Object$ ss !! fromIntegral idx 
-        InitProperty idx -> do
-          (D vmrt) <- pop
-          (D (VmRt_Object this)) <- pop
-          init_property this idx vmrt
-        ConvertString -> do
-          (D v) <- pop
-          push$ convert_string v
-        ConvertInt -> do
-          (D v) <- pop
-          push$ convert_int v
-        ConvertUInt -> do
-          (D v) <- pop
-          push$ convert_uint v
-        ConvertDouble -> do
-          (D v) <- pop
-          push$ convert_double v
-        ConvertBoolean -> do
-          (D v) <- pop
-          push$ convert_boolean v
-        ConvertObject -> ML.raise "NI: ConvertObject"
-        GetLocal0 -> push$ D$ reg !! 0
-        GetLocal1 -> push$ D$ reg !! 1
-        GetLocal2 -> push$ D$ reg !! 2
-        GetLocal3 -> push$ D$ reg !! 3
-        SetLocal0 -> do
-          D new <- pop
-          mod_reg$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
-        SetLocal1 -> do
-          D new <- pop
-          mod_reg$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
-        SetLocal2 -> do
-          D new <- pop
-          mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
-        SetLocal3 -> do
-          D new <- pop
-          mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
-        _ -> mod_sp (+1)
+            liftIO$ H.insert global (Ext "Test")$ VmRt_Object klass
+            p$ "########## " ++ show idx
+    {-5D-}FindPropStrict idx -> find_property idx ss >>= push . D -- TODO this need error checking
+    {-5E-}FindProperty idx -> find_property idx ss >>= push . D -- TODO this need error checking
+    {-60-}GetLex idx -> do
+            push$ O$ GetProperty idx
+            push$ O$ FindPropStrict idx
+    {-65-}GetScopeObject idx -> push$ D$ VmRt_Object$ ss !! fromIntegral idx 
+    {-68-}InitProperty idx -> do
+            (D vmrt) <- pop
+            (D (VmRt_Object this)) <- pop
+            init_property this idx vmrt
+    {-70-}ConvertString -> do
+            (D v) <- pop
+            push$ convert_string v
+    {-73-}ConvertInt -> do
+            (D v) <- pop
+            push$ convert_int v
+    {-74-}ConvertUInt -> do
+            (D v) <- pop
+            push$ convert_uint v
+    {-75-}ConvertDouble -> do
+            (D v) <- pop
+            push$ convert_double v
+    {-76-}ConvertBoolean -> do
+            (D v) <- pop
+            push$ convert_boolean v
+    {-77-}ConvertObject -> ML.raise "NI: ConvertObject"
+    {-D0-}GetLocal0 -> push$ D$ reg !! 0
+    {-D1-}GetLocal1 -> push$ D$ reg !! 1
+    {-D2-}GetLocal2 -> push$ D$ reg !! 2
+    {-D3-}GetLocal3 -> push$ D$ reg !! 3
+    {-D4-}SetLocal0 -> do
+            D new <- pop
+            mod_reg$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
+    {-D5-}SetLocal1 -> do
+            D new <- pop
+            mod_reg$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
+    {-D6-}SetLocal2 -> do
+            D new <- pop
+            mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
+    {-D7-}SetLocal3 -> do
+            D new <- pop
+            mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
+          _ -> mod_sp (+1)
   
   (_, ((newsp,newops,_,_):_)) <- get
   case newsp of
@@ -264,7 +294,6 @@ find_property idx ss = do
           --p$ "found obj in attempt2"
           return obj
         Nothing -> raise "find_property - couldn't find_property"
-  --return ()
   where
     search_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
     search_stack key [] = return Nothing
@@ -285,8 +314,8 @@ find_property idx ss = do
     traits_ref idx (top:stack) = do
       maybeClassInfoIdx <- liftIO$ H.lookup top pfx_class_info_idx
       case maybeClassInfoIdx of
-        Just (VmRtInternalInt class_idx) -> do
-          ClassInfo msi traits <- get_class class_idx
+        Just (VmRtInternalInt classIdx) -> do
+          ClassInfo _ traits <- get_class classIdx
           let matchingTraits = filter (\(TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits
           --p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
           case length matchingTraits of

@@ -10,7 +10,7 @@ import Data.Enumerator.List as EL
 import Data.Int (Int32)
 import Data.Word
 import TFish
-import Util.Misc (allBytes, forNState)
+import Util.Misc (allBytes, replicateM')
 import Util.Words hiding
   (
     fromU8
@@ -52,8 +52,8 @@ parseAbc = do
   metadata   <- common False parseMetadata
 
   classCount <- fromU30LE_vl
-  instances <- forNState parseInstance classCount
-  classes <- forNState parseClass classCount
+  instances <- replicateM' parseInstance classCount
+  classes <- replicateM' parseClass classCount
 
   scripts <- common False parseScript
   methodBodies <- common False parseMethodBody
@@ -74,7 +74,7 @@ parseAbc = do
   }
 
 common :: Bool -> Parser a -> Parser [a]
-common hasOne f = fromU30LE_vl >>= u30' hasOne >>= forNState f
+common hasOne f = fromU30LE_vl >>= u30' hasOne >>= replicateM' f
   where
     u30' :: Bool -> U30 -> Parser Int
     u30' hasOne u30
@@ -116,7 +116,7 @@ parseNSInfos = do
   Namespace set
 -}
 parseNSSets :: Parser NSSet
-parseNSSets = fromU30LE_vl >>= forNState fromU30LE_vl
+parseNSSets = fromU30LE_vl >>= replicateM' fromU30LE_vl
 
 {-
   4.4.3
@@ -152,7 +152,7 @@ parseMethodSignatures :: Parser MethodSignature
 parseMethodSignatures = do
   paramCount <- fromU30LE_vl
   returnType <- fromU30LE_vl
-  paramTypes <- forNState fromU30LE_vl paramCount
+  paramTypes <- replicateM' fromU30LE_vl paramCount
   name <- fromU30LE_vl
   flags <- fromU8
   optionInfo <- if (flags .&. msflag_HAS_OPTIONAL == msflag_HAS_OPTIONAL)
@@ -177,7 +177,7 @@ parseMethodSignatures = do
 
 parseOptionalParams :: Parser (Maybe [CPC])
 parseOptionalParams =
-  fromU30LE_vl >>= forNState optionDetail >>= returnJ
+  fromU30LE_vl >>= replicateM' optionDetail >>= returnJ
 
 optionDetail :: Parser CPC
 optionDetail = do
@@ -224,7 +224,7 @@ cpcChoice w idx
 
 parseParamNames :: Word32 -> Parser (Maybe [Word32])
 parseParamNames count =
-  forNState fromU30LE_vl count >>= returnJ
+  replicateM' fromU30LE_vl count >>= returnJ
 
 {-
   4.6
@@ -235,8 +235,8 @@ parseMetadata :: Parser Metadata
 parseMetadata = do
   name <- fromU30LE_vl
   pairs <- fromU30LE_vl
-  keys <- forNState fromU30LE_vl pairs
-  values <- forNState fromU30LE_vl pairs
+  keys <- replicateM' fromU30LE_vl pairs
+  values <- replicateM' fromU30LE_vl pairs
   return$ Metadata name$ Prelude.zip keys values
 
 {-
@@ -252,9 +252,9 @@ parseInstance = do
   protectedNs <- if (flags .&. instf_CLASS_PROTECTEDNS == instf_CLASS_PROTECTEDNS)
     then fromU30LE_vl >>= returnJ
     else return Nothing
-  interfaces <- fromU30LE_vl >>= forNState fromU30LE_vl
+  interfaces <- fromU30LE_vl >>= replicateM' fromU30LE_vl
   iinit <- fromU30LE_vl
-  traits <- fromU30LE_vl >>= forNState parseTrait
+  traits <- fromU30LE_vl >>= replicateM' parseTrait
   return InstanceInfo {
     instName = name
   , instSuperName = superName
@@ -278,7 +278,7 @@ parseTrait = do
   let final = kind .&. 0x10 == 0x10
   let override = kind .&. 0x20 == 0x20
   meta <- if (kind .&. 0x40 == 0x40)
-    then fromU30LE_vl >>= forNState fromU30LE_vl >>= returnJ
+    then fromU30LE_vl >>= replicateM' fromU30LE_vl >>= returnJ
     else return Nothing
   return TraitsInfo {
     tiName = name
@@ -355,7 +355,7 @@ parseTraitMethod f = liftM f$ liftM2 TraitMethod fromU30LE_vl fromU30LE_vl
 parseClass :: Parser ClassInfo
 parseClass = do
   ciInit <- fromU30LE_vl
-  ciTraits <- fromU30LE_vl >>= forNState parseTrait
+  ciTraits <- fromU30LE_vl >>= replicateM' parseTrait
   return ClassInfo {
     ciInit = ciInit
   , ciTraits = ciTraits
@@ -369,7 +369,7 @@ parseClass = do
 parseScript :: Parser ScriptInfo
 parseScript = do
   siInit <- fromU30LE_vl
-  siTraits <- fromU30LE_vl >>= forNState parseTrait
+  siTraits <- fromU30LE_vl >>= replicateM' parseTrait
   return ScriptInfo {
     siInit = siInit
   , siTraits = siTraits
@@ -390,8 +390,8 @@ parseMethodBody = do
   mbCodeCount <- fromU30LE_vl
   opcodeBytes <- EB.take (fromIntegral mbCodeCount)
   mbCode <- tryIO$ run_ (enumList 1 (BL.toChunks opcodeBytes) $$ parseOpCode)
-  mbExceptions <- fromU30LE_vl >>= forNState parseException
-  mbTraits <- fromU30LE_vl >>= forNState parseTrait
+  mbExceptions <- fromU30LE_vl >>= replicateM' parseException
+  mbTraits <- fromU30LE_vl >>= replicateM' parseTrait
   return MethodBody {
     mbMethod = mbMethod
   , mbMaxStack = mbMaxStack
@@ -443,7 +443,7 @@ parseOpCodeChoice w
   | w == 0x1A = liftM IfStrictNotEqual fromS24LE
   | w == 0x1B = do
     defaultOffset <- fromS24LE
-    caseOffsets <- fromU30LE_vl >>= forNState fromS24LE
+    caseOffsets <- fromU30LE_vl >>= replicateM' fromS24LE
     return$ LookupSwitch defaultOffset caseOffsets
   | w == 0x1C = return PushWith
   | w == 0x1D = return PopScope
