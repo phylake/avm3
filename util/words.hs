@@ -31,6 +31,7 @@ module Util.Words (
   , varLenUintLE
   , varIntLenBS
   , varIntLen
+  , u30Bytes
   , fromU29
 ) where
 
@@ -128,7 +129,7 @@ fromU30LE_vl bs = let (w32, bs') = fromU32LE_vl bs in (w32 .&. 0x3fffffff, bs')
 fromS24LE :: BS.ByteString -> (Int32, BS.ByteString)
 fromS24LE bs =
   let (unpackThese, bs') = BS.splitAt 3 bs in
-  (fromIntegral . fromS24LE_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
+  (fromIntegral . fromS24LE_impl . map fromIntegral $ BS.unpack unpackThese, bs')
 
 fromS24LE_impl :: [Word32] -> Word32
 fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
@@ -197,6 +198,13 @@ varIntLenBS = (+1) . BS.length . BS.takeWhile hasSignalBit
 
 varIntLen :: [Word8] -> Int
 varIntLen = (+1) . length . takeWhile hasSignalBit
+
+u30Bytes :: Word32 -> Int
+u30Bytes u30
+  | u30 >= 0x00000000 && u30 <= 0x0000007F = 1
+  | u30 >= 0x00000080 && u30 <= 0x00003FFF = 2
+  | u30 >= 0x00004000 && u30 <= 0x001FFFFF = 3
+  | u30 >= 0x00200000 && u30 <= 0x3FFFFFFF = 4
 
 fromU29 :: (Bits a) => [a] -> a
 fromU29 (w1:[]) = lsb1

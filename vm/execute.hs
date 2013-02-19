@@ -99,6 +99,12 @@ build_global_scope = do
 
   return global
 
+convert_offset :: [VmRtOp] -> S24 -> Int
+--convert_offset s24 (op:[]) = toBytes op
+convert_offset ((O op):ops) s24
+  | s24 > 0 = 1 + (convert_offset ops$ s24 - (fromIntegral$ toBytes op))
+  | otherwise = 1
+
 {-
   Since interrupts wait for the stack to wind down I don't have to handle them
   explicitly in run_function
@@ -126,9 +132,13 @@ r_f = do
         p$ (unlines$ map (\s -> "\t" ++ show s) aboveSp)
           ++ "\t--------------------" ++ show sp ++ "\n"
           ++ (unlines$ map (\s -> "\t" ++ show s) belowSp)
-        let ops2 = aboveSp ++ (drop 1 belowSp)
-        set_ops ops2
+        mod_sp (+1)
         case op of
+    {-09-}Label -> return ()
+    {-10-}Jump s24 -> do
+            -- sp already modified. subtract 1
+            let offset = convert_offset (drop 1 belowSp) s24 - 1
+            mod_sp (+offset)
     {-1D-}PopScope -> pop_ss
     {-24-}PushByte u8 -> push$ D$ VmRt_Int$ fromIntegral u8
     {-26-}PushTrue -> push$ D$ VmRt_Boolean True
@@ -148,7 +158,7 @@ r_f = do
     {-30-}PushScope -> do
             D (VmRt_Object v) <- pop
             push_ss v
-    {-47-}ReturnVoid -> set_sp (-1) >> push (D VmRt_Undefined)
+    {-47-}ReturnVoid -> push (D VmRt_Undefined) >> set_sp (-1)
     {-48-}ReturnValue -> set_sp (-1)
     {-4F-}CallPropVoid idx args -> do -- TODO check for [ns] [name]
             nArgs <- replicateM (fromIntegral args) pop
@@ -175,7 +185,7 @@ r_f = do
             
             MethodBody _ _ _ _ _ code _ _ <- get_methodBody methodId
             p$ show code
-            push_activation (0, map O code, [last ss], [VmRt_Object this])
+            push_activation (0, map O code, [last ss], [VmRt_Object this] ++ (map (\(D a) -> a) nArgs))
             r_f
             pop_activation
 
@@ -236,14 +246,29 @@ r_f = do
             mod_reg$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
     {-D5-}SetLocal1 -> do
             D new <- pop
-            mod_reg$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
+            case reg of
+              [] -> mod_reg$ \_ -> [VmRt_Undefined, new]
+              (_:[]) -> mod_reg (++[new])
+              otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
     {-D6-}SetLocal2 -> do
             D new <- pop
-            mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
+            p$ "REG " ++ show reg
+            case reg of
+              [] -> mod_reg$ \_ -> [VmRt_Undefined, VmRt_Undefined, new]
+              (_:[]) -> mod_reg$ \(a:[]) -> [a, VmRt_Undefined, new]
+              (_:_:[]) -> mod_reg (++[new])
+              otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
+            --mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
     {-D7-}SetLocal3 -> do
             D new <- pop
-            mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
-          _ -> mod_sp (+1)
+            case reg of
+              [] -> mod_reg$ \_ -> [VmRt_Undefined, VmRt_Undefined, VmRt_Undefined, new]
+              (_:[]) -> mod_reg$ \(a:[]) -> [a, VmRt_Undefined, VmRt_Undefined, new]
+              (_:_:[]) -> mod_reg$ \(a:b:[]) -> [a, b, VmRt_Undefined, new]
+              (_:_:_:[]) -> mod_reg (++[new])
+              otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
+            --mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
+          _ -> raise$ "didn't match opcode " ++ show op
   
   (_, ((newsp,newops,_,_):_)) <- get
   case newsp of

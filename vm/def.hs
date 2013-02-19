@@ -182,10 +182,3 @@ mod_reg :: (Registers -> Registers) -> AVM3 ()
 mod_reg f = do
   (cp, ((a,b,ss,reg):fs)) <- get
   set (cp, (a,b,ss,f reg):fs)
-
-
-
-
-
-
-
