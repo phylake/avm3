@@ -113,7 +113,7 @@ convert_offset ((O op):ops) s24
   | otherwise = 1
 
 push_undefined :: AVM3 ()
-push_undefined = push$ D VmRt_Undefined
+push_undefined = pushd VmRt_Undefined
 
 {-
   prone to off by one errors.
@@ -221,10 +221,10 @@ r_f = do
               then jump s24
               else return ()
     {-1D-}PopScope -> pop_ss
-    {-24-}PushByte u8 -> push$ D$ VmRt_Int$ fromIntegral u8
-    {-26-}PushTrue -> push$ D$ VmRt_Boolean True
-    {-27-}PushFalse -> push$ D$ VmRt_Boolean False
-    {-28-}PushNaN -> push$ D$ VmRt_Number nan
+    {-24-}PushByte u8 -> pushd$ VmRt_Int$ fromIntegral u8
+    {-26-}PushTrue -> pushd$ VmRt_Boolean True
+    {-27-}PushFalse -> pushd$ VmRt_Boolean False
+    {-28-}PushNaN -> pushd$ VmRt_Number nan
     {-29-}Pop -> pop >> return ()
     {-2A-}Dup -> get_ops >>= push . head
     {-2B-}Swap -> do
@@ -232,14 +232,14 @@ r_f = do
             b <- pop
             push a
             push b
-    {-2C-}PushString idx -> get_string idx >>= push . D . VmRt_String
-    {-2D-}PushInt idx -> get_int idx >>= push . D . VmRt_Int
-    {-2E-}PushUInt idx -> get_uint idx >>= push . D . VmRt_Uint
-    {-2F-}PushDouble idx -> get_double idx >>= push . D . VmRt_Number
+    {-2C-}PushString idx -> get_string idx >>= pushd . VmRt_String
+    {-2D-}PushInt idx -> get_int idx >>= pushd . VmRt_Int
+    {-2E-}PushUInt idx -> get_uint idx >>= pushd . VmRt_Uint
+    {-2F-}PushDouble idx -> get_double idx >>= pushd . VmRt_Number
     {-30-}PushScope -> do
             D (VmRt_Object v iid) <- pop
             push_ss (v,iid)
-    {-47-}ReturnVoid -> push (D VmRt_Undefined) >> set_sp (-1)
+    {-47-}ReturnVoid -> push_undefined >> set_sp (-1)
     {-48-}ReturnValue -> set_sp (-1)
     {-4F-}CallPropVoid idx args -> do -- TODO check for [ns] [name]
             nArgs <- replicateM (fromIntegral args) pop
@@ -260,7 +260,8 @@ r_f = do
                   1 -> return$ head matchingTraits
                   otherwise -> raise "CallPropVoid - too many matching traits"
               otherwise -> do
-                name <- resolve_multiname idx
+                Multiname_QName nSInfoIdx stringIdx <- get_multiname idx
+                name <- liftM2 (++) (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
                 proplist <- liftIO$ H.toList this
                 raise$ "couldn't find " ++ name ++ " on " ++ show proplist
             
@@ -274,7 +275,7 @@ r_f = do
     {-56-}NewArray args -> do
             nArgs <- replicateM (fromIntegral args) pop
             iid <- next_id
-            push$ D$ VmRt_Array (map (\(D a) -> a)$ reverse nArgs) iid
+            pushd$ VmRt_Array (map (\(D a) -> a)$ reverse nArgs) iid
     {-58-}NewClass idx -> do
             p$ "########## NewClass " ++ show idx
             ClassInfo msi traits <- get_class idx
@@ -293,18 +294,25 @@ r_f = do
 
             liftIO$ H.insert global (Ext "Test")$ VmRt_Object klass iid
             p$ "########## " ++ show idx
-    {-5D-}FindPropStrict idx -> find_property idx ss >>= push . D -- TODO this need error checking
-    {-5E-}FindProperty idx -> find_property idx ss >>= push . D -- TODO this need error checking
+    {-5D-}FindPropStrict idx -> find_property idx ss >>= pushd -- TODO this need error checking
+    {-5E-}FindProperty idx -> find_property idx ss >>= pushd -- TODO this need error checking
     {-60-}GetLex idx -> do
             -- TODO need to splice this in or modify it during parsing
             push$ O$ GetProperty idx
             push$ O$ FindPropStrict idx
     {-65-}GetScopeObject idx -> do
             let (obj, iid) = ss !! fromIntegral idx 
-            push$ D$ VmRt_Object obj iid
-    {-66-}GetProperty idx -> do -- TODO check for [ns] [name]
+            pushd$ VmRt_Object obj iid
+    {-66-}GetProperty idx -> do
+            multiname <- get_multiname idx
+            prop <- case multiname of
+              Multiname_QName nSInfoIdx stringIdx -> do
+                name <- liftM2 (++) (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
+                return$ VmRt_String name
+              otherwise -> do (D d) <- pop; return d
+
             D vmrt <- pop
-            name <- resolve_multiname idx
+
             case vmrt of
               VmRt_Undefined -> push_undefined
               VmRt_Null -> push_undefined
@@ -313,39 +321,71 @@ r_f = do
               VmRt_Uint v -> push_undefined
               VmRt_Number v -> push_undefined
               VmRt_String v -> push_undefined
-              VmRt_Array v _ -> case name of
-                "length" -> push . D . VmRt_Int . fromIntegral$ length v
-                otherwise -> raise$ "GetProperty - VmRt_Array - can't get property " ++ name
-              VmRt_Object this _ -> do
-                maybeProp <- liftIO$ H.lookup this$ Ext name
-                case maybeProp of
-                  Just p -> push$ D p
-                  Nothing -> push_undefined
+              VmRt_Array v _ -> case prop of
+                VmRt_String name -> case name of
+                  "length" -> pushd . VmRt_Int . fromIntegral$ length v
+                  otherwise -> raise$ "GetProperty - VmRt_Array - can't get property " ++ name
+                VmRt_Int i -> pushd$ v !! fromIntegral i
+              VmRt_Object this _ -> case prop of
+                VmRt_String name -> do
+                  maybeProp <- liftIO$ H.lookup this$ Ext name
+                  case maybeProp of
+                    Just p -> pushd p
+                    Nothing -> push_undefined
+                otherwise -> raise "GetProperty - VmRt_Object - only strings"
               --VmRt_Closure f
     {-68-}InitProperty idx -> do
-            (D vmrt) <- pop
-            (D (VmRt_Object this iid)) <- pop
+            D vmrt <- pop
+            D (VmRt_Object this iid) <- pop
             init_property this idx vmrt
     {-70-}ConvertString -> do
-            (D v) <- pop
-            push$ convert_string v
+            D v <- pop
+            pushd$ convert_string v
     {-73-}ConvertInt -> do
-            (D v) <- pop
-            push$ convert_int v
+            D v <- pop
+            pushd$ convert_int v
     {-74-}ConvertUInt -> do
-            (D v) <- pop
-            push$ convert_uint v
+            D v <- pop
+            pushd$ convert_uint v
     {-75-}ConvertDouble -> do
-            (D v) <- pop
-            push$ convert_double v
+            D v <- pop
+            pushd$ convert_double v
     {-76-}ConvertBoolean -> do
-            (D v) <- pop
-            push$ convert_boolean v
+            D v <- pop
+            pushd$ convert_boolean v
     {-77-}ConvertObject -> ML.raise "NI: ConvertObject"
-    {-D0-}GetLocal0 -> push$ D$ reg !! 0
-    {-D1-}GetLocal1 -> push$ D$ reg !! 1
-    {-D2-}GetLocal2 -> push$ D$ reg !! 2
-    {-D3-}GetLocal3 -> push$ D$ reg !! 3
+    {-A0-}Add -> do
+            D a <- pop
+            D b <- pop
+            pushd$ b + a
+    {-A1-}Subtract -> do
+            D a <- pop
+            D b <- pop
+            pushd$ b - a
+    {-A2-}Multiply -> do
+            D a <- pop
+            D b <- pop
+            pushd$ b * a
+    {-A3-}Divide -> do
+            D a <- pop
+            D b <- pop
+            pushd$ b / a
+    {-C0-}IncrementInt -> do
+            D a <- pop
+            pushd$ a+1
+    {-C1-}DecrementInt -> do
+            D a <- pop
+            pushd$ a-1
+    {-C2-}IncLocalInt regIdx -> do
+            let new = (reg !! fromIntegral regIdx) + 1
+            mod_reg$ \reg -> let (h,(_:t)) = splitAt (fromIntegral regIdx) reg in h ++ (new:t)
+    {-C3-}DecLocalInt regIdx -> do
+            let new = (reg !! fromIntegral regIdx) - 1
+            mod_reg$ \reg -> let (h,(_:t)) = splitAt (fromIntegral regIdx) reg in h ++ (new:t)
+    {-D0-}GetLocal0 -> pushd$ reg !! 0
+    {-D1-}GetLocal1 -> pushd$ reg !! 1
+    {-D2-}GetLocal2 -> pushd$ reg !! 2
+    {-D3-}GetLocal3 -> pushd$ reg !! 3
     {-D4-}SetLocal0 -> do
             D new <- pop
             mod_reg$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
@@ -357,7 +397,6 @@ r_f = do
               otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
     {-D6-}SetLocal2 -> do
             D new <- pop
-            p$ "REG " ++ show reg
             case reg of
               [] -> mod_reg$ \_ -> [VmRt_Undefined, VmRt_Undefined, new]
               (_:[]) -> mod_reg$ \(a:[]) -> [a, VmRt_Undefined, new]
@@ -380,20 +419,20 @@ r_f = do
     -1 -> let (D ret:_) = newops in return ret
     otherwise -> r_f
 
-convert_string :: VmRt -> VmRtOp
-convert_string = D . VmRt_String . to_string
+convert_string :: VmRt -> VmRt
+convert_string = VmRt_String . to_string
 
-convert_double :: VmRt -> VmRtOp
-convert_double = D . VmRt_Number . to_number
+convert_double :: VmRt -> VmRt
+convert_double = VmRt_Number . to_number
 
-convert_boolean :: VmRt -> VmRtOp
-convert_boolean = D . VmRt_Boolean . to_boolean
+convert_boolean :: VmRt -> VmRt
+convert_boolean = VmRt_Boolean . to_boolean
 
-convert_int :: VmRt -> VmRtOp
-convert_int = D . VmRt_Int . to_int32
+convert_int :: VmRt -> VmRt
+convert_int = VmRt_Int . to_int32
 
-convert_uint :: VmRt -> VmRtOp
-convert_uint = D . VmRt_Uint . to_uint32
+convert_uint :: VmRt -> VmRt
+convert_uint = VmRt_Uint . to_uint32
 
 new_function :: AVM3 ()
 new_function = undefined
@@ -409,7 +448,8 @@ TODO resolve against
 -}
 find_property :: MultinameIdx -> ScopeStack -> AVM3 VmRt
 find_property idx ss = do
-  name <- resolve_multiname idx
+  Multiname_QName nSInfoIdx stringIdx <- get_multiname idx
+  name <- liftM2 (++) (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
   p$ "FindProperty [" ++ show idx ++ " " ++ name ++ "]"
   --p$ "\tscope_stack length " ++ (show$ length ss)
   attempt1 <- search_stack (Ext name) ss
@@ -464,7 +504,8 @@ get_scoped_object ss idx = undefined-}
 
 init_property :: VmObject -> MultinameIdx -> VmRt -> AVM3 ()
 init_property this idx value = do
-  name <- resolve_multiname idx
+  Multiname_QName nSInfoIdx stringIdx <- get_multiname idx
+  name <- liftM2 (++) (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
   p$ "InitProperty [" ++ show idx ++ " " ++ name ++ "]"
   maybeProp <- liftIO$ H.lookup this (Ext name)
   case maybeProp of

@@ -66,13 +66,13 @@ class Coerce a where
     | otherwise = to_integer' num
     where
       num = to_number a
-      to_integer' = fromIntegral. doubleToWord
+      to_integer' = fromIntegral . doubleToWord
   -- 9.5
   to_int32 :: a -> Int32
-  to_int32 = fromIntegral. to_integer
+  to_int32 = fromIntegral . to_integer
   -- 9.6
   to_uint32 :: a -> Word32
-  to_uint32 = fromIntegral. to_integer
+  to_uint32 = fromIntegral . to_integer
   -- 9.8
   to_string :: a -> String
   to_string a = ""

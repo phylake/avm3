@@ -82,6 +82,26 @@ instance Coerce VmRt where
   to_number (VmRt_String a) = read a
   to_number (VmRt_Object _ _) = undefined
 
+  to_int32 VmRt_Undefined = 0
+  to_int32 VmRt_Null = 0
+  to_int32 (VmRt_Boolean True) = 1
+  to_int32 (VmRt_Boolean False) = 0
+  to_int32 (VmRt_Int a) = a
+  to_int32 (VmRt_Uint a) = fromIntegral a
+  to_int32 (VmRt_Number a) = fromIntegral a
+  to_int32 (VmRt_String a) = read a
+  to_int32 (VmRt_Object _ a) = fromIntegral a
+
+  to_uint32 VmRt_Undefined = 0
+  to_uint32 VmRt_Null = 0
+  to_uint32 (VmRt_Boolean True) = 1
+  to_uint32 (VmRt_Boolean False) = 0
+  to_uint32 (VmRt_Int a) = fromIntegral a
+  to_uint32 (VmRt_Uint a) = a
+  to_uint32 (VmRt_Number a) = fromIntegral a
+  to_uint32 (VmRt_String a) = read a
+  to_uint32 (VmRt_Object _ a) = fromIntegral a
+
   to_string VmRt_Undefined = "undefined"
   to_string VmRt_Null = "null"
   to_string (VmRt_Boolean True) = "true"
@@ -93,50 +113,124 @@ instance Coerce VmRt where
   to_string (VmRt_Object _ _) = "[Object]"
 
 instance Eq VmRt where
-  a == b = to_boolean a == to_boolean b
+  VmRt_Undefined == VmRt_Undefined = True
+  VmRt_Undefined == VmRt_Null = True
+  VmRt_Null == VmRt_Null = True
+  VmRt_Null == VmRt_Undefined = True
+  
+  (VmRt_Int a) == (VmRt_Int b) = a == b
+  (VmRt_Int a) == (VmRt_Uint b) = a == fromIntegral b
+  (VmRt_Int a) == (VmRt_Number b) = a == fromIntegral b
+  
+  (VmRt_Uint a) == (VmRt_Uint b) = a == b
+  (VmRt_Uint a) == (VmRt_Int b) = a == fromIntegral b
+  (VmRt_Uint a) == (VmRt_Number b) = a == fromIntegral b
+  
+  (VmRt_Number a) == (VmRt_Number b) = a == b
+  (VmRt_Number a) == (VmRt_Int b) = a == fromIntegral b
+  (VmRt_Number a) == (VmRt_Uint b) = a == fromIntegral b
+  
+  (VmRt_String a) == (VmRt_String b) = a == b
+  (VmRt_String a) == (VmRt_Number b) = a == show b
+  (VmRt_String a) == (VmRt_Int b) = a == show b
+  (VmRt_String a) == (VmRt_Uint b) = a == show b
+  
+  (VmRt_Array _ a) == (VmRt_Array _ b) = a == b
+  (VmRt_Object _ a) == (VmRt_Object _ b) = a == b
 
 instance Ord VmRt where
   compare VmRt_Undefined VmRt_Undefined = EQ
   compare VmRt_Undefined VmRt_Null = EQ
-  compare VmRt_Undefined _ = LT
-  compare _ VmRt_Undefined = LT
 
   compare VmRt_Null VmRt_Undefined = EQ
   compare VmRt_Null VmRt_Null = EQ
-  compare VmRt_Null _ = LT
-  compare _ VmRt_Null = LT
 
   compare (VmRt_Boolean a) (VmRt_Boolean b) = compare a b
-  compare (VmRt_Boolean _) _ = LT
-  compare _ (VmRt_Boolean _) = LT
   
   compare (VmRt_Int a) (VmRt_Int b) = compare a b
   compare (VmRt_Int a) (VmRt_Uint b) = compare a $ fromIntegral b
   compare (VmRt_Int a) (VmRt_Number b) = compare a $ fromIntegral b
-  compare (VmRt_Int _) _ = LT
-  compare _ (VmRt_Int _) = LT
 
   compare (VmRt_Uint a) (VmRt_Uint b) = compare a b
   compare (VmRt_Uint a) (VmRt_Int b) = compare a $ fromIntegral b
   compare (VmRt_Uint a) (VmRt_Number b) = compare a $ fromIntegral b
-  compare (VmRt_Uint _) _ = LT
-  compare _ (VmRt_Uint _) = LT
 
   compare (VmRt_Number a) (VmRt_Number b) = compare a b
   compare (VmRt_Number a) (VmRt_Int b) = compare a $ fromIntegral b
   compare (VmRt_Number a) (VmRt_Uint b) = compare a $ fromIntegral b
-  compare (VmRt_Number _) _ = LT
-  compare _ (VmRt_Number _) = LT
 
   compare (VmRt_Array _ a) (VmRt_Array _ b) = compare a b
-  compare (VmRt_Array _ _) _ = LT
-  compare _ (VmRt_Array _ _) = LT
   
   compare (VmRt_String a) (VmRt_String b) = compare a b
-  compare (VmRt_String _) _ = LT
-  compare _ (VmRt_String _) = LT
   
   compare (VmRt_Object _ a) (VmRt_Object _ b) = compare a b
+
+instance Num VmRt where
+  (VmRt_Int a) + (VmRt_Int b) = VmRt_Int$ a + b
+  (VmRt_Int a) + (VmRt_Uint b) = VmRt_Int$ a + fromIntegral b
+  (VmRt_Int a) + (VmRt_Number b) = VmRt_Number$ fromIntegral a + b
+
+  (VmRt_Uint a) + (VmRt_Uint b) = VmRt_Uint$ a + b
+  (VmRt_Uint a) + (VmRt_Int b) = VmRt_Uint$ a + fromIntegral b
+  (VmRt_Uint a) + (VmRt_Number b) = VmRt_Number$ fromIntegral a + b
+
+  (VmRt_Number a) + (VmRt_Number b) = VmRt_Number$ a + b
+  (VmRt_Number a) + (VmRt_Int b) = VmRt_Number$ a + fromIntegral b
+  (VmRt_Number a) + (VmRt_Uint b) = VmRt_Number$ a + fromIntegral b
+
+  
+  (VmRt_Int a) - (VmRt_Int b) = VmRt_Int$ a - b
+  (VmRt_Int a) - (VmRt_Uint b) = VmRt_Int$ a - fromIntegral b
+  (VmRt_Int a) - (VmRt_Number b) = VmRt_Number$ fromIntegral a - b
+
+  (VmRt_Uint a) - (VmRt_Uint b) = VmRt_Uint$ a - b
+  (VmRt_Uint a) - (VmRt_Int b) = VmRt_Uint$ a - fromIntegral b
+  (VmRt_Uint a) - (VmRt_Number b) = VmRt_Number$ fromIntegral a - b
+
+  (VmRt_Number a) - (VmRt_Number b) = VmRt_Number$ a - b
+  (VmRt_Number a) - (VmRt_Int b) = VmRt_Number$ a - fromIntegral b
+  (VmRt_Number a) - (VmRt_Uint b) = VmRt_Number$ a - fromIntegral b
+
+  
+  (VmRt_Int a) * (VmRt_Int b) = VmRt_Int$ a * b
+  (VmRt_Int a) * (VmRt_Uint b) = VmRt_Int$ a * fromIntegral b
+  (VmRt_Int a) * (VmRt_Number b) = VmRt_Number$ fromIntegral a * b
+
+  (VmRt_Uint a) * (VmRt_Uint b) = VmRt_Uint$ a * b
+  (VmRt_Uint a) * (VmRt_Int b) = VmRt_Uint$ a * fromIntegral b
+  (VmRt_Uint a) * (VmRt_Number b) = VmRt_Number$ fromIntegral a * b
+
+  (VmRt_Number a) * (VmRt_Number b) = VmRt_Number$ a * b
+  (VmRt_Number a) * (VmRt_Int b) = VmRt_Number$ a * fromIntegral b
+  (VmRt_Number a) * (VmRt_Uint b) = VmRt_Number$ a * fromIntegral b
+
+  
+  abs (VmRt_Number a) = abs$ fromIntegral a
+  abs (VmRt_Int a) = abs$ fromIntegral a
+  abs (VmRt_Uint a) = abs$ fromIntegral a
+
+  signum (VmRt_Number a) = signum$ fromIntegral a
+  signum (VmRt_Int a) = signum$ fromIntegral a
+  signum (VmRt_Uint a) = signum$ fromIntegral a
+
+  fromInteger = VmRt_Int . fromIntegral
+
+instance Fractional Int32 where
+  a / b = fromIntegral a / fromIntegral b
+
+instance Fractional Word32 where
+  a / b = fromIntegral a / fromIntegral b
+
+instance Fractional VmRt where
+  (VmRt_Int a) / (VmRt_Int b) = VmRt_Int$ a / b
+  (VmRt_Int a) / (VmRt_Uint b) = VmRt_Int$ a / fromIntegral b
+  (VmRt_Int a) / (VmRt_Number b) = VmRt_Number$ fromIntegral a / b
+
+  (VmRt_Uint a) / (VmRt_Uint b) = VmRt_Uint$ a / b
+  (VmRt_Uint a) / (VmRt_Int b) = VmRt_Uint$ a / fromIntegral b
+  (VmRt_Uint a) / (VmRt_Number b) = VmRt_Number$ fromIntegral a / b
+  
+  --fromRational = VmRt_Number . fromIntegral
 
 instance Show VmRt where
   show VmRt_Undefined      = "VmRt_Undefined"
@@ -194,6 +288,9 @@ push :: VmRtOp -> AVM3 ()
 push op = do
   (cp, ((sp,ops,ss,reg):fs), iid) <- get
   set (cp, ((sp+1,op:ops,ss,reg):fs), iid)
+
+pushd :: VmRt -> AVM3 ()
+pushd = push . D
 
 pop :: AVM3 VmRtOp
 pop = do

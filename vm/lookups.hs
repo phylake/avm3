@@ -1,4 +1,4 @@
-module Vm.Lookups where
+module Vm.Lookups (resolve_nsinfo) where
 
 import           Abc.Def
 import           MonadLib
@@ -19,6 +19,8 @@ resolve_nsinfo idx = do
     NSInfo_PrivateNs stringIdx -> get_string stringIdx
     NSInfo_Any -> return "*"
 
+-- finding a need to handle this logic in execute.hs
+-- so not exporting for now
 resolve_multiname :: MultinameIdx -> AVM3 String
 resolve_multiname idx = do
   --putStrLn "resolve_multiname"
