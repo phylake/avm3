@@ -108,11 +108,7 @@ fromS32LE_vl = do
 {-# INLINE fromS32LE_vl #-}
 
 fromS24LE :: Parser Int32
---fromS24LE = EB.take 3 >>= return . Util.fromS24LE . BL.unpack
-fromS24LE = do
-  bs <- EB.take 3
-  tryIO.putStrLn$ "ws " ++ show (BL.unpack bs)
-  return . Util.fromS24LE $ BL.unpack bs
+fromS24LE = EB.take 3 >>= return . Util.fromS24LE . BL.unpack
 {-# INLINE fromS24LE #-}
 
 take' :: Integer -> Parser B.ByteString

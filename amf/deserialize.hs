@@ -7,9 +7,9 @@ import           Control.Monad
 import           Data.Binary.IEEE754 (wordToDouble)
 import           Data.Bits
 import           Data.Char (digitToInt, intToDigit)
-import           Data.Enumerator as E
-import           Data.Enumerator.Binary as EB
-import           Data.Enumerator.List as EL
+import           Data.Enumerator as E hiding (replicateM)
+import           Data.Enumerator.Binary as EB hiding (replicateM)
+import           Data.Enumerator.List as EL hiding (replicateM)
 import           Data.Int
 import           Data.Word
 import           Util.Misc
@@ -165,7 +165,7 @@ fromU29OTraitsExt u29 = fail "fromU29OTraitsExt not implemented"
 fromU29OTraits :: U29 -> Parser Amf
 fromU29OTraits u29 = do
   (utf8vr :: UTF_8_vr) <- fromAmf
-  (props :: [UTF_8_vr]) <- forNState fromUtf8Loop$ u29 `shiftR` 4
+  (props :: [UTF_8_vr]) <- replicateM (u29 `shiftR` 4) fromUtf8Loop
   let traits = (utf8vr, props, u29 .&. 0x8 == 0x8)
   pushTT traits >>= commonU29O >>= return . AmfObject . U29O_Traits
   where
@@ -184,7 +184,7 @@ commonU29O (_, props, dynamic) = if dynamic
 
 strictProps :: [UTF_8_vr] -> Parser [Assoc_Value]
 strictProps props = do
-  (valueAmfs :: [Amf]) <- forNState fromAmf$ Prelude.length props
+  (valueAmfs :: [Amf]) <- replicateM (Prelude.length props) fromAmf
   if Prelude.length valueAmfs /= Prelude.length props
     then fail$ "strictProps - length mismatch"
       ++ "\n\t props: " ++ show props
@@ -211,7 +211,7 @@ fromU29ARef = return . AmfArray . U29A_Ref
 fromU29AValue :: U29 -> Parser Amf
 fromU29AValue len = do
   assocValues <- fromAssoc
-  (denseAmfs :: [Amf]) <- forNState fromAmf len
+  (denseAmfs :: [Amf]) <- replicateM len fromAmf
   pushCOT$ AmfArray$ U29A_Value assocValues denseAmfs
 
 fromAssoc :: Parser [Assoc_Value]

@@ -23,15 +23,6 @@ instance Integral Double where
       fab = floor ab
   toInteger = floor
 
--- TODO found replicateM. get rid of this
-{-forNState :: (Ord n, Num n, Monad m) => m a -> n -> m [a]
-forNState f n = if n > 0
-  then do
-    x <- f
-    xs <- forNState f (n-1)
-    return $ x:xs
-  else do return []-}
-
 replicateM' :: (Monad m, Integral i) => m a -> i -> m [a]
 replicateM' m i = Control.Monad.replicateM (fromIntegral i) m
 
