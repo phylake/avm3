@@ -22,9 +22,7 @@ module Util.Words (
   , fromU32LE_vl
   , fromU30LE_vl
   , fromS24LE
-  , fromS24LE_impl
   , fromS32LE_vl
-  , fromS32LE_vl_impl
   , foldWords
   , foldVarLen
   , hasSignalBit
@@ -98,19 +96,19 @@ fromDoubleLE :: BS.ByteString -> (Double, BS.ByteString)
 fromDoubleLE bs = let (ws, bs') = nWords 8 bs in (toDouble $ reverse ws, bs')
 
 toWord16 :: [Word8] -> Word16
-toWord16 ws = foldl' foldWords 0 (take 2 ws)
+toWord16 ws = foldl foldWords 0 (take 2 ws)
 
 toWord16LE :: [Word8] -> Word16
 toWord16LE ws = foldr (flip foldWords) 0 (take 2 ws)
 
 toWord32 :: [Word8] -> Word32
-toWord32 ws = foldl' foldWords 0 (take 4 ws)
+toWord32 ws = foldl foldWords 0 (take 4 ws)
 
 toWord32LE :: [Word8] -> Word32
 toWord32LE ws = foldr (flip foldWords) 0 (take 4 ws)
 
 toWord64 :: [Word8] -> Word64
-toWord64 ws = foldl' foldWords 0 (take 8 ws)
+toWord64 ws = foldl foldWords 0 (take 8 ws)
 
 toWord64LE :: [Word8] -> Word64
 toWord64LE ws = foldr (flip foldWords) 0 (take 8 ws)
@@ -126,52 +124,13 @@ fromU32LE_vl bs = let (w64, bs') = varLenUintLE bs in (fromIntegral w64, bs')
 fromU30LE_vl :: BS.ByteString -> (Word32, BS.ByteString)
 fromU30LE_vl bs = let (w32, bs') = fromU32LE_vl bs in (w32 .&. 0x3fffffff, bs')
 
-fromS24LE :: BS.ByteString -> (Int32, BS.ByteString)
-fromS24LE bs =
-  let (unpackThese, bs') = BS.splitAt 3 bs in
-  (fromIntegral . fromS24LE_impl . map fromIntegral $ BS.unpack unpackThese, bs')
+fromS24LE :: [Word8] -> Int32
+fromS24LE ws@(w3:w2:w1:[])
+  | w1 .&. 0x80 == 0x80 = foldr (flip foldWords) 0 ws .|. 0xFF000000
+  | otherwise = foldr (flip foldWords) 0 ws
 
-fromS24LE_impl :: [Word32] -> Word32
-fromS24LE_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
-  where
-    sign = (w1 .&. 0x80) `shiftL` 24
-    w1'  = (w1 .&. 0x7f) `shiftL` 16
-    w2'  =  w2 `shiftL` 8
-    w3'  =  w3
-
-fromS32LE_vl :: BS.ByteString -> (Int32, BS.ByteString)
-fromS32LE_vl bs =
-  let (unpackThese, bs') = BS.splitAt (varIntLenBS bs) bs in
-  (fromIntegral . fromS32LE_vl_impl $ map fromIntegral $ BS.unpack unpackThese, bs')
-
-fromS32LE_vl_impl :: [Word32] -> Word32
-fromS32LE_vl_impl (w1:[]) = sign .|. w1'
-  where
-    sign = (w1 .&. 0x40) `shiftL` 25
-    w1'  = (w1 .&. 0x3f) `shiftL` 0
-fromS32LE_vl_impl (w2:w1:[]) = sign .|. w1' .|. w2'
-  where
-    sign = (w1 .&. 0x40) `shiftL` 25
-    w1'  = (w1 .&. 0x3f) `shiftL` 7
-    w2'  = (w2 .&. 0x7f) `shiftL` 0
-fromS32LE_vl_impl (w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3'
-  where
-    sign = (w1 .&. 0x40) `shiftL` 25
-    w1'  = (w1 .&. 0x3f) `shiftL` 14
-    w2'  = (w2 .&. 0x7f) `shiftL` 7
-    w3'  = (w3 .&. 0x7f) `shiftL` 0
-fromS32LE_vl_impl (w4:w3:w2:w1:[]) = sign .|. w1' .|. w2' .|. w3' .|. w4'
-  where
-    sign = (w1 .&. 0x40) `shiftL` 25
-    w1'  = (w1 .&. 0x3f) `shiftL` 21
-    w2'  = (w2 .&. 0x7f) `shiftL` 14
-    w3'  = (w3 .&. 0x7f) `shiftL` 7
-    w4'  = (w4 .&. 0x7f) `shiftL` 0
-
-
-foldl' f acc []     = acc
-foldl' f acc (x:xs) = let acc' = acc `f` x 
-                      in seq acc' $ foldl' f acc' xs
+fromS32LE_vl :: [Word8] -> Int32
+fromS32LE_vl = foldr (flip foldVarLen) 0
 
 foldWords acc w = (acc `shiftL` 8) .|. fromIntegral w
 foldVarLen acc w = (acc `shiftL` 7) .|. (fromIntegral w .&. 0x7f)

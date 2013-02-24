@@ -104,11 +104,15 @@ fromS32LE_vl :: Parser Int32
 fromS32LE_vl = do
   ws <- EB.takeWhile hasSignalBit >>= toStrict
   w <- EB.take 1 >>= toStrict
-  return . fst $ Util.fromS32LE_vl $ B.append ws w
+  return . Util.fromS32LE_vl . B.unpack $ B.append ws w
 {-# INLINE fromS32LE_vl #-}
 
 fromS24LE :: Parser Int32
-fromS24LE = take' 3 >>= return . fst . Util.fromS24LE
+--fromS24LE = EB.take 3 >>= return . Util.fromS24LE . BL.unpack
+fromS24LE = do
+  bs <- EB.take 3
+  tryIO.putStrLn$ "ws " ++ show (BL.unpack bs)
+  return . Util.fromS24LE $ BL.unpack bs
 {-# INLINE fromS24LE #-}
 
 take' :: Integer -> Parser B.ByteString
