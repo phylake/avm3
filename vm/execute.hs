@@ -12,7 +12,7 @@ import           Data.Int
 import           Data.Maybe (listToMaybe)
 import           Data.Word
 import           Ecma.Prims
-import           MonadLib as ML hiding (get, set)
+import           MonadLib as ML hiding (get, set, jump)
 import           Text.JSON
 import           TFish
 import           Util.Misc
@@ -43,12 +43,18 @@ avm_prefix = "avm3internal_"
 pfx_class_info_idx :: VmRtP
 pfx_class_info_idx = ClassIdx$ avm_prefix ++ "class_info_idx"
 
+new_object :: AVM3 (VmObject, InstanceId)
+new_object = do
+  iid <- next_id
+  obj <- liftIO$ H.new
+  return (obj, iid)
+
 test_file = do
   (abc :: Abc) <- E.run_ (EB.enumFile "abc/Test.abc" E.$$ parseAbc)
   --writeFile "abc/Test.abc.json"$ encode$ abcToJson abc
   ht <- H.new
   (either::Either String (), _) <- abc `deepseq`
-    (runStateT (ht, [])$ runExceptionT$ execute_abc abc)
+    (runStateT (ht, [], 0)$ runExceptionT$ execute_abc abc)
   case either of
     Left err -> Prelude.putStrLn$ "EXCEPTION\n" ++ (unlines$ map ("\t"++)$ lines err)
     otherwise -> return ()
@@ -72,9 +78,10 @@ execute_abc abc = do
   MethodBody _ _ _ _ _ mb_Code _ _ <- get_methodBody msidx-}
   
   p$ "-------------------------------------------"
-  global <- liftIO build_global_scope
+  (global, globalid) <- build_global_scope
   let ops = [O$ NewClass idx,O ReturnVoid]
-  push_activation (0, ops, [global], [VmRt_Object global])
+  iid <- next_id
+  push_activation (0, ops, [(global, globalid)], [VmRt_Object global iid])
   vmrt <- r_f
   p$ "-------------------------------------------"
 
@@ -89,21 +96,40 @@ show_ops header ops = do
       p$ header
       p$ unlines$ map (\s -> "\t" ++ show s) ops
 
-build_global_scope :: IO VmObject
+build_global_scope :: AVM3 (VmObject, InstanceId)
 build_global_scope = do
-  (int :: VmObject) <- H.new
-  H.insert int (Ext "MAX_VALUE") (VmRt_Int 2147483647)
+  (int :: VmObject, iid) <- new_object
+  liftIO$ H.insert int (Ext "MAX_VALUE") (VmRt_Int 2147483647)
 
-  (global :: VmObject) <- H.new
-  H.insert global (Ext "int") (VmRt_Object int)
+  (global :: VmObject, globalid) <- new_object
+  liftIO$ H.insert global (Ext "int") (VmRt_Object int iid)
 
-  return global
+  return (global, globalid)
 
 convert_offset :: [VmRtOp] -> S24 -> Int
 --convert_offset s24 (op:[]) = toBytes op
 convert_offset ((O op):ops) s24
   | s24 > 0 = 1 + (convert_offset ops$ s24 - (fromIntegral$ toBytes op))
   | otherwise = 1
+
+push_undefined :: AVM3 ()
+push_undefined = push$ D VmRt_Undefined
+
+{-
+  prone to off by one errors.
+  this must be called after the sp is modified in r_f
+-}
+jump :: S24 -> AVM3 ()
+jump s24 = do
+  (_, ((sp,ops,_,_):_), _) <- get
+  let (aboveSp, belowSp) = splitAt sp ops
+  if s24 > 0
+    then do
+      let offset = convert_offset (drop 1 belowSp) s24 - 1
+      mod_sp ((+)offset)
+    else do
+      let offset = convert_offset (drop 1$ reverse aboveSp) (abs s24) - 1
+      mod_sp ((+) (negate offset))
 
 {-
   Since interrupts wait for the stack to wind down I don't have to handle them
@@ -120,7 +146,7 @@ REMEMBER the stack order here is the REVERSE of the docs
 -}
 r_f :: AVM3 VmRt
 r_f = do
-  (_, ((sp,ops,ss,reg):_)) <- get
+  (_, ((sp,ops,ss,reg):_), _) <- get
 
   let (aboveSp, belowSp) = splitAt sp ops
   case take 1 belowSp of
@@ -135,10 +161,65 @@ r_f = do
         mod_sp (+1)
         case op of
     {-09-}Label -> return ()
-    {-10-}Jump s24 -> do
-            -- sp already modified. subtract 1
-            let offset = convert_offset (drop 1 belowSp) s24 - 1
-            mod_sp (+offset)
+    {-10-}Jump s24 -> jump s24
+    {-11-}IfTrue s24 -> do
+            D a <- pop
+            if to_boolean a == True
+              then jump s24
+              else return ()
+    {-12-}IfFalse s24 -> do
+            D a <- pop
+            if to_boolean a == False
+              then jump s24
+              else return ()
+    {-13-}IfEqual s24 -> do
+            D a <- pop
+            D b <- pop
+            if b == a
+              then jump s24
+              else return ()
+    {-14-}IfNotEqual s24 -> do
+            D a <- pop
+            D b <- pop
+            if b /= a
+              then jump s24
+              else return ()
+    {-15-}IfLessThan s24 -> do
+            D a <- pop
+            D b <- pop
+            if b < a
+              then jump s24
+              else return ()
+    {-16-}IfLessEqual s24 -> do
+            D a <- pop
+            D b <- pop
+            if b <= a
+              then jump s24
+              else return ()
+    {-17-}IfGreaterThan s24 -> do
+            D a <- pop
+            D b <- pop
+            if b > a
+              then jump s24
+              else return ()
+    {-18-}IfGreaterEqual s24 -> do
+            D a <- pop
+            D b <- pop
+            if b >= a
+              then jump s24
+              else return ()
+    {-19-}IfStrictEqual s24 -> do
+            D a <- pop
+            D b <- pop
+            if a == b -- TODO class StrictEq ===
+              then jump s24
+              else return ()
+    {-1A-}IfStrictNotEqual s24 -> do
+            D a <- pop
+            D b <- pop
+            if a /= b -- TODO class StrictEq /==
+              then jump s24
+              else return ()
     {-1D-}PopScope -> pop_ss
     {-24-}PushByte u8 -> push$ D$ VmRt_Int$ fromIntegral u8
     {-26-}PushTrue -> push$ D$ VmRt_Boolean True
@@ -156,13 +237,13 @@ r_f = do
     {-2E-}PushUInt idx -> get_uint idx >>= push . D . VmRt_Uint
     {-2F-}PushDouble idx -> get_double idx >>= push . D . VmRt_Number
     {-30-}PushScope -> do
-            D (VmRt_Object v) <- pop
-            push_ss v
+            D (VmRt_Object v iid) <- pop
+            push_ss (v,iid)
     {-47-}ReturnVoid -> push (D VmRt_Undefined) >> set_sp (-1)
     {-48-}ReturnValue -> set_sp (-1)
     {-4F-}CallPropVoid idx args -> do -- TODO check for [ns] [name]
             nArgs <- replicateM (fromIntegral args) pop
-            D (VmRt_Object this) <- pop
+            D (VmRt_Object this iid) <- pop
             
             p$ "CallPropVoid"
             list <- liftIO$ H.toList this
@@ -185,14 +266,15 @@ r_f = do
             
             MethodBody _ _ _ _ _ code _ _ <- get_methodBody methodId
             p$ show code
-            push_activation (0, map O code, [last ss], [VmRt_Object this] ++ (map (\(D a) -> a) nArgs))
+            push_activation (0, map O code, [last ss], [VmRt_Object this iid] ++ (map (\(D a) -> a) nArgs))
             r_f
             pop_activation
 
             return ()
     {-56-}NewArray args -> do
             nArgs <- replicateM (fromIntegral args) pop
-            push$ D$ VmRt_Array$ map (\(D a) -> a)$ reverse nArgs
+            iid <- next_id
+            push$ D$ VmRt_Array (map (\(D a) -> a)$ reverse nArgs) iid
     {-58-}NewClass idx -> do
             p$ "########## NewClass " ++ show idx
             ClassInfo msi traits <- get_class idx
@@ -200,26 +282,49 @@ r_f = do
             MethodBody _ _ _ _ _ code _ _ <- get_methodBody msi
             --p$ "\tops: " ++ show code
             
-            (klass :: VmObject) <- liftIO$ H.new
+            (klass, iid) <- new_object
             -- store this class's identity in it
             liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
             
-            let global = last ss
-            push_activation (0, map O code, [global], [VmRt_Object klass])
+            let (global, globalid) = last ss
+            push_activation (0, map O code, [(global, globalid)], [VmRt_Object klass iid])
             r_f
             pop_activation
 
-            liftIO$ H.insert global (Ext "Test")$ VmRt_Object klass
+            liftIO$ H.insert global (Ext "Test")$ VmRt_Object klass iid
             p$ "########## " ++ show idx
     {-5D-}FindPropStrict idx -> find_property idx ss >>= push . D -- TODO this need error checking
     {-5E-}FindProperty idx -> find_property idx ss >>= push . D -- TODO this need error checking
     {-60-}GetLex idx -> do
+            -- TODO need to splice this in or modify it during parsing
             push$ O$ GetProperty idx
             push$ O$ FindPropStrict idx
-    {-65-}GetScopeObject idx -> push$ D$ VmRt_Object$ ss !! fromIntegral idx 
+    {-65-}GetScopeObject idx -> do
+            let (obj, iid) = ss !! fromIntegral idx 
+            push$ D$ VmRt_Object obj iid
+    {-66-}GetProperty idx -> do -- TODO check for [ns] [name]
+            D vmrt <- pop
+            name <- resolve_multiname idx
+            case vmrt of
+              VmRt_Undefined -> push_undefined
+              VmRt_Null -> push_undefined
+              VmRt_Boolean bool -> push_undefined
+              VmRt_Int v -> push_undefined
+              VmRt_Uint v -> push_undefined
+              VmRt_Number v -> push_undefined
+              VmRt_String v -> push_undefined
+              VmRt_Array v _ -> case name of
+                "length" -> push . D . VmRt_Int . fromIntegral$ length v
+                otherwise -> raise$ "GetProperty - VmRt_Array - can't get property " ++ name
+              VmRt_Object this _ -> do
+                maybeProp <- liftIO$ H.lookup this$ Ext name
+                case maybeProp of
+                  Just p -> push$ D p
+                  Nothing -> push_undefined
+              --VmRt_Closure f
     {-68-}InitProperty idx -> do
             (D vmrt) <- pop
-            (D (VmRt_Object this)) <- pop
+            (D (VmRt_Object this iid)) <- pop
             init_property this idx vmrt
     {-70-}ConvertString -> do
             (D v) <- pop
@@ -270,7 +375,7 @@ r_f = do
             --mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
           _ -> raise$ "didn't match opcode " ++ show op
   
-  (_, ((newsp,newops,_,_):_)) <- get
+  (_, ((newsp,newops,_,_):_), _) <- get
   case newsp of
     -1 -> let (D ret:_) = newops in return ret
     otherwise -> r_f
@@ -322,7 +427,7 @@ find_property idx ss = do
   where
     search_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
     search_stack key [] = return Nothing
-    search_stack key@(Ext str) (top:stack) = do
+    search_stack key@(Ext str) ((top, iid):stack) = do
       if str == "Foo"
         then do
           list <- liftIO$ H.toList top
@@ -332,11 +437,11 @@ find_property idx ss = do
       maybeValue <- liftIO$ H.lookup top key
       case maybeValue of
         Nothing -> search_stack key stack
-        Just value -> returnJ$ VmRt_Object top
+        Just value -> returnJ$ VmRt_Object top iid
 
     traits_ref :: MultinameIdx -> ScopeStack -> AVM3 (Maybe VmRt)
     traits_ref idx [] = return Nothing
-    traits_ref idx (top:stack) = do
+    traits_ref idx ((top, iid):stack) = do
       maybeClassInfoIdx <- liftIO$ H.lookup top pfx_class_info_idx
       case maybeClassInfoIdx of
         Just (VmRtInternalInt classIdx) -> do
@@ -345,7 +450,7 @@ find_property idx ss = do
           --p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
           case length matchingTraits of
             0 -> return Nothing
-            1 -> returnJ$ VmRt_Object top
+            1 -> returnJ$ VmRt_Object top iid
             otherwise -> raise "traits_ref - too many matching traits"
         otherwise -> traits_ref idx stack
 

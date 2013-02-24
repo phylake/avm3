@@ -19,7 +19,7 @@ data VmRt = VmRt_Undefined
           deriving (Show)-}
 
 -- 9
-instance Coerce VmRt where
+{-instance Coerce VmRt where
   to_boolean VmRt_Undefined = False
   to_boolean VmRt_Null = False
   to_boolean (VmRt_Boolean a) = a
@@ -50,4 +50,4 @@ instance Coerce VmRt where
   to_string (VmRt_Uint a) = show a
   to_string (VmRt_Number a) = show a
   to_string (VmRt_String a) = a
-  to_string (VmRt_Object _) = "[Object]"
+  to_string (VmRt_Object _) = "[Object]"-}
