@@ -296,7 +296,7 @@ instance NFData OpCode where
 {- 0x8E -}
 {- 0x8F -}
 {- 0x90 -} {-Negate-}
-{- 0x91 -} rnf (Increment a) = a `deepseq` ()
+{- 0x91 -} {-Increment-}
 {- 0x92 -} {-IncLocal-}
 {- 0x93 -} {-Decrement-}
 {- 0x94 -} rnf (DecLocal a) = a `deepseq` ()

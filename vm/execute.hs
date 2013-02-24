@@ -226,7 +226,7 @@ r_f = do
     {-27-}PushFalse -> pushd$ VmRt_Boolean False
     {-28-}PushNaN -> pushd$ VmRt_Number nan
     {-29-}Pop -> pop >> return ()
-    {-2A-}Dup -> get_ops >>= push . head
+    {-2A-}Dup -> do a <- pop; push a; push a
     {-2B-}Swap -> do
             a <- pop
             b <- pop

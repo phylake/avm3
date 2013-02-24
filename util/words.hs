@@ -26,7 +26,6 @@ module Util.Words (
   , foldWords
   , foldVarLen
   , hasSignalBit
-  , varLenUintLE
   , varIntLenBS
   , varIntLen
   , u30Bytes
@@ -96,33 +95,33 @@ fromDoubleLE :: BS.ByteString -> (Double, BS.ByteString)
 fromDoubleLE bs = let (ws, bs') = nWords 8 bs in (toDouble $ reverse ws, bs')
 
 toWord16 :: [Word8] -> Word16
-toWord16 ws = foldl foldWords 0 (take 2 ws)
+toWord16 = foldl foldWords 0 . take 2
 
 toWord16LE :: [Word8] -> Word16
-toWord16LE ws = foldr (flip foldWords) 0 (take 2 ws)
+toWord16LE = foldr (flip foldWords) 0 . take 2
 
 toWord32 :: [Word8] -> Word32
-toWord32 ws = foldl foldWords 0 (take 4 ws)
+toWord32 = foldl foldWords 0 . take 4
 
 toWord32LE :: [Word8] -> Word32
-toWord32LE ws = foldr (flip foldWords) 0 (take 4 ws)
+toWord32LE = foldr (flip foldWords) 0 . take 4
 
 toWord64 :: [Word8] -> Word64
-toWord64 ws = foldl foldWords 0 (take 8 ws)
+toWord64 = foldl foldWords 0 . take 8
 
 toWord64LE :: [Word8] -> Word64
-toWord64LE ws = foldr (flip foldWords) 0 (take 8 ws)
+toWord64LE = foldr (flip foldWords) 0 . take 8
 
 toDouble :: [Word8] -> Double
 toDouble = wordToDouble . toWord64
 
 {- variable length integers -}
 
-fromU32LE_vl :: BS.ByteString -> (Word32, BS.ByteString)
-fromU32LE_vl bs = let (w64, bs') = varLenUintLE bs in (fromIntegral w64, bs')
+fromU32LE_vl :: [Word8] -> Word32
+fromU32LE_vl = foldr (flip foldVarLen) 0
 
-fromU30LE_vl :: BS.ByteString -> (Word32, BS.ByteString)
-fromU30LE_vl bs = let (w32, bs') = fromU32LE_vl bs in (w32 .&. 0x3fffffff, bs')
+fromU30LE_vl :: [Word8] -> Word32
+fromU30LE_vl = (.&. 0x3fffffff) . fromU32LE_vl
 
 fromS24LE :: [Word8] -> Int32
 fromS24LE ws@(w3:w2:w1:[])
@@ -132,7 +131,10 @@ fromS24LE ws@(w3:w2:w1:[])
 fromS32LE_vl :: [Word8] -> Int32
 fromS32LE_vl = foldr (flip foldVarLen) 0
 
+foldWords :: (Integral a, Bits b) => b -> a -> b
 foldWords acc w = (acc `shiftL` 8) .|. fromIntegral w
+
+foldVarLen :: (Integral a, Bits b) => b -> a -> b
 foldVarLen acc w = (acc `shiftL` 7) .|. (fromIntegral w .&. 0x7f)
 
 {-varLenInt :: Bits a => [a] -> (a, [a])
@@ -144,13 +146,6 @@ varLenInt ws =
 
 hasSignalBit :: Word8 -> Bool
 hasSignalBit w = w .&. 0x80 == 0x80
-
-{- little-endian -}
-varLenUintLE :: BS.ByteString -> (Word64, BS.ByteString)
-varLenUintLE bs =
-  let (foldThese, bs') = BS.splitAt (varIntLenBS bs) bs in
-  let vli = BS.foldr (flip foldVarLen) 0 foldThese in
-  (vli, bs')
 
 varIntLenBS :: BS.ByteString -> Int
 varIntLenBS = (+1) . BS.length . BS.takeWhile hasSignalBit

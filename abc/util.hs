@@ -88,23 +88,23 @@ fromDoubleLE = take' 8 >>= return . fst . Util.fromDoubleLE
 
 fromU32LE_vl :: Parser Word32
 fromU32LE_vl = do
-  ws <- EB.takeWhile hasSignalBit >>= toStrict
-  w <- EB.take 1 >>= toStrict
-  return . fst $ Util.fromU32LE_vl $ B.append ws w
+  ws <- EB.takeWhile hasSignalBit
+  w <- EB.take 1
+  return . Util.fromU32LE_vl . BL.unpack $ BL.append ws w
 {-# INLINE fromU32LE_vl #-}
 
 fromU30LE_vl :: Parser Word32
 fromU30LE_vl = do
-  ws <- EB.takeWhile hasSignalBit >>= toStrict
-  w <- EB.take 1 >>= toStrict
-  return . fst $ Util.fromU30LE_vl $ B.append ws w
+  ws <- EB.takeWhile hasSignalBit
+  w <- EB.take 1
+  return . Util.fromU30LE_vl . BL.unpack $ BL.append ws w
 {-# INLINE fromU30LE_vl #-}
 
 fromS32LE_vl :: Parser Int32
 fromS32LE_vl = do
-  ws <- EB.takeWhile hasSignalBit >>= toStrict
-  w <- EB.take 1 >>= toStrict
-  return . Util.fromS32LE_vl . B.unpack $ B.append ws w
+  ws <- EB.takeWhile hasSignalBit
+  w <- EB.take 1
+  return . Util.fromS32LE_vl . BL.unpack $ BL.append ws w
 {-# INLINE fromS32LE_vl #-}
 
 fromS24LE :: Parser Int32

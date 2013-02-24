@@ -580,7 +580,7 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0x8E -}
               {- 0x8F -} {-negate_p-}
             | {- 0x90 -} Negate
-            | {- 0x91 -} Increment U30
+            | {- 0x91 -} Increment
             | {- 0x92 -} IncLocal
             | {- 0x93 -} Decrement
             | {- 0x94 -} DecLocal U30
@@ -836,7 +836,7 @@ toBytes {- 0x89 -} (CoerceObject) = 1
 --toBytes   {- 0x8E -}
 --toBytes   {- 0x8F -} {-negate_p-}
 toBytes {- 0x90 -} (Negate) = 1
-toBytes {- 0x91 -} (Increment u30) = 1 + u30Bytes u30
+toBytes {- 0x91 -} (Increment) = 1
 toBytes {- 0x92 -} (IncLocal) = 1
 toBytes {- 0x93 -} (Decrement) = 1
 toBytes {- 0x94 -} (DecLocal u30) = 1 + u30Bytes u30
