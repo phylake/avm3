@@ -68,7 +68,15 @@ build_cp abc = do
     instances = abcInstances abc
     classes = abcClasses abc
     scripts = abcScripts abc
-    methodBodies = abcMethodBodies abc
+    methodBodies = xform_methodBodies$ abcMethodBodies abc
+
+xform_methodBodies :: [MethodBody] -> [MethodBody]
+xform_methodBodies = map f where
+  f (MethodBody a b c d e code f g) = MethodBody a b c d e newCode f g
+    where
+      newCode = foldr replaceGetLex [] code
+  replaceGetLex (GetLex idx) acc = [GetProperty idx, FindPropStrict idx] ++ acc
+  replaceGetLex op acc = op:acc
 
 get_int :: U30 -> AVM3 Int32
 get_int u30 = do VmAbc_Int a <- get_ht Int_ u30;return a

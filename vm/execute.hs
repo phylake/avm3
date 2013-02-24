@@ -64,13 +64,13 @@ execute_abc abc = do
   build_cp abc
   cp <- get_cp
 
-  p$ show $ abcStrings abc
-  p$ show $ abcNsInfo abc
+  --p$ show $ abcStrings abc
+  --p$ show $ abcNsInfo abc
   --p$ "nssets " ++ (show $ abcNsSet abc)
-  p$ show $ abcMultinames abc
+  --p$ show $ abcMultinames abc
   --p$ "\nmethod bodies\n" ++ unlines (map (show.mbCode) $ abcMethodBodies abc)
   --p$ "\nscripts\n" ++ unlines (map show$ abcScripts abc)
-  p$ "\nclassinfos\n" ++ unlines (map show$ abcClasses abc)
+  --p$ "\nclassinfos\n" ++ unlines (map show$ abcClasses abc)
 
   ScriptInfo _ ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]) <- get_script 0
   {-ClassInfo msidx _ <- get_class idx
@@ -296,10 +296,7 @@ r_f = do
             p$ "########## " ++ show idx
     {-5D-}FindPropStrict idx -> find_property idx ss >>= pushd -- TODO this need error checking
     {-5E-}FindProperty idx -> find_property idx ss >>= pushd -- TODO this need error checking
-    {-60-}GetLex idx -> do
-            -- TODO need to splice this in or modify it during parsing
-            push$ O$ GetProperty idx
-            push$ O$ FindPropStrict idx
+    {-60-}GetLex idx -> raise "GetLex should have been replaced"
     {-65-}GetScopeObject idx -> do
             let (obj, iid) = ss !! fromIntegral idx 
             pushd$ VmRt_Object obj iid
