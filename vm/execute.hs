@@ -10,9 +10,11 @@ import           Control.Applicative
 import           Control.DeepSeq
 import           Data.Int
 import           Data.Maybe (listToMaybe)
+import           Data.Time.Clock
 import           Data.Word
 import           Ecma.Prims
 import           MonadLib as ML hiding (get, set, jump)
+import           Prelude hiding (lookup)
 import           Text.JSON
 import           TFish
 import           Util.Misc
@@ -29,7 +31,8 @@ import qualified Data.Enumerator.List as EL
 import qualified Data.HashTable.IO as H
 
 p :: String -> AVM3 ()
-p = liftIO.putStrLn
+--p = liftIO.putStrLn
+p s = return ()
 
 returnJ :: a -> AVM3 (Maybe a)
 returnJ = return. Just
@@ -42,6 +45,9 @@ avm_prefix = "avm3internal_"
 
 insert :: VmObject -> VmRtP -> VmRt -> AVM3 ()
 insert h k v = liftIO$ H.insert h k v
+
+lookup :: VmObject -> VmRtP -> AVM3 (Maybe VmRt)
+lookup h k = liftIO$ H.lookup h k
 
 pfx_class_info_idx :: VmRtP
 pfx_class_info_idx = ClassIdx$ avm_prefix ++ "class_info_idx"
@@ -64,6 +70,7 @@ test_file = do
 
 execute_abc :: Abc -> AVM3 ()
 execute_abc abc = do
+  t0 <- liftIO$ getCurrentTime
   build_cp abc
   cp <- get_cp
   ScriptInfo _ ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]) <- get_script 0
@@ -74,6 +81,8 @@ execute_abc abc = do
   push_activation (0, ops, [(global, globalid)], [VmRt_Object global iid])
   vmrt <- r_f
   p$ "-------------------------------------------"
+  t1 <- liftIO$ getCurrentTime
+  liftIO.putStrLn$ show$ diffUTCTime t1 t0
   return ()
 
 show_ops :: String -> Ops -> AVM3 ()
@@ -149,88 +158,89 @@ r_f = do
           ++ (unlines$ map (\s -> "\t" ++ show s) belowSp)
         mod_sp (+1)
         case op of
-    {-09-}Label -> return ()
-    {-10-}Jump s24 -> jump s24
-    {-11-}IfTrue s24 -> do
+  {-0x08-}Kill regIdx -> mod_reg$ \reg -> let (h,(_:t)) = splitAt (fromIntegral regIdx) reg in h ++ (VmRt_Undefined:t)
+  {-0x09-}Label -> return ()
+  {-0x10-}Jump s24 -> jump s24
+  {-0x11-}IfTrue s24 -> do
             D a <- pop
             if to_boolean a == True
               then jump s24
               else return ()
-    {-12-}IfFalse s24 -> do
+  {-0x12-}IfFalse s24 -> do
             D a <- pop
             if to_boolean a == False
               then jump s24
               else return ()
-    {-13-}IfEqual s24 -> do
+  {-0x13-}IfEqual s24 -> do
             D a <- pop
             D b <- pop
             if b == a
               then jump s24
               else return ()
-    {-14-}IfNotEqual s24 -> do
+  {-0x14-}IfNotEqual s24 -> do
             D a <- pop
             D b <- pop
             if b /= a
               then jump s24
               else return ()
-    {-15-}IfLessThan s24 -> do
+  {-0x15-}IfLessThan s24 -> do
             D a <- pop
             D b <- pop
             if b < a
               then jump s24
               else return ()
-    {-16-}IfLessEqual s24 -> do
+  {-0x16-}IfLessEqual s24 -> do
             D a <- pop
             D b <- pop
             if b <= a
               then jump s24
               else return ()
-    {-17-}IfGreaterThan s24 -> do
+  {-0x17-}IfGreaterThan s24 -> do
             D a <- pop
             D b <- pop
             if b > a
               then jump s24
               else return ()
-    {-18-}IfGreaterEqual s24 -> do
+  {-0x18-}IfGreaterEqual s24 -> do
             D a <- pop
             D b <- pop
             if b >= a
               then jump s24
               else return ()
-    {-19-}IfStrictEqual s24 -> do
+  {-0x19-}IfStrictEqual s24 -> do
             D a <- pop
             D b <- pop
             if a == b -- TODO class StrictEq ===
               then jump s24
               else return ()
-    {-1A-}IfStrictNotEqual s24 -> do
+  {-0x1A-}IfStrictNotEqual s24 -> do
             D a <- pop
             D b <- pop
             if a /= b -- TODO class StrictEq /==
               then jump s24
               else return ()
-    {-1D-}PopScope -> pop_ss
-    {-24-}PushByte u8 -> pushd$ VmRt_Int$ fromIntegral u8
-    {-26-}PushTrue -> pushd$ VmRt_Boolean True
-    {-27-}PushFalse -> pushd$ VmRt_Boolean False
-    {-28-}PushNaN -> pushd$ VmRt_Number nan
-    {-29-}Pop -> pop >> return ()
-    {-2A-}Dup -> do a <- pop; push a; push a
-    {-2B-}Swap -> do
+  {-0x1D-}PopScope -> pop_ss
+  {-0x24-}PushByte u8 -> pushd$ VmRt_Int$ fromIntegral u8
+  {-0x26-}PushTrue -> pushd$ VmRt_Boolean True
+  {-0x27-}PushFalse -> pushd$ VmRt_Boolean False
+  {-0x28-}PushNaN -> pushd$ VmRt_Number nan
+  {-0x29-}Pop -> pop >> return ()
+  {-0x2A-}Dup -> do a <- pop; push a; push a
+  {-0x2B-}Swap -> do
             a <- pop
             b <- pop
             push a
             push b
-    {-2C-}PushString idx -> get_string idx >>= pushd . VmRt_String
-    {-2D-}PushInt idx -> get_int idx >>= pushd . VmRt_Int
-    {-2E-}PushUInt idx -> get_uint idx >>= pushd . VmRt_Uint
-    {-2F-}PushDouble idx -> get_double idx >>= pushd . VmRt_Number
-    {-30-}PushScope -> do
+  {-0x2C-}PushString idx -> get_string idx >>= pushd . VmRt_String
+  {-0x2D-}PushInt idx -> get_int idx >>= pushd . VmRt_Int
+  {-0x2E-}PushUInt idx -> get_uint idx >>= pushd . VmRt_Uint
+  {-0x2F-}PushDouble idx -> get_double idx >>= pushd . VmRt_Number
+  {-0x30-}PushScope -> do
             D (VmRt_Object v iid) <- pop
             push_ss (v,iid)
-    {-47-}ReturnVoid -> push_undefined >> set_sp (-1)
-    {-48-}ReturnValue -> set_sp (-1)
-    {-4F-}CallPropVoid idx args -> do -- TODO check for [ns] [name]
+  {-0x47-}ReturnVoid -> push_undefined >> set_sp (-1)
+  {-0x48-}ReturnValue -> set_sp (-1)
+  {-0x4F-}CallPropVoid idx args -> do -- TODO check for [ns] [name]
             nArgs <- replicateM (fromIntegral args) pop
             D (VmRt_Object this iid) <- pop
             
@@ -261,16 +271,16 @@ r_f = do
             pop_activation
 
             return ()
-    {-55-}NewObject args -> do
+  {-0x55-}NewObject args -> do
             (obj, iid) <- new_object
             nArgs <- replicateM (fromIntegral args) (liftM2 (,) pop pop)
             forM_ nArgs$ \(D v,D (VmRt_String k)) -> insert obj (Ext k) v
             pushd$ VmRt_Object obj iid
-    {-56-}NewArray args -> do
+  {-0x56-}NewArray args -> do
             nArgs <- replicateM (fromIntegral args) pop
             iid <- next_iid
             pushd$ VmRt_Array (map (\(D a) -> a)$ reverse nArgs) iid
-    {-58-}NewClass idx -> do
+  {-0x58-}NewClass idx -> do
             p$ "########## NewClass " ++ show idx
             ClassInfo msi traits <- get_class idx
             
@@ -288,18 +298,28 @@ r_f = do
 
             insert global (Ext "Test")$ VmRt_Object klass iid
             p$ "########## " ++ show idx
-    {-5D-}FindPropStrict idx -> find_property idx ss >>= pushd -- TODO this need error checking
-    {-5E-}FindProperty idx -> find_property idx ss >>= pushd -- TODO this need error checking
-    {-60-}GetLex idx -> raise "GetLex should have been replaced"
-    {-65-}GetScopeObject idx -> do
+  {-0x5D-}FindPropStrict idx -> find_property idx ss >>= pushd -- TODO this need error checking
+  {-0x5E-}FindProperty idx -> find_property idx ss >>= pushd -- TODO this need error checking
+  {-0x60-}GetLex idx -> raise "GetLex should have been replaced"
+  {-0x61-}SetProperty idx -> do
+            D value <- pop
+            
+            multiname <- get_multiname idx
+            (VmRt_String prop) <- case multiname of
+              Multiname_QName _ stringIdx -> liftM VmRt_String$ get_string stringIdx
+              Multiname_Multiname stringIdx _ -> liftM VmRt_String$ get_string stringIdx
+              otherwise -> do (D d) <- pop; return d
+            
+            D (VmRt_Object this _) <- pop
+            insert this (Ext prop) value
+  {-0x65-}GetScopeObject idx -> do
             let (obj, iid) = ss !! fromIntegral idx 
             pushd$ VmRt_Object obj iid
-    {-66-}GetProperty idx -> do
+  {-0x66-}GetProperty idx -> do
             multiname <- get_multiname idx
             prop <- case multiname of
-              Multiname_QName nSInfoIdx stringIdx -> do
-                name <- liftM2 (++) (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
-                return$ VmRt_String name
+              Multiname_QName _ stringIdx -> liftM VmRt_String$ get_string stringIdx
+              Multiname_Multiname stringIdx _ -> liftM VmRt_String$ get_string stringIdx
               otherwise -> do (D d) <- pop; return d
 
             D vmrt <- pop
@@ -325,68 +345,81 @@ r_f = do
                     Nothing -> push_undefined
                 otherwise -> raise "GetProperty - VmRt_Object - only strings"
               --VmRt_Closure f
-    {-68-}InitProperty idx -> do
+  {-0x68-}InitProperty idx -> do
             D vmrt <- pop
             D (VmRt_Object this iid) <- pop
             init_property this idx vmrt
-    {-70-}ConvertString -> do
+  {-0x70-}ConvertString -> do
             D v <- pop
             pushd$ convert_string v
-    {-73-}ConvertInt -> do
+  {-0x73-}ConvertInt -> do
             D v <- pop
             pushd$ convert_int v
-    {-74-}ConvertUInt -> do
+  {-0x74-}ConvertUInt -> do
             D v <- pop
             pushd$ convert_uint v
-    {-75-}ConvertDouble -> do
+  {-0x75-}ConvertDouble -> do
             D v <- pop
             pushd$ convert_double v
-    {-76-}ConvertBoolean -> do
+  {-0x76-}ConvertBoolean -> do
             D v <- pop
             pushd$ convert_boolean v
-    {-77-}ConvertObject -> ML.raise "NI: ConvertObject"
-    {-A0-}Add -> do
+  {-0x77-}ConvertObject -> ML.raise "NI: ConvertObject"
+  {-0x90-}Negate -> do
+            D a <- pop
+            case a of
+              VmRt_Int i -> pushd$ VmRt_Int$ negate i
+              VmRt_Uint i -> pushd$ VmRt_Uint$ negate i
+              VmRt_Number i -> pushd$ VmRt_Number$ negate i
+              otherwise -> raise$ "can't negate " ++ show a
+  {-0x91-}Increment -> do
+            D a <- pop
+            pushd$ a + 1
+  {-0x93-}Decrement -> do
+            D a <- pop
+            pushd$ a - 1
+  {-0xA0-}Add -> do
             D a <- pop
             D b <- pop
             pushd$ b + a
-    {-A1-}Subtract -> do
+  {-0xA1-}Subtract -> do
             D a <- pop
             D b <- pop
             pushd$ b - a
-    {-A2-}Multiply -> do
+  {-0xA2-}Multiply -> do
             D a <- pop
             D b <- pop
             pushd$ b * a
-    {-A3-}Divide -> do
+  {-0xA3-}Divide -> do
             D a <- pop
             D b <- pop
             pushd$ b / a
-    {-C0-}IncrementInt -> do
+  {-0xC0-}IncrementInt -> do
             D a <- pop
             pushd$ a+1
-    {-C1-}DecrementInt -> do
+  {-0xC1-}DecrementInt -> do
             D a <- pop
             pushd$ a-1
-    {-C2-}IncLocalInt regIdx -> do
+  {-0xC2-}IncLocalInt regIdx -> do
             let new = (reg !! fromIntegral regIdx) + 1
             mod_reg$ \reg -> let (h,(_:t)) = splitAt (fromIntegral regIdx) reg in h ++ (new:t)
-    {-C3-}DecLocalInt regIdx -> do
+  {-0xC3-}DecLocalInt regIdx -> do
             let new = (reg !! fromIntegral regIdx) - 1
             mod_reg$ \reg -> let (h,(_:t)) = splitAt (fromIntegral regIdx) reg in h ++ (new:t)
-    {-D0-}GetLocal0 -> pushd$ reg !! 0
-    {-D1-}GetLocal1 -> pushd$ reg !! 1
-    {-D2-}GetLocal2 -> pushd$ reg !! 2
-    {-D3-}GetLocal3 -> pushd$ reg !! 3
-    {-D4-}SetLocal0 -> do
+  {-0xD0-}GetLocal0 -> pushd$ reg !! 0
+  {-0xD1-}GetLocal1 -> pushd$ reg !! 1
+  {-0xD2-}GetLocal2 -> pushd$ reg !! 2
+  {-0xD3-}GetLocal3 -> pushd$ reg !! 3
+  {-0xD4-}SetLocal0 -> do
             D new <- pop
             mod_reg$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
-    {-D5-}SetLocal1 -> do
+  {-0xD5-}SetLocal1 -> do
             D new <- pop
             case reg of
               [] -> mod_reg$ \_ -> [VmRt_Undefined, new]
               (_:[]) -> mod_reg (++[new])
               otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
-    {-D6-}SetLocal2 -> do
+  {-0xD6-}SetLocal2 -> do
             D new <- pop
             case reg of
               [] -> mod_reg$ \_ -> [VmRt_Undefined, VmRt_Undefined, new]
@@ -394,7 +427,7 @@ r_f = do
               (_:_:[]) -> mod_reg (++[new])
               otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
             --mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
-    {-D7-}SetLocal3 -> do
+  {-0xD7-}SetLocal3 -> do
             D new <- pop
             case reg of
               [] -> mod_reg$ \_ -> [VmRt_Undefined, VmRt_Undefined, VmRt_Undefined, new]
