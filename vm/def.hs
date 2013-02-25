@@ -303,8 +303,8 @@ pop = do
 
 -- InstanceId
 
-next_id :: AVM3 InstanceId
-next_id = do
+next_iid :: AVM3 InstanceId
+next_iid = do
   (cp, fs, iid) <- get
   set (cp, fs, iid+1)
   return$ iid+1

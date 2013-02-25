@@ -75,7 +75,7 @@ xform_methodBodies = map f where
   f (MethodBody a b c d e code f g) = MethodBody a b c d e newCode f g
     where
       newCode = foldr replaceGetLex [] code
-  replaceGetLex (GetLex idx) acc = [GetProperty idx, FindPropStrict idx] ++ acc
+  replaceGetLex (GetLex idx) acc = [FindPropStrict idx, GetProperty idx] ++ acc
   replaceGetLex op acc = op:acc
 
 get_int :: U30 -> AVM3 Int32

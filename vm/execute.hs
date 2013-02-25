@@ -40,12 +40,15 @@ returnN = return Nothing
 avm_prefix :: String
 avm_prefix = "avm3internal_"
 
+insert :: VmObject -> VmRtP -> VmRt -> AVM3 ()
+insert h k v = liftIO$ H.insert h k v
+
 pfx_class_info_idx :: VmRtP
 pfx_class_info_idx = ClassIdx$ avm_prefix ++ "class_info_idx"
 
 new_object :: AVM3 (VmObject, InstanceId)
 new_object = do
-  iid <- next_id
+  iid <- next_iid
   obj <- liftIO$ H.new
   return (obj, iid)
 
@@ -63,28 +66,14 @@ execute_abc :: Abc -> AVM3 ()
 execute_abc abc = do
   build_cp abc
   cp <- get_cp
-
-  --p$ show $ abcStrings abc
-  --p$ show $ abcNsInfo abc
-  --p$ "nssets " ++ (show $ abcNsSet abc)
-  --p$ show $ abcMultinames abc
-  --p$ "\nmethod bodies\n" ++ unlines (map (show.mbCode) $ abcMethodBodies abc)
-  --p$ "\nscripts\n" ++ unlines (map show$ abcScripts abc)
-  --p$ "\nclassinfos\n" ++ unlines (map show$ abcClasses abc)
-
   ScriptInfo _ ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]) <- get_script 0
-  {-ClassInfo msidx _ <- get_class idx
-  MethodSignature returnT _ name _ _ _ <- get_methodSig msidx
-  MethodBody _ _ _ _ _ mb_Code _ _ <- get_methodBody msidx-}
-  
   p$ "-------------------------------------------"
   (global, globalid) <- build_global_scope
   let ops = [O$ NewClass idx,O ReturnVoid]
-  iid <- next_id
+  iid <- next_iid
   push_activation (0, ops, [(global, globalid)], [VmRt_Object global iid])
   vmrt <- r_f
   p$ "-------------------------------------------"
-
   return ()
 
 show_ops :: String -> Ops -> AVM3 ()
@@ -99,10 +88,10 @@ show_ops header ops = do
 build_global_scope :: AVM3 (VmObject, InstanceId)
 build_global_scope = do
   (int :: VmObject, iid) <- new_object
-  liftIO$ H.insert int (Ext "MAX_VALUE") (VmRt_Int 2147483647)
+  insert int (Ext "MAX_VALUE") (VmRt_Int 2147483647)
 
   (global :: VmObject, globalid) <- new_object
-  liftIO$ H.insert global (Ext "int") (VmRt_Object int iid)
+  insert global (Ext "int") (VmRt_Object int iid)
 
   return (global, globalid)
 
@@ -272,9 +261,14 @@ r_f = do
             pop_activation
 
             return ()
+    {-55-}NewObject args -> do
+            (obj, iid) <- new_object
+            nArgs <- replicateM (fromIntegral args) (liftM2 (,) pop pop)
+            forM_ nArgs$ \(D v,D (VmRt_String k)) -> insert obj (Ext k) v
+            pushd$ VmRt_Object obj iid
     {-56-}NewArray args -> do
             nArgs <- replicateM (fromIntegral args) pop
-            iid <- next_id
+            iid <- next_iid
             pushd$ VmRt_Array (map (\(D a) -> a)$ reverse nArgs) iid
     {-58-}NewClass idx -> do
             p$ "########## NewClass " ++ show idx
@@ -285,14 +279,14 @@ r_f = do
             
             (klass, iid) <- new_object
             -- store this class's identity in it
-            liftIO$ H.insert klass pfx_class_info_idx (VmRtInternalInt idx)
+            insert klass pfx_class_info_idx (VmRtInternalInt idx)
             
             let (global, globalid) = last ss
             push_activation (0, map O code, [(global, globalid)], [VmRt_Object klass iid])
             r_f
             pop_activation
 
-            liftIO$ H.insert global (Ext "Test")$ VmRt_Object klass iid
+            insert global (Ext "Test")$ VmRt_Object klass iid
             p$ "########## " ++ show idx
     {-5D-}FindPropStrict idx -> find_property idx ss >>= pushd -- TODO this need error checking
     {-5E-}FindProperty idx -> find_property idx ss >>= pushd -- TODO this need error checking
@@ -507,7 +501,7 @@ init_property this idx value = do
   maybeProp <- liftIO$ H.lookup this (Ext name)
   case maybeProp of
     Nothing -> do
-      liftIO$ H.insert this (Ext name) value
+      insert this (Ext name) value
       return ()
     otherwise -> raise$ "init_property - property [" ++ name ++ "] exists"
 
