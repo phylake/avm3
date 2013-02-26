@@ -78,7 +78,9 @@ execute_abc abc = do
   (global, globalid) <- build_global_scope
   let ops = [O$ NewClass idx,O ReturnVoid]
   iid <- next_iid
-  push_activation (0, ops, [(global, globalid)], [VmRt_Object global iid])
+  (registers :: Registers) <- liftIO$ H.new
+  liftIO$ H.insert registers 0 $ VmRt_Object global iid
+  push_activation (0, ops, [(global, globalid)], registers)
   vmrt <- r_f
   p$ "-------------------------------------------"
   t1 <- liftIO$ getCurrentTime
@@ -158,7 +160,7 @@ r_f = do
           ++ (unlines$ map (\s -> "\t" ++ show s) belowSp)
         mod_sp (+1)
         case op of
-  {-0x08-}Kill regIdx -> mod_reg$ \reg -> let (h,(_:t)) = splitAt (fromIntegral regIdx) reg in h ++ (VmRt_Undefined:t)
+  {-0x08-}Kill regIdx -> liftIO$ H.insert reg (fromIntegral regIdx) VmRt_Undefined
   {-0x09-}Label -> return ()
   {-0x10-}Jump s24 -> jump s24
   {-0x11-}IfTrue s24 -> do
@@ -221,6 +223,7 @@ r_f = do
               else return ()
   {-0x1D-}PopScope -> pop_ss
   {-0x24-}PushByte u8 -> pushd$ VmRt_Int$ fromIntegral u8
+  {-0x25-}PushShort u30 -> pushd$ VmRt_Uint u30
   {-0x26-}PushTrue -> pushd$ VmRt_Boolean True
   {-0x27-}PushFalse -> pushd$ VmRt_Boolean False
   {-0x28-}PushNaN -> pushd$ VmRt_Number nan
@@ -266,7 +269,10 @@ r_f = do
             
             MethodBody _ _ _ _ _ code _ _ <- get_methodBody methodId
             p$ show code
-            push_activation (0, map O code, [last ss], [VmRt_Object this iid] ++ (map (\(D a) -> a) nArgs))
+            (registers :: Registers) <- liftIO$ H.new
+            liftIO$ H.insert registers 0 $ VmRt_Object this iid
+            forM_ (zip [1..length nArgs] nArgs) (\(i,D arg) -> liftIO$ H.insert registers i arg)
+            push_activation (0, map O code, [last ss], registers)
             r_f
             pop_activation
 
@@ -292,7 +298,9 @@ r_f = do
             insert klass pfx_class_info_idx (VmRtInternalInt idx)
             
             let (global, globalid) = last ss
-            push_activation (0, map O code, [(global, globalid)], [VmRt_Object klass iid])
+            (registers :: Registers) <- liftIO$ H.new
+            liftIO$ H.insert registers 0 $ VmRt_Object klass iid
+            push_activation (0, map O code, [(global, globalid)], registers)
             r_f
             pop_activation
 
@@ -312,6 +320,14 @@ r_f = do
             
             D (VmRt_Object this _) <- pop
             insert this (Ext prop) value
+  {-0x62-}GetLocal u30 -> do
+            maybeR <- liftIO$ H.lookup reg (fromIntegral u30)
+            case maybeR of
+              Nothing -> raise$ "GetLocal" ++ show u30 ++ " - register doesn't exist"
+              Just r -> pushd r
+  {-0x63-}SetLocal u30 -> do
+            D new <- pop
+            liftIO$ H.insert reg (fromIntegral u30) new
   {-0x65-}GetScopeObject idx -> do
             let (obj, iid) = ss !! fromIntegral idx 
             pushd$ VmRt_Object obj iid
@@ -401,41 +417,47 @@ r_f = do
             D a <- pop
             pushd$ a-1
   {-0xC2-}IncLocalInt regIdx -> do
-            let new = (reg !! fromIntegral regIdx) + 1
-            mod_reg$ \reg -> let (h,(_:t)) = splitAt (fromIntegral regIdx) reg in h ++ (new:t)
+            maybeReg <- liftIO$ H.lookup reg (fromIntegral regIdx)
+            case maybeReg of
+              Nothing -> raise$ "register " ++ show regIdx ++ " didn't exist"
+              Just r -> liftIO$ H.insert reg (fromIntegral regIdx) (r + 1)
   {-0xC3-}DecLocalInt regIdx -> do
-            let new = (reg !! fromIntegral regIdx) - 1
-            mod_reg$ \reg -> let (h,(_:t)) = splitAt (fromIntegral regIdx) reg in h ++ (new:t)
-  {-0xD0-}GetLocal0 -> pushd$ reg !! 0
-  {-0xD1-}GetLocal1 -> pushd$ reg !! 1
-  {-0xD2-}GetLocal2 -> pushd$ reg !! 2
-  {-0xD3-}GetLocal3 -> pushd$ reg !! 3
+            maybeReg <- liftIO$ H.lookup reg (fromIntegral regIdx)
+            case maybeReg of
+              Nothing -> raise$ "register " ++ show regIdx ++ " didn't exist"
+              Just r -> liftIO$ H.insert reg (fromIntegral regIdx) (r - 1)
+  {-0xD0-}GetLocal0 -> do
+            maybeR <- liftIO$ H.lookup reg 0
+            case maybeR of
+              Nothing -> raise "GetLocal0 - register doesn't exist"
+              Just r -> pushd r
+  {-0xD1-}GetLocal1 -> do
+            maybeR <- liftIO$ H.lookup reg 1
+            case maybeR of
+              Nothing -> raise "GetLocal1 - register doesn't exist"
+              Just r -> pushd r
+  {-0xD2-}GetLocal2 -> do
+            maybeR <- liftIO$ H.lookup reg 2
+            case maybeR of
+              Nothing -> raise "GetLocal2 - register doesn't exist"
+              Just r -> pushd r
+  {-0xD3-}GetLocal3 -> do
+            maybeR <- liftIO$ H.lookup reg 3
+            case maybeR of
+              Nothing -> raise "GetLocal3 - register doesn't exist"
+              Just r -> pushd r
   {-0xD4-}SetLocal0 -> do
             D new <- pop
-            mod_reg$ \reg -> let (h,(_:t)) = splitAt 0 reg in h ++ (new:t)
+            liftIO$ H.insert reg 0 new
   {-0xD5-}SetLocal1 -> do
             D new <- pop
-            case reg of
-              [] -> mod_reg$ \_ -> [VmRt_Undefined, new]
-              (_:[]) -> mod_reg (++[new])
-              otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 1 reg in h ++ (new:t)
+            liftIO$ H.insert reg 1 new
   {-0xD6-}SetLocal2 -> do
             D new <- pop
-            case reg of
-              [] -> mod_reg$ \_ -> [VmRt_Undefined, VmRt_Undefined, new]
-              (_:[]) -> mod_reg$ \(a:[]) -> [a, VmRt_Undefined, new]
-              (_:_:[]) -> mod_reg (++[new])
-              otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
-            --mod_reg$ \reg -> let (h,(_:t)) = splitAt 2 reg in h ++ (new:t)
+            liftIO$ H.insert reg 2 new
   {-0xD7-}SetLocal3 -> do
             D new <- pop
-            case reg of
-              [] -> mod_reg$ \_ -> [VmRt_Undefined, VmRt_Undefined, VmRt_Undefined, new]
-              (_:[]) -> mod_reg$ \(a:[]) -> [a, VmRt_Undefined, VmRt_Undefined, new]
-              (_:_:[]) -> mod_reg$ \(a:b:[]) -> [a, b, VmRt_Undefined, new]
-              (_:_:_:[]) -> mod_reg (++[new])
-              otherwise -> mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
-            --mod_reg$ \reg -> let (h,(_:t)) = splitAt 3 reg in h ++ (new:t)
+            liftIO$ H.insert reg 3 new
           _ -> raise$ "didn't match opcode " ++ show op
   
   (_, ((newsp,newops,_,_):_), _) <- get

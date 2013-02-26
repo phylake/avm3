@@ -13,7 +13,7 @@ type InstanceId = Word64
 type ConstantPool = H.BasicHashTable String VmAbc
 type VmObject = H.BasicHashTable VmRtP VmRt
 type ScopeStack = [(VmObject, InstanceId)]
-type Registers = [VmRt]
+type Registers = H.BasicHashTable Int VmRt
 type Ops = [VmRtOp]
 type Heap = Int -- TODO need one of these ;)
 
@@ -364,7 +364,7 @@ pop_ss = mod_ss tail
 
 -- Registers
 
-mod_reg :: (Registers -> Registers) -> AVM3 ()
+{-mod_reg :: (Registers -> Registers) -> AVM3 ()
 mod_reg f = do
   (cp, ((a,b,ss,reg):fs), iid) <- get
-  set (cp, (a,b,ss,f reg):fs, iid)
+  set (cp, (a,b,ss,f reg):fs, iid)-}
