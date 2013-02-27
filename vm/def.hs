@@ -6,11 +6,12 @@ import           Data.Int
 import           Data.Word
 import           Ecma.Prims
 import           Util.Misc
+import qualified Data.ByteString as B
 import qualified Data.HashTable.IO as H
 import qualified MonadLib as ML
 
 type InstanceId = Word64
-type ConstantPool = H.BasicHashTable String VmAbc
+type ConstantPool = H.BasicHashTable B.ByteString VmAbc
 type VmObject = H.BasicHashTable VmRtP VmRt
 type ScopeStack = [(VmObject, InstanceId)]
 type Registers = H.BasicHashTable Int VmRt
