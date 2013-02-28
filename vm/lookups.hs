@@ -5,8 +5,10 @@ import           MonadLib
 import           Util.Misc
 import           Vm.Def
 import           Vm.Store
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
 
-resolve_nsinfo :: MultinameIdx -> AVM3 String
+resolve_nsinfo :: MultinameIdx -> AVM3 B.ByteString
 resolve_nsinfo idx = do
   nsinfo <- get_nsInfo idx
   case nsinfo of
@@ -17,11 +19,11 @@ resolve_nsinfo idx = do
     NSInfo_ExplicitNamespace stringIdx -> get_string stringIdx
     NSInfo_StaticProtectedNs stringIdx -> get_string stringIdx
     NSInfo_PrivateNs stringIdx -> get_string stringIdx
-    NSInfo_Any -> return "*"
+    NSInfo_Any -> return$ BC.pack "*"
 
 -- finding a need to handle this logic in execute.hs
 -- so not exporting for now
-resolve_multiname :: MultinameIdx -> AVM3 String
+resolve_multiname :: MultinameIdx -> AVM3 B.ByteString
 resolve_multiname idx = do
   --putStrLn "resolve_multiname"
   multiname <- get_multiname idx
@@ -32,7 +34,7 @@ resolve_multiname idx = do
       {-putStrLn "\tin Multiname_QName"
       putStrLn$ "\tinfo - " ++ info
       putStrLn$ "\tstr - " ++ maybe "*" id str-}
-      return$ info ++ str
+      return$ B.append info str
 
     Multiname_QNameA nSInfoIdx stringIdx -> raise "unsupported lookup: Multiname_QNameA"
     Multiname_RTQName stringIdx -> raise "unsupported lookup: Multiname_RTQName"

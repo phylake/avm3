@@ -25,6 +25,7 @@ import           Vm.Lookups
 import           Vm.Store
 import qualified Control.Monad.State as S
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.Enumerator as E
 import qualified Data.Enumerator.Binary as EB
 import qualified Data.Enumerator.List as EL
@@ -32,25 +33,33 @@ import qualified Data.HashTable.IO as H
 
 p :: String -> AVM3 ()
 --p = liftIO.putStrLn
-p s = return ()
+p _ = return ()
+{-# INLINE p #-}
+
+p_length :: B.ByteString
+p_length = BC.pack "length"
 
 returnJ :: a -> AVM3 (Maybe a)
-returnJ = return. Just
+returnJ = return . Just
+{-# INLINE returnJ #-}
 
 returnN :: AVM3 (Maybe a)
 returnN = return Nothing
+{-# INLINE returnN #-}
 
 avm_prefix :: String
 avm_prefix = "avm3internal_"
 
 insert :: VmObject -> VmRtP -> VmRt -> AVM3 ()
 insert h k v = liftIO$ H.insert h k v
+{-# INLINE insert #-}
 
 lookup :: VmObject -> VmRtP -> AVM3 (Maybe VmRt)
 lookup h k = liftIO$ H.lookup h k
+{-# INLINE lookup #-}
 
 pfx_class_info_idx :: VmRtP
-pfx_class_info_idx = ClassIdx$ avm_prefix ++ "class_info_idx"
+pfx_class_info_idx = ClassIdx$ BC.pack$ avm_prefix ++ "class_info_idx"
 
 new_object :: AVM3 (VmObject, InstanceId)
 new_object = do
@@ -99,10 +108,10 @@ show_ops header ops = do
 build_global_scope :: AVM3 (VmObject, InstanceId)
 build_global_scope = do
   (int :: VmObject, iid) <- new_object
-  insert int (Ext "MAX_VALUE") (VmRt_Int 2147483647)
+  insert int (Ext$ BC.pack "MAX_VALUE") (VmRt_Int 2147483647)
 
   (global :: VmObject, globalid) <- new_object
-  insert global (Ext "int") (VmRt_Object int iid)
+  insert global (Ext$ BC.pack "int") (VmRt_Object int iid)
 
   return (global, globalid)
 
@@ -154,7 +163,7 @@ r_f = do
     (vmrtOp:[]) -> case vmrtOp of
       (D _) -> mod_sp (+1)
       (O op) -> do
-        p "run_function"
+        p$ "run_function"
         p$ (unlines$ map (\s -> "\t" ++ show s) aboveSp)
           ++ "\t--------------------" ++ show sp ++ "\n"
           ++ (unlines$ map (\s -> "\t" ++ show s) belowSp)
@@ -263,9 +272,9 @@ r_f = do
                   otherwise -> raise "CallPropVoid - too many matching traits"
               otherwise -> do
                 Multiname_QName nSInfoIdx stringIdx <- get_multiname idx
-                name <- liftM2 (++) (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
+                name <- liftM2 B.append (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
                 proplist <- liftIO$ H.toList this
-                raise$ "couldn't find " ++ name ++ " on " ++ show proplist
+                raise$ "couldn't find " ++ BC.unpack name ++ " on " ++ show proplist
             
             MethodBody _ _ _ _ _ code _ _ <- get_methodBody methodId
             p$ show code
@@ -304,7 +313,7 @@ r_f = do
             r_f
             pop_activation
 
-            insert global (Ext "Test")$ VmRt_Object klass iid
+            insert global (Ext$ BC.pack "Test")$ VmRt_Object klass iid
             p$ "########## " ++ show idx
   {-0x5D-}FindPropStrict idx -> find_property idx ss >>= pushd -- TODO this need error checking
   {-0x5E-}FindProperty idx -> find_property idx ss >>= pushd -- TODO this need error checking
@@ -350,14 +359,14 @@ r_f = do
               VmRt_String v -> push_undefined
               VmRt_Array v _ -> case prop of
                 VmRt_String name -> case name of
-                  "length" -> pushd . VmRt_Int . fromIntegral$ length v
-                  otherwise -> raise$ "GetProperty - VmRt_Array - can't get property " ++ name
+                  p_length -> pushd . VmRt_Int . fromIntegral$ length v
+                  otherwise -> raise$ "GetProperty - VmRt_Array - can't get property " ++ BC.unpack name
                 VmRt_Int i -> pushd$ v !! fromIntegral i
               VmRt_Object this _ -> case prop of
                 VmRt_String name -> do
                   maybeProp <- liftIO$ H.lookup this$ Ext name
                   case maybeProp of
-                    Just p -> pushd p
+                    Just prop -> pushd prop
                     Nothing -> push_undefined
                 otherwise -> raise "GetProperty - VmRt_Object - only strings"
               --VmRt_Closure f
@@ -466,7 +475,7 @@ r_f = do
     otherwise -> r_f
 
 convert_string :: VmRt -> VmRt
-convert_string = VmRt_String . to_string
+convert_string = VmRt_String . BC.pack . to_string
 
 convert_double :: VmRt -> VmRt
 convert_double = VmRt_Number . to_number
@@ -495,8 +504,8 @@ TODO resolve against
 find_property :: MultinameIdx -> ScopeStack -> AVM3 VmRt
 find_property idx ss = do
   Multiname_QName nSInfoIdx stringIdx <- get_multiname idx
-  name <- liftM2 (++) (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
-  p$ "FindProperty [" ++ show idx ++ " " ++ name ++ "]"
+  name <- liftM2 B.append (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
+  --p$ "FindProperty [" ++ show idx ++ " " ++ name ++ "]"
   --p$ "\tscope_stack length " ++ (show$ length ss)
   attempt1 <- search_stack (Ext name) ss
   case attempt1 of
@@ -514,7 +523,7 @@ find_property idx ss = do
     search_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
     search_stack key [] = return Nothing
     search_stack key@(Ext str) ((top, iid):stack) = do
-      if str == "Foo"
+      if str == BC.pack "Foo"
         then do
           list <- liftIO$ H.toList top
           p$ show list
@@ -551,14 +560,14 @@ get_scoped_object ss idx = undefined-}
 init_property :: VmObject -> MultinameIdx -> VmRt -> AVM3 ()
 init_property this idx value = do
   Multiname_QName nSInfoIdx stringIdx <- get_multiname idx
-  name <- liftM2 (++) (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
-  p$ "InitProperty [" ++ show idx ++ " " ++ name ++ "]"
+  name <- liftM2 B.append (resolve_nsinfo nSInfoIdx) (get_string stringIdx)
+  --p$ "InitProperty [" ++ show idx ++ " " ++ name ++ "]"
   maybeProp <- liftIO$ H.lookup this (Ext name)
   case maybeProp of
     Nothing -> do
       insert this (Ext name) value
       return ()
-    otherwise -> raise$ "init_property - property [" ++ name ++ "] exists"
+    otherwise -> raise$ "init_property - property [" ++ BC.unpack name ++ "] exists"
 
 
 

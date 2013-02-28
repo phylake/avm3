@@ -7,6 +7,7 @@ import           Data.Word
 import           Ecma.Prims
 import           Util.Misc
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.HashTable.IO as H
 import qualified MonadLib as ML
 
@@ -24,13 +25,14 @@ type Execution = (ConstantPool, FunctionStack, InstanceId)
 type AVM3_State = ML.StateT Execution IO
 type AVM3 = ML.ExceptionT String AVM3_State
 
-data VmRtP = Ext String -- all run time, external properties
-           | ClassIdx String -- the identity of the class
+data VmRtP = Ext B.ByteString -- all run time, external properties
+           | ClassIdx B.ByteString -- the identity of the class
            deriving (Eq, Show)
 
+-- consing to prevent hash collision
 instance Hashable VmRtP where
-  hashWithSalt salt (Ext a) = hashWithSalt salt$ "Ext" ++ a
-  hashWithSalt salt (ClassIdx a) = hashWithSalt salt$ "ClassIdx" ++ a
+  hashWithSalt salt (Ext a) = hashWithSalt salt$ B.cons 1 a
+  hashWithSalt salt (ClassIdx a) = hashWithSalt salt$ B.cons 2 a
 
 data VmRtOp = O OpCode
             | D VmRt
@@ -54,7 +56,7 @@ data VmRt = VmRt_Undefined
           | VmRt_Int Int32
           | VmRt_Uint Word32
           | VmRt_Number Double
-          | VmRt_String String
+          | VmRt_String B.ByteString
           | VmRt_Array [VmRt] InstanceId
           | VmRt_Object VmObject InstanceId{-RefCount-} {-(Maybe ScopeStack)-}
           | VmRt_Closure (Registers -> Ops -> AVM3 VmRt) -- curried r_f
@@ -70,7 +72,7 @@ instance Coerce VmRt where
     | a == 0 = False
     | isNaN a = False
     | otherwise = True
-  to_boolean (VmRt_String a) = length a > 0
+  to_boolean (VmRt_String a) = B.length a > 0
   to_boolean (VmRt_Object _ _) = True
 
   to_number VmRt_Undefined = nan
@@ -80,7 +82,7 @@ instance Coerce VmRt where
   to_number (VmRt_Int a) = fromIntegral a
   to_number (VmRt_Uint a) = fromIntegral a
   to_number (VmRt_Number a) = a
-  to_number (VmRt_String a) = read a
+  to_number (VmRt_String a) = read$ BC.unpack a
   to_number (VmRt_Object _ _) = undefined
 
   to_int32 VmRt_Undefined = 0
@@ -90,7 +92,7 @@ instance Coerce VmRt where
   to_int32 (VmRt_Int a) = a
   to_int32 (VmRt_Uint a) = fromIntegral a
   to_int32 (VmRt_Number a) = fromIntegral a
-  to_int32 (VmRt_String a) = read a
+  to_int32 (VmRt_String a) = read$ BC.unpack a
   to_int32 (VmRt_Object _ a) = fromIntegral a
 
   to_uint32 VmRt_Undefined = 0
@@ -100,7 +102,7 @@ instance Coerce VmRt where
   to_uint32 (VmRt_Int a) = fromIntegral a
   to_uint32 (VmRt_Uint a) = a
   to_uint32 (VmRt_Number a) = fromIntegral a
-  to_uint32 (VmRt_String a) = read a
+  to_uint32 (VmRt_String a) = read$ BC.unpack a
   to_uint32 (VmRt_Object _ a) = fromIntegral a
 
   to_string VmRt_Undefined = "undefined"
@@ -110,7 +112,7 @@ instance Coerce VmRt where
   to_string (VmRt_Int a) = show a
   to_string (VmRt_Uint a) = show a
   to_string (VmRt_Number a) = show a
-  to_string (VmRt_String a) = a
+  to_string (VmRt_String a) = BC.unpack a
   to_string (VmRt_Object _ _) = "[Object]"
 
 instance Eq VmRt where
@@ -118,24 +120,29 @@ instance Eq VmRt where
   VmRt_Undefined == VmRt_Null = True
   VmRt_Null == VmRt_Null = True
   VmRt_Null == VmRt_Undefined = True
-  
+
   (VmRt_Int a) == (VmRt_Int b) = a == b
   (VmRt_Int a) == (VmRt_Uint b) = a == fromIntegral b
   (VmRt_Int a) == (VmRt_Number b) = a == fromIntegral b
-  
+
   (VmRt_Uint a) == (VmRt_Uint b) = a == b
   (VmRt_Uint a) == (VmRt_Int b) = a == fromIntegral b
   (VmRt_Uint a) == (VmRt_Number b) = a == fromIntegral b
-  
+
   (VmRt_Number a) == (VmRt_Number b) = a == b
   (VmRt_Number a) == (VmRt_Int b) = a == fromIntegral b
   (VmRt_Number a) == (VmRt_Uint b) = a == fromIntegral b
-  
-  (VmRt_String a) == (VmRt_String b) = a == b
+
+  {-(VmRt_String a) == (VmRt_String b) = a == b
   (VmRt_String a) == (VmRt_Number b) = a == show b
   (VmRt_String a) == (VmRt_Int b) = a == show b
-  (VmRt_String a) == (VmRt_Uint b) = a == show b
-  
+  (VmRt_String a) == (VmRt_Uint b) = a == show b-}
+
+  (VmRt_String a) == (VmRt_String b) = a == b
+  (VmRt_String a) == (VmRt_Number b) = BC.unpack a == show b
+  (VmRt_String a) == (VmRt_Int b) = BC.unpack a == show b
+  (VmRt_String a) == (VmRt_Uint b) = BC.unpack a == show b
+
   (VmRt_Array _ a) == (VmRt_Array _ b) = a == b
   (VmRt_Object _ a) == (VmRt_Object _ b) = a == b
 
@@ -147,7 +154,7 @@ instance Ord VmRt where
   compare VmRt_Null VmRt_Null = EQ
 
   compare (VmRt_Boolean a) (VmRt_Boolean b) = compare a b
-  
+
   compare (VmRt_Int a) (VmRt_Int b) = compare a b
   compare (VmRt_Int a) (VmRt_Uint b) = compare a $ fromIntegral b
   compare (VmRt_Int a) (VmRt_Number b) = compare a $ fromIntegral b
@@ -161,9 +168,9 @@ instance Ord VmRt where
   compare (VmRt_Number a) (VmRt_Uint b) = compare a $ fromIntegral b
 
   compare (VmRt_Array _ a) (VmRt_Array _ b) = compare a b
-  
+
   compare (VmRt_String a) (VmRt_String b) = compare a b
-  
+
   compare (VmRt_Object _ a) (VmRt_Object _ b) = compare a b
 
 instance Num VmRt where
@@ -179,7 +186,6 @@ instance Num VmRt where
   (VmRt_Number a) + (VmRt_Int b) = VmRt_Number$ a + fromIntegral b
   (VmRt_Number a) + (VmRt_Uint b) = VmRt_Number$ a + fromIntegral b
 
-  
   (VmRt_Int a) - (VmRt_Int b) = VmRt_Int$ a - b
   (VmRt_Int a) - (VmRt_Uint b) = VmRt_Int$ a - fromIntegral b
   (VmRt_Int a) - (VmRt_Number b) = VmRt_Number$ fromIntegral a - b
@@ -192,7 +198,6 @@ instance Num VmRt where
   (VmRt_Number a) - (VmRt_Int b) = VmRt_Number$ a - fromIntegral b
   (VmRt_Number a) - (VmRt_Uint b) = VmRt_Number$ a - fromIntegral b
 
-  
   (VmRt_Int a) * (VmRt_Int b) = VmRt_Int$ a * b
   (VmRt_Int a) * (VmRt_Uint b) = VmRt_Int$ a * fromIntegral b
   (VmRt_Int a) * (VmRt_Number b) = VmRt_Number$ fromIntegral a * b
@@ -205,7 +210,6 @@ instance Num VmRt where
   (VmRt_Number a) * (VmRt_Int b) = VmRt_Number$ a * fromIntegral b
   (VmRt_Number a) * (VmRt_Uint b) = VmRt_Number$ a * fromIntegral b
 
-  
   abs (VmRt_Number a) = abs$ fromIntegral a
   abs (VmRt_Int a) = abs$ fromIntegral a
   abs (VmRt_Uint a) = abs$ fromIntegral a
@@ -230,7 +234,7 @@ instance Fractional VmRt where
   (VmRt_Uint a) / (VmRt_Uint b) = VmRt_Uint$ a / b
   (VmRt_Uint a) / (VmRt_Int b) = VmRt_Uint$ a / fromIntegral b
   (VmRt_Uint a) / (VmRt_Number b) = VmRt_Number$ fromIntegral a / b
-  
+
   --fromRational = VmRt_Number . fromIntegral
 
 instance Show VmRt where
@@ -250,7 +254,7 @@ instance Show VmRt where
 data VmAbc = VmAbc_Int Int32
            | VmAbc_Uint U30
            | VmAbc_Double Double
-           | VmAbc_String String
+           | VmAbc_String B.ByteString
            | VmAbc_NsInfo NSInfo
            | VmAbc_NsSet NSSet
            | VmAbc_Multiname Multiname

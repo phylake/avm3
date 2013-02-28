@@ -87,7 +87,7 @@ build_cp abc = do
     ints = abcInts abc
     uints = abcUints abc
     doubles = abcDoubles abc
-    strings = abcStrings abc
+    strings = xform_strings$ abcStrings abc
     nsInfo = abcNsInfo abc
     nsSet = abcNsSet abc
     multinames = abcMultinames abc
@@ -97,6 +97,9 @@ build_cp abc = do
     classes = abcClasses abc
     scripts = abcScripts abc
     methodBodies = xform_methodBodies$ abcMethodBodies abc
+
+xform_strings :: [String] -> [B.ByteString]
+xform_strings = map BC.pack
 
 xform_methodBodies :: [MethodBody] -> [MethodBody]
 xform_methodBodies = map f where
@@ -124,10 +127,10 @@ get_double u30 = do VmAbc_Double a <- get_ht key_double u30;return a
 put_double :: U30 -> Double -> AVM3 ()
 put_double k v = put_ht key_double k $ VmAbc_Double v
 
-get_string :: U30 -> AVM3 String
+get_string :: U30 -> AVM3 B.ByteString
 get_string u30 = do VmAbc_String a <- get_ht key_string u30;return a
 
-put_string :: U30 -> String -> AVM3 ()
+put_string :: U30 -> B.ByteString -> AVM3 ()
 put_string k v = put_ht key_string k $ VmAbc_String v
 
 get_nsInfo :: U30 -> AVM3 NSInfo
@@ -211,3 +214,4 @@ u30ToWord8 u30 = [msb0, msb1, msb2, msb3]
     msb1 = fromIntegral$ u30 `shiftR` 16 .&. 0xff
     msb2 = fromIntegral$ u30 `shiftR`  8 .&. 0xff
     msb3 = fromIntegral$ u30 `shiftR`  0 .&. 0xff
+{-# INLINE u30ToWord8 #-}
