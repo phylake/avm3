@@ -66,23 +66,25 @@ key_script = BC.pack "_script"
 key_methodBody :: B.ByteString
 key_methodBody = BC.pack "_methodBody"
 
-build_cp :: Abc -> AVM3 ()
+build_cp :: Abc -> IO ConstantPool
 build_cp abc = do
-  mapM_ (\(idx, a) -> put_int idx a) $ zip (map fromIntegral [0..length ints]) ints
-  mapM_ (\(idx, a) -> put_uint idx a) $ zip (map fromIntegral [0..length uints]) uints
-  mapM_ (\(idx, a) -> put_double idx a) $ zip (map fromIntegral [0..length doubles]) doubles
-  mapM_ (\(idx, a) -> put_string idx a) $ zip (map fromIntegral [0..length strings]) strings
-  mapM_ (\(idx, a) -> put_nsInfo idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
-  mapM_ (\(idx, a) -> put_nsSet idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
-  mapM_ (\(idx, a) -> put_multiname idx a) $ zip (map fromIntegral [0..length multinames]) multinames
-  mapM_ (\(idx, a) -> put_methodSig idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
-  mapM_ (\(idx, a) -> put_metadata idx a) $ zip (map fromIntegral [0..length metadata]) metadata
-  mapM_ (\(idx, a) -> put_instance idx a) $ zip (map fromIntegral [0..length instances]) instances
-  mapM_ (\(idx, a) -> put_class idx a) $ zip (map fromIntegral [0..length classes]) classes
-  mapM_ (\(idx, a) -> put_script idx a) $ zip (map fromIntegral [0..length scripts]) scripts
+  cp <- H.new
+  mapM_ (\(idx, a) -> put_int cp idx a) $ zip (map fromIntegral [0..length ints]) ints
+  mapM_ (\(idx, a) -> put_uint cp idx a) $ zip (map fromIntegral [0..length uints]) uints
+  mapM_ (\(idx, a) -> put_double cp idx a) $ zip (map fromIntegral [0..length doubles]) doubles
+  mapM_ (\(idx, a) -> put_string cp idx a) $ zip (map fromIntegral [0..length strings]) strings
+  mapM_ (\(idx, a) -> put_nsInfo cp idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
+  mapM_ (\(idx, a) -> put_nsSet cp idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
+  mapM_ (\(idx, a) -> put_multiname cp idx a) $ zip (map fromIntegral [0..length multinames]) multinames
+  mapM_ (\(idx, a) -> put_methodSig cp idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
+  mapM_ (\(idx, a) -> put_metadata cp idx a) $ zip (map fromIntegral [0..length metadata]) metadata
+  mapM_ (\(idx, a) -> put_instance cp idx a) $ zip (map fromIntegral [0..length instances]) instances
+  mapM_ (\(idx, a) -> put_class cp idx a) $ zip (map fromIntegral [0..length classes]) classes
+  mapM_ (\(idx, a) -> put_script cp idx a) $ zip (map fromIntegral [0..length scripts]) scripts
   -- reverse lookup: get_methodBody expects a method signature index since a
   -- method body index doesn't exist
-  mapM_ (\(idx, a) -> put_methodBody idx a) $ zip (map mbMethod methodBodies) methodBodies
+  mapM_ (\(idx, a) -> put_methodBody cp idx a) $ zip (map mbMethod methodBodies) methodBodies
+  return cp
   where
     ints = abcInts abc
     uints = abcUints abc
@@ -109,101 +111,98 @@ xform_methodBodies = map f where
   replaceGetLex (GetLex idx) acc = [FindPropStrict idx, GetProperty idx] ++ acc
   replaceGetLex op acc = op:acc
 
-get_int :: U30 -> AVM3 Int32
-get_int u30 = do VmAbc_Int a <- get_ht key_int u30;return a
+get_int :: ConstantPool -> U30 -> IO Int32
+get_int cp u30 = do VmAbc_Int a <- get_ht cp key_int u30;return a
 
-put_int :: U30 -> Int32 -> AVM3 ()
-put_int k v = put_ht key_int k $ VmAbc_Int v
+put_int :: ConstantPool -> U30 -> Int32 -> IO ()
+put_int cp k v = put_ht cp key_int k $ VmAbc_Int v
 
-get_uint :: U30 -> AVM3 U30
-get_uint u30 = do VmAbc_Uint a <- get_ht key_uint u30;return a
+get_uint :: ConstantPool -> U30 -> IO U30
+get_uint cp u30 = do VmAbc_Uint a <- get_ht cp key_uint u30;return a
 
-put_uint :: U30 -> U30 -> AVM3 ()
-put_uint k v = put_ht key_uint k $ VmAbc_Uint v
+put_uint :: ConstantPool -> U30 -> U30 -> IO ()
+put_uint cp k v = put_ht cp key_uint k $ VmAbc_Uint v
 
-get_double :: U30 -> AVM3 Double
-get_double u30 = do VmAbc_Double a <- get_ht key_double u30;return a
+get_double :: ConstantPool -> U30 -> IO Double
+get_double cp u30 = do VmAbc_Double a <- get_ht cp key_double u30;return a
 
-put_double :: U30 -> Double -> AVM3 ()
-put_double k v = put_ht key_double k $ VmAbc_Double v
+put_double :: ConstantPool -> U30 -> Double -> IO ()
+put_double cp k v = put_ht cp key_double k $ VmAbc_Double v
 
-get_string :: U30 -> AVM3 B.ByteString
-get_string u30 = do VmAbc_String a <- get_ht key_string u30;return a
+get_string :: ConstantPool -> U30 -> IO B.ByteString
+get_string cp u30 = do VmAbc_String a <- get_ht cp key_string u30;return a
 
-put_string :: U30 -> B.ByteString -> AVM3 ()
-put_string k v = put_ht key_string k $ VmAbc_String v
+put_string :: ConstantPool -> U30 -> B.ByteString -> IO ()
+put_string cp k v = put_ht cp key_string k $ VmAbc_String v
 
-get_nsInfo :: U30 -> AVM3 NSInfo
-get_nsInfo u30 = do VmAbc_NsInfo a <- get_ht key_nsInfo u30;return a
+get_nsInfo :: ConstantPool -> U30 -> IO NSInfo
+get_nsInfo cp u30 = do VmAbc_NsInfo a <- get_ht cp key_nsInfo u30;return a
 
-put_nsInfo :: U30 -> NSInfo -> AVM3 ()
-put_nsInfo k v = put_ht key_nsInfo k $ VmAbc_NsInfo v
+put_nsInfo :: ConstantPool -> U30 -> NSInfo -> IO ()
+put_nsInfo cp k v = put_ht cp key_nsInfo k $ VmAbc_NsInfo v
 
-get_nsSet :: U30 -> AVM3 NSSet
-get_nsSet u30 = do VmAbc_NsSet a <- get_ht key_nsSet u30;return a
+get_nsSet :: ConstantPool -> U30 -> IO NSSet
+get_nsSet cp u30 = do VmAbc_NsSet a <- get_ht cp key_nsSet u30;return a
 
-put_nsSet :: U30 -> NSSet -> AVM3 ()
-put_nsSet k v = put_ht key_nsSet k $ VmAbc_NsSet v
+put_nsSet :: ConstantPool -> U30 -> NSSet -> IO ()
+put_nsSet cp k v = put_ht cp key_nsSet k $ VmAbc_NsSet v
 
-get_multiname :: U30 -> AVM3 Multiname
-get_multiname u30 = do VmAbc_Multiname a <- get_ht key_multiname u30;return a
+get_multiname :: ConstantPool -> U30 -> IO Multiname
+get_multiname cp u30 = do VmAbc_Multiname a <- get_ht cp key_multiname u30;return a
 
-put_multiname :: U30 -> Multiname -> AVM3 ()
-put_multiname k v = put_ht key_multiname k $ VmAbc_Multiname v
+put_multiname :: ConstantPool -> U30 -> Multiname -> IO ()
+put_multiname cp k v = put_ht cp key_multiname k $ VmAbc_Multiname v
 
-get_methodSig :: U30 -> AVM3 MethodSignature
-get_methodSig u30 = do VmAbc_MethodSig a <- get_ht key_methodSig u30;return a
+get_methodSig :: ConstantPool -> U30 -> IO MethodSignature
+get_methodSig cp u30 = do VmAbc_MethodSig a <- get_ht cp key_methodSig u30;return a
 
-put_methodSig :: U30 -> MethodSignature -> AVM3 ()
-put_methodSig k v = put_ht key_methodSig k $ VmAbc_MethodSig v
+put_methodSig :: ConstantPool -> U30 -> MethodSignature -> IO ()
+put_methodSig cp k v = put_ht cp key_methodSig k $ VmAbc_MethodSig v
 
-get_metadata :: U30 -> AVM3 Metadata
-get_metadata u30 = do VmAbc_Metadata a <- get_ht key_metadata u30;return a
+get_metadata :: ConstantPool -> U30 -> IO Metadata
+get_metadata cp u30 = do VmAbc_Metadata a <- get_ht cp key_metadata u30;return a
 
-put_metadata :: U30 -> Metadata -> AVM3 ()
-put_metadata k v = put_ht key_metadata k $ VmAbc_Metadata v
+put_metadata :: ConstantPool -> U30 -> Metadata -> IO ()
+put_metadata cp k v = put_ht cp key_metadata k $ VmAbc_Metadata v
 
-get_instance :: U30 -> AVM3 InstanceInfo
-get_instance u30 = do VmAbc_Instance a <- get_ht key_instance u30;return a
+get_instance :: ConstantPool -> U30 -> IO InstanceInfo
+get_instance cp u30 = do VmAbc_Instance a <- get_ht cp key_instance u30;return a
 
-put_instance :: U30 -> InstanceInfo -> AVM3 ()
-put_instance k v = put_ht key_instance k $ VmAbc_Instance v
+put_instance :: ConstantPool -> U30 -> InstanceInfo -> IO ()
+put_instance cp k v = put_ht cp key_instance k $ VmAbc_Instance v
 
-get_class :: U30 -> AVM3 ClassInfo
-get_class u30 = do VmAbc_Class a <- get_ht key_class u30;return a
+get_class :: ConstantPool -> U30 -> IO ClassInfo
+get_class cp u30 = do VmAbc_Class a <- get_ht cp key_class u30;return a
 
-put_class :: U30 -> ClassInfo -> AVM3 ()
-put_class k v = put_ht key_class k $ VmAbc_Class v
+put_class :: ConstantPool -> U30 -> ClassInfo -> IO ()
+put_class cp k v = put_ht cp key_class k $ VmAbc_Class v
 
-get_script :: U30 -> AVM3 ScriptInfo
-get_script u30 = do VmAbc_Script a <- get_ht key_script u30;return a
+get_script :: ConstantPool -> U30 -> IO ScriptInfo
+get_script cp u30 = do VmAbc_Script a <- get_ht cp key_script u30;return a
 
-put_script :: U30 -> ScriptInfo -> AVM3 ()
-put_script k v = put_ht key_script k $ VmAbc_Script v
+put_script :: ConstantPool -> U30 -> ScriptInfo -> IO ()
+put_script cp k v = put_ht cp key_script k $ VmAbc_Script v
 
-get_methodBody :: U30 -> AVM3 MethodBody
-get_methodBody u30 = do VmAbc_MethodBody a <- get_ht key_methodBody u30;return a
+get_methodBody :: ConstantPool -> U30 -> IO MethodBody
+get_methodBody cp u30 = do VmAbc_MethodBody a <- get_ht cp key_methodBody u30;return a
 
-put_methodBody :: U30 -> MethodBody -> AVM3 ()
-put_methodBody k v = put_ht key_methodBody k $ VmAbc_MethodBody v
+put_methodBody :: ConstantPool -> U30 -> MethodBody -> IO ()
+put_methodBody cp k v = put_ht cp key_methodBody k $ VmAbc_MethodBody v
 
-get_ht :: B.ByteString -> U30 -> AVM3 VmAbc
-get_ht prefix k = do
-  ht <- get_cp
+get_ht :: ConstantPool -> B.ByteString -> U30 -> IO VmAbc
+get_ht ht prefix k = do
   --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
-  m <- liftIO $ H.lookup ht fullKey
+  m <- H.lookup ht fullKey
   case m of
-    Nothing -> raise$ "get_ht - " ++ (BC.unpack prefix ++ show k)
+    Nothing -> fail$ "get_ht - " ++ (show k ++ BC.unpack prefix)
     Just ret -> return ret
   where
     fullKey = foldr B.cons prefix$ u30ToWord8 k
 
-put_ht :: B.ByteString -> U30 -> VmAbc -> AVM3 ()
-put_ht prefix k v = do
-  ht <- get_cp
+put_ht :: ConstantPool -> B.ByteString -> U30 -> VmAbc -> IO ()
+put_ht cp prefix k v = do
   --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
-  liftIO $ H.insert ht fullKey v
-  set_cp ht
+  H.insert cp fullKey v
   where
     fullKey = foldr B.cons prefix$ u30ToWord8 k
 
