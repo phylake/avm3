@@ -129,6 +129,7 @@ jump s24 tuple
   | s24 > 0 = pos_jump s24 tuple
   | s24 < 0 = neg_jump (negate s24) tuple
   | otherwise = tuple
+{-# INLINE jump #-}
 
 pos_jump :: S24 -> (A_Ops, B_Ops) -> (A_Ops, B_Ops)
 pos_jump _ (aops, []) = (aops, [])

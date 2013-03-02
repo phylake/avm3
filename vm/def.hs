@@ -14,7 +14,7 @@ type VmObject = H.BasicHashTable VmRtP VmRt
 
 -- Part of FunctionStack
 type ScopeStack = [(VmObject, InstanceId)] -- this is a tuple for purity
-type Registers = H.BasicHashTable Int VmRt
+type Registers = H.CuckooHashTable Int VmRt
 type Ops = [VmRtOp]
 type D_Ops = [VmRt] -- data ops
 type A_Ops = [OpCode] -- above stack pointer
@@ -22,7 +22,7 @@ type B_Ops = [OpCode] -- below stack pointer
 
 -- Part of Execution
 type FunctionStack = [(D_Ops, A_Ops, B_Ops, ScopeStack, Registers)]
-type ConstantPool = H.BasicHashTable B.ByteString VmAbc
+type ConstantPool = H.CuckooHashTable B.ByteString VmAbc
 type InstanceId = Word64 -- Global instance id
 type AVM3Exception = String -- Exception string
 
