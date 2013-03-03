@@ -441,7 +441,9 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x02 -} Nop
             | {- 0x03 -} Throw
             | {- 0x04 -} GetSuper MultinameIdx
+            | {-      -} GetSuper_ MultinameIdx B.ByteString
             | {- 0x05 -} SetSuper MultinameIdx
+            | {-      -} SetSuper_ MultinameIdx B.ByteString
             | {- 0x06 -} DefaultXmlNamespace U30
             | {- 0x07 -} DefaultXmlNamespaceL
             | {- 0x08 -} Kill U30
@@ -503,19 +505,27 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x40 -} NewFunction U30
             | {- 0x41 -} Call U30
             | {- 0x42 -} Construct U30
-            | {- 0x43 -} CallMethod U30 U30
-            | {- 0x44 -} CallStatic U30 U30
-            | {- 0x45 -} CallSuper U30 U30
-            | {- 0x46 -} CallProperty U30 U30
+            | {- 0x43 -} CallMethod MultinameIdx U30
+            | {-      -} CallMethod_ MultinameIdx U30 B.ByteString
+            | {- 0x44 -} CallStatic MultinameIdx U30
+            | {-      -} CallStatic_ MultinameIdx U30 B.ByteString
+            | {- 0x45 -} CallSuper MultinameIdx U30
+            | {-      -} CallSuper_ MultinameIdx U30 B.ByteString
+            | {- 0x46 -} CallProperty MultinameIdx U30
+            | {-      -} CallProperty_ MultinameIdx U30 B.ByteString
             | {- 0x47 -} ReturnVoid
             | {- 0x48 -} ReturnValue
             | {- 0x49 -} ConstructSuper U30
-            | {- 0x4A -} ConstructProp U30 U30
+            | {- 0x4A -} ConstructProp MultinameIdx U30
+            | {-      -} ConstructProp_ MultinameIdx U30 B.ByteString
             | {- 0x4B -} CallSuperId    {-NOT HANDLED-}
-            | {- 0x4C -} CallPropLex U30 U30
+            | {- 0x4C -} CallPropLex MultinameIdx U30
+            | {-      -} CallPropLex_ MultinameIdx U30 B.ByteString
             | {- 0x4D -} CallInterface  {-NOT HANDLED-}
-            | {- 0x4E -} CallSuperVoid U30 U30
-            | {- 0x4F -} CallPropVoid U30 U30
+            | {- 0x4E -} CallSuperVoid MultinameIdx U30
+            | {-      -} CallSuperVoid_ MultinameIdx U30 B.ByteString
+            | {- 0x4F -} CallPropVoid MultinameIdx U30
+            | {-      -} CallPropVoid_ MultinameIdx U30 B.ByteString
               {- 0x50 -} {-Sign1-}  {- Alchemy -}
               {- 0x51 -} {-Sign8-}  {- Alchemy -}
               {- 0x52 -} {-Sign16-} {- Alchemy -}
@@ -525,21 +535,27 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x57 -} NewActivation
             | {- 0x58 -} NewClass ClassInfoIdx
             | {- 0x59 -} GetDescendants MultinameIdx
+            | {-      -} GetDescendants_ MultinameIdx B.ByteString
             | {- 0x5A -} NewCatch U30
             | {- 0x5B -} FindPropGlobalStrict   {-NEW from Tamarin (internal)-}
             | {- 0x5C -} FindPropGlobal         {-NEW from Tamarin (internal)-}
             | {- 0x5D -} FindPropStrict MultinameIdx
+            | {-      -} FindPropStrict_ MultinameIdx B.ByteString
             | {- 0x5E -} FindProperty MultinameIdx
+            | {-      -} FindProperty_ MultinameIdx B.ByteString
             | {- 0x5F -} FindDef        {-NOT HANDLED-}
             | {- 0x60 -} GetLex U30
             | {- 0x61 -} SetProperty MultinameIdx
+            | {-      -} SetProperty_ MultinameIdx B.ByteString
             | {- 0x62 -} GetLocal U30
             | {- 0x63 -} SetLocal U30
             | {- 0x64 -} GetGlobalScope
             | {- 0x65 -} GetScopeObject U8
             | {- 0x66 -} GetProperty MultinameIdx
+            | {-      -} GetProperty_ MultinameIdx B.ByteString
             | {- 0x67 -} GetPropertyLate
             | {- 0x68 -} InitProperty MultinameIdx
+            | {-      -} InitProperty_ MultinameIdx B.ByteString
             | {- 0x69 -} SetPropertyLate
             | {- 0x6A -} DeleteProperty U30
             | {- 0x6B -} DeletePropertyLate
@@ -564,6 +580,7 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0x7E -}
               {- 0x7F -}
             | {- 0x80 -} Coerce MultinameIdx
+            | {-      -} Coerce_ MultinameIdx B.ByteString
             | {- 0x81 -} CoerceBoolean
             | {- 0x82 -} CoerceAny
             | {- 0x83 -} CoerceInt
@@ -614,6 +631,7 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0xB0 -} GreaterEquals
             | {- 0xB1 -} InstanceOf
             | {- 0xB2 -} IsType MultinameIdx
+            | {-      -} IsType_ MultinameIdx B.ByteString
             | {- 0xB3 -} IsTypeLate
             | {- 0xB4 -} In
               {- 0xB5 -}
@@ -697,7 +715,9 @@ toBytes {- 0x01 -} (Breakpoint) = 1
 toBytes {- 0x02 -} (Nop) = 1
 toBytes {- 0x03 -} (Throw) = 1
 toBytes {- 0x04 -} (GetSuper u30) = 1 + u30Bytes u30
+toBytes {-      -} (GetSuper_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x05 -} (SetSuper u30) = 1 + u30Bytes u30
+toBytes {-      -} (SetSuper_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x06 -} (DefaultXmlNamespace u30) = 1 + u30Bytes u30
 toBytes {- 0x07 -} (DefaultXmlNamespaceL) = 1
 toBytes {- 0x08 -} (Kill u30) = 1 + u30Bytes u30
@@ -760,15 +780,21 @@ toBytes {- 0x40 -} (NewFunction u30) = 1 + u30Bytes u30
 toBytes {- 0x41 -} (Call u30) = 1 + u30Bytes u30
 toBytes {- 0x42 -} (Construct u30) = 1 + u30Bytes u30
 toBytes {- 0x43 -} (CallMethod u30_1 u30_2) = 1 + u30Bytes u30_1 + u30Bytes u30_2
+toBytes {-      -} (CallMethod_ u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
 toBytes {- 0x44 -} (CallStatic u30_1 u30_2) = 1 + u30Bytes u30_1 + u30Bytes u30_2
+toBytes {-      -} (CallStatic_ u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
 toBytes {- 0x45 -} (CallSuper u30_1 u30_2) = 1 + u30Bytes u30_1 + u30Bytes u30_2
+toBytes {-      -} (CallSuper_ u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
 toBytes {- 0x46 -} (CallProperty u30_1 u30_2) = 1 + u30Bytes u30_1 + u30Bytes u30_2
+toBytes {-      -} (CallProperty_ u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
 toBytes {- 0x47 -} (ReturnVoid) = 1
 toBytes {- 0x48 -} (ReturnValue) = 1
 toBytes {- 0x49 -} (ConstructSuper u30) = 1 + u30Bytes u30
 toBytes {- 0x4A -} (ConstructProp u30_1 u30_2) = 1 + u30Bytes u30_1 + u30Bytes u30_2
+toBytes {-      -} (ConstructProp_ u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
 toBytes {- 0x4B -} (CallSuperId    {-NOT HANDLED-}) = 1
 toBytes {- 0x4C -} (CallPropLex u30_1 u30_2) = 1 + u30Bytes u30_1 + u30Bytes u30_2
+toBytes {-      -} (CallPropLex_ u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
 toBytes {- 0x4D -} (CallInterface  {-NOT HANDLED-}) = 1
 toBytes {- 0x4E -} (CallSuperVoid u30_1 u30_2) = 1 + u30Bytes u30_1 + u30Bytes u30_2
 toBytes {- 0x4F -} (CallPropVoid u30_1 u30_2) = 1 + u30Bytes u30_1 + u30Bytes u30_2
@@ -781,21 +807,27 @@ toBytes {- 0x56 -} (NewArray u30) = 1 + u30Bytes u30
 toBytes {- 0x57 -} (NewActivation) = 1
 toBytes {- 0x58 -} (NewClass u30) = 1 + u30Bytes u30
 toBytes {- 0x59 -} (GetDescendants u30) = 1 + u30Bytes u30
+toBytes {-      -} (GetDescendants_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x5A -} (NewCatch u30) = 1 + u30Bytes u30
 toBytes {- 0x5B -} (FindPropGlobalStrict   {-NEW from Tamarin (internal)-}) = 1
 toBytes {- 0x5C -} (FindPropGlobal         {-NEW from Tamarin (internal)-}) = 1
 toBytes {- 0x5D -} (FindPropStrict u30) = 1 + u30Bytes u30
+toBytes {-      -} (FindPropStrict_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x5E -} (FindProperty u30) = 1 + u30Bytes u30
+toBytes {-      -} (FindProperty_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x5F -} (FindDef        {-NOT HANDLED-}) = 1
 toBytes {- 0x60 -} (GetLex u30) = 1 + u30Bytes u30
 toBytes {- 0x61 -} (SetProperty u30) = 1 + u30Bytes u30
+toBytes {-      -} (SetProperty_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x62 -} (GetLocal u30) = 1 + u30Bytes u30
 toBytes {- 0x63 -} (SetLocal u30) = 1 + u30Bytes u30
 toBytes {- 0x64 -} (GetGlobalScope) = 1
 toBytes {- 0x65 -} (GetScopeObject u8) = 1
 toBytes {- 0x66 -} (GetProperty u30) = 1 + u30Bytes u30
+toBytes {-      -} (GetProperty_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x67 -} (GetPropertyLate) = 1
 toBytes {- 0x68 -} (InitProperty u30) = 1 + u30Bytes u30
+toBytes {-      -} (InitProperty_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x69 -} (SetPropertyLate) = 1
 toBytes {- 0x6A -} (DeleteProperty u30) = 1 + u30Bytes u30
 toBytes {- 0x6B -} (DeletePropertyLate) = 1
@@ -820,6 +852,7 @@ toBytes {- 0x78 -} (CheckFilter) = 1
 --toBytes   {- 0x7E -}
 --toBytes   {- 0x7F -}
 toBytes {- 0x80 -} (Coerce u30) = 1 + u30Bytes u30
+toBytes {-      -} (Coerce_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0x81 -} (CoerceBoolean) = 1
 toBytes {- 0x82 -} (CoerceAny) = 1
 toBytes {- 0x83 -} (CoerceInt) = 1
@@ -870,6 +903,7 @@ toBytes {- 0xAF -} (GreaterThan) = 1
 toBytes {- 0xB0 -} (GreaterEquals) = 1
 toBytes {- 0xB1 -} (InstanceOf) = 1
 toBytes {- 0xB2 -} (IsType u30) = 1 + u30Bytes u30
+toBytes {-      -} (IsType_ u30 _) = 1 + u30Bytes u30
 toBytes {- 0xB3 -} (IsTypeLate) = 1
 toBytes {- 0xB4 -} (In) = 1
 --toBytes   {- 0xB5 -}

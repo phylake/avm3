@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 module Vm.Execute where
 
 import           Abc.DeepSeq
@@ -94,7 +95,7 @@ execute_abc abc = do
   ScriptInfo _ ((TraitsInfo _ _ _ (TT_Class (TraitClass _ idx)) _):[]) <- get_script cp 0
   p$ "-------------------------------------------"
   (global, globalid) <- build_global_scope 0
-  let ops = [NewClass idx,ReturnVoid]
+  let ops = [NewClass idx, ReturnVoid]
   (registers :: Registers) <- H.new
   H.insert registers 0 $ VmRt_Object global $ globalid+1
   (vmrt, _) <- r_f ([], [], ops, [(global, globalid)], registers, cp, globalid+2)
@@ -102,15 +103,6 @@ execute_abc abc = do
   t1 <- getCurrentTime
   putStrLn$ show$ diffUTCTime t1 t0
   return vmrt
-
-show_ops :: String -> Ops -> AVM3 ()
-show_ops header ops = do
-  case length ops of
-    0 -> do
-      p$ header ++ " []"
-    otherwise -> do
-      p$ header
-      p$ unlines$ map (\s -> "\t" ++ show s) ops
 
 build_global_scope :: InstanceId -> AVM3 (VmObject, InstanceId)
 build_global_scope iid = do
@@ -133,15 +125,15 @@ jump s24 tuple
 
 pos_jump :: S24 -> (A_Ops, B_Ops) -> (A_Ops, B_Ops)
 pos_jump _ (aops, []) = (aops, [])
-pos_jump s24 (aops, bop:bops)
+pos_jump s24 t@(aops, bop:bops)
   | s24 > 0 = pos_jump (s24 - (fromIntegral$ toBytes bop)) (bop:aops, bops)
-  | otherwise = (aops, bop:bops)
+  | otherwise = t
 
 neg_jump :: S24 -> (A_Ops, B_Ops) -> (A_Ops, B_Ops)
 neg_jump _ ([], bops) = ([], bops)
-neg_jump s24 (aop:aops, bops)
+neg_jump s24 t@(aop:aops, bops)
   | s24 > 0 = neg_jump (s24 - (fromIntegral$ toBytes aop)) (aops, aop:bops)
-  | otherwise = (aop:aops, bops)
+  | otherwise = t
 
 
 {-
@@ -176,147 +168,147 @@ r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, InstanceId)
 r_f {-0x08-} (dops, aops, Kill regIdx:bops, ss, reg, cp, iid) = do
   --po dops aops$ Kill regIdx:bops
   H.insert reg (fromIntegral regIdx) VmRt_Undefined
-  r_f (dops,Kill regIdx:aops,bops,ss,reg, cp, iid)
+  r_f (dops, Kill regIdx:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x09-} (dops, aops, Label:bops, ss, reg, cp, iid) = do
   --po dops aops$ Label:bops
-  r_f (dops,Label:aops,bops,ss,reg, cp, iid)
+  r_f (dops, Label:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x10-} (dops, aops, Jump s24:bops, ss, reg, cp, iid) = do
   --po dops aops$ Jump s24:bops
-  r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+  r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (Jump s24:aops, bops)
 
 r_f {-0x11-} (a:dops, aops, IfTrue s24:bops, ss, reg, cp, iid) = do
   --po (a:dops) aops$ IfTrue s24:bops
   if to_boolean a == True
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfTrue s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfTrue s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfTrue s24:aops, bops)
 
 r_f {-0x12-} (a:dops, aops, IfFalse s24:bops, ss, reg, cp, iid) = do
   --po (a:dops) aops$ IfFalse s24:bops
   if to_boolean a == False
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfFalse s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfFalse s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfFalse s24:aops, bops)
 
 r_f {-0x13-} (a:b:dops, aops, IfEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfEqual s24:bops
   if b == a
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfEqual s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfEqual s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfEqual s24:aops, bops)
 
 r_f {-0x14-} (a:b:dops, aops, IfNotEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfNotEqual s24:bops
   if b /= a
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfNotEqual s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfNotEqual s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfNotEqual s24:aops, bops)
 
 r_f {-0x15-} (a:b:dops, aops, IfLessThan s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfLessThan s24:bops
   if b < a
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfLessThan s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfLessThan s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfLessThan s24:aops, bops)
 
 r_f {-0x16-} (a:b:dops, aops, IfLessEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfLessEqual s24:bops
   if b <= a
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfLessEqual s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfLessEqual s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfLessEqual s24:aops, bops)
 
 r_f {-0x17-} (a:b:dops, aops, IfGreaterThan s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfGreaterThan s24:bops
   if b > a
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfGreaterThan s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfGreaterThan s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfGreaterThan s24:aops, bops)
 
 r_f {-0x18-} (a:b:dops, aops, IfGreaterEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfGreaterEqual s24:bops
   if b >= a
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfGreaterEqual s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfGreaterEqual s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfGreaterEqual s24:aops, bops)
 
 r_f {-0x19-} (a:b:dops, aops, IfStrictEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfStrictEqual s24:bops
   if a == b -- TODO class StrictEq ===
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfStrictEqual s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfStrictEqual s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfStrictEqual s24:aops, bops)
 
 r_f {-0x1A-} (a:b:dops, aops, IfStrictNotEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfStrictNotEqual s24:bops
   if a /= b -- TODO class StrictEq /==
-    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
-    else r_f (dops,IfStrictNotEqual s24:aops,bops,ss,reg, cp, iid)
+    then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f (dops, IfStrictNotEqual s24:aops, bops, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfStrictNotEqual s24:aops, bops)
 
 r_f {-0x1D-} (dops, aops, PopScope:bops, (_:ss), reg, cp, iid) = do
-  r_f (dops,PopScope:aops,bops,ss,reg, cp, iid)
+  r_f (dops, PopScope:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x24-} (dops, aops, PushByte u8:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushByte u8:bops
-  r_f (VmRt_Int (fromIntegral u8):dops,PushByte u8:aops,bops,ss,reg, cp, iid)
+  r_f (VmRt_Int (fromIntegral u8):dops, PushByte u8:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x25-} (dops, aops, PushShort u30:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushShort u30:bops
-  r_f (VmRt_Uint u30:dops,PushShort u30:aops,bops,ss,reg, cp, iid)
+  r_f (VmRt_Uint u30:dops, PushShort u30:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x26-} (dops, aops, PushTrue:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushTrue:bops
-  r_f (VmRt_Boolean True:dops,PushTrue:aops,bops,ss,reg, cp, iid)
+  r_f (VmRt_Boolean True:dops, PushTrue:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x27-} (dops, aops, PushFalse:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushFalse:bops
-  r_f (VmRt_Boolean False:dops,PushFalse:aops,bops,ss,reg, cp, iid)
+  r_f (VmRt_Boolean False:dops, PushFalse:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x28-} (dops, aops, PushNaN:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushNaN:bops
-  r_f (VmRt_Number nan:dops,PushNaN:aops,bops,ss,reg, cp, iid)
+  r_f (VmRt_Number nan:dops, PushNaN:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2A-} (a:dops, aops, Dup:bops, ss, reg, cp, iid) = do
-  r_f (a:a:dops,Dup:aops,bops,ss,reg, cp, iid)
+  r_f (a:a:dops, Dup:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2B-} (a:b:dops, aops, Swap:bops, ss, reg, cp, iid) = do
-  r_f (b:a:dops,Swap:aops,bops,ss,reg, cp, iid)
+  r_f (b:a:dops, Swap:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2C-} (dops, aops, PushString idx:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushString idx:bops
   a <- liftM VmRt_String$ get_string cp idx
-  r_f (a:dops,PushString idx:aops,bops,ss,reg, cp, iid)
+  r_f (a:dops, PushString idx:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2D-} (dops, aops, PushInt idx:bops, ss, reg, cp, iid) = do
   a <- liftM VmRt_Int$ get_int cp idx
-  r_f (a:dops,PushInt idx:aops,bops,ss,reg, cp, iid)
+  r_f (a:dops, PushInt idx:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2E-} (dops, aops, PushUInt idx:bops, ss, reg, cp, iid) = do
   a <- liftM VmRt_Uint$ get_uint cp idx
-  r_f (a:dops,PushUInt idx:aops,bops,ss,reg, cp, iid)
+  r_f (a:dops, PushUInt idx:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2F-} (dops, aops, PushDouble idx:bops, ss, reg, cp, iid) = do
   a <- liftM VmRt_Number$ get_double cp idx
-  r_f (a:dops,PushDouble idx:aops,bops,ss,reg, cp, iid)
+  r_f (a:dops, PushDouble idx:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x30-} (VmRt_Object v i:dops, aops, PushScope:bops, ss, reg, cp, iid) = do
   --po (VmRt_Object v i:dops) aops$ PushScope:bops
-  r_f (dops,PushScope:aops,bops,(v,i):ss,reg, cp, iid)
+  r_f (dops, PushScope:aops, bops, (v, i):ss, reg, cp, iid)
 
 r_f {-0x47-} (dops, aops, ReturnVoid:bops, ss, reg, cp, iid) = return (Right VmRt_Undefined, iid)
 
@@ -346,27 +338,27 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args:bops, ss, reg, cp, iid) = do
 
   (registers :: Registers) <- H.newSized$ fromIntegral args+1
   H.insert registers 0 $ VmRt_Object this iidThis
-  forM_ (zip [1..length nArgs] nArgs) (\(i,arg) -> H.insert registers i arg)
+  forM_ (zip [1..length nArgs] nArgs) (\(i, arg) -> H.insert registers i arg)
 
   -- CallPropVoid, only need the latest instance id counter
   (_, iid2) <- r_f ([], [], code, [last ss], registers, cp, iid)
 
-  r_f (dopsNew,CallPropVoid idx args:aops,bops,ss,reg, cp, iid2)
+  r_f (dopsNew, CallPropVoid idx args:aops, bops, ss, reg, cp, iid2)
   where
     (nArgs, (VmRt_Object this iidThis):dopsNew) = splitAt (fromIntegral args) dops
 
 r_f {-0x55-} (dops, aops, NewObject args:bops, ss, reg, cp, iid) = do
   --po dops aops$ NewObject args:bops
   vmrto@(VmRt_Object obj iid2) <- new_object iid
-  forM_ (kvps nArgs)$ \(v,VmRt_String k) -> insert obj (Ext k) v
-  r_f (vmrto:dopsNew,NewObject args:aops,bops,ss,reg, cp, iid2)
+  forM_ (kvps nArgs)$ \(v, VmRt_String k) -> insert obj (Ext k) v
+  r_f (vmrto:dopsNew, NewObject args:aops, bops, ss, reg, cp, iid2)
   where
     (nArgs, dopsNew) = splitAt (fromIntegral args*2) dops
-    kvps (v:k:kvs) = (v,k):kvps kvs
+    kvps (v:k:kvs) = (v, k):kvps kvs
     kvps [] = []
 
 r_f {-0x56-} (dops, aops, NewArray args:bops, ss, reg, cp, iid) = do
-  r_f (newArray:dopsNew,NewArray args:aops,bops,ss,reg, cp, iid2)
+  r_f (newArray:dopsNew, NewArray args:aops, bops, ss, reg, cp, iid2)
   where
     iid2 = iid + 1
     (nArgs, dopsNew) = splitAt (fromIntegral args) dops
@@ -392,7 +384,7 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   insert global (Ext$ BC.pack "Test") vmrto
   p$ "########## " ++ show idx
 
-  r_f (dops,NewClass idx:aops,bops,ss,reg, cp, iid3)
+  r_f (dops, NewClass idx:aops, bops, ss, reg, cp, iid3)
   where
     (global, globalid) = last ss
 
@@ -410,16 +402,22 @@ r_f {-0x60-} (dops, aops, GetLex idx:bops, ss, reg, cp, iid) = fail "GetLex shou
 
 r_f {-0x61-} (value:dops, aops, SetProperty idx:bops, ss, reg, cp, iid) = do
   multiname <- get_multiname cp idx
-  (VmRt_String prop, (VmRt_Object this iidThis):dopsNew) <- case multiname of
+  (VmRt_String prop, (VmRt_Object this iidThis):dopsNew, replace) <- case multiname of
     Multiname_QName _ stringIdx -> do
       str <- get_string cp stringIdx
-      return (VmRt_String str, dops)
+      return (VmRt_String str, dops, True)
     Multiname_Multiname stringIdx _ -> do
       str <- get_string cp stringIdx
-      return (VmRt_String str, dops)
-    otherwise -> return (head dops, tail dops)
+      return (VmRt_String str, dops, True)
+    otherwise -> return (head dops, tail dops, False)
   insert this (Ext prop) value
-  r_f (dopsNew, SetProperty idx:aops, bops, ss, reg, cp, iid)
+  if replace
+    then r_f (dopsNew, SetProperty_ idx prop:aops, bops, ss, reg, cp, iid)
+    else r_f (dopsNew, SetProperty idx:aops, bops, ss, reg, cp, iid)
+
+r_f {-    -} (value:VmRt_Object this _:dops, aops, SetProperty_ idx prop:bops, ss, reg, cp, iid) = do
+  insert this (Ext prop) value
+  r_f (dops, SetProperty_ idx prop:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x62-} (dops, aops, GetLocal u30:bops, ss, reg, cp, iid) = do
   maybeR <- H.lookup reg $ fromIntegral u30
@@ -441,19 +439,14 @@ r_f {-0x66-} (dops, aops, GetProperty idx:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetProperty idx:bops
   multiname <- get_multiname cp idx
   p$ show multiname
-  (prop, vmrt:dopsNew) <- case multiname of
+  (prop, vmrt:dopsNew, replace) <- case multiname of
     Multiname_QName _ stringIdx -> do
       str <- get_string cp stringIdx
-      return (VmRt_String str, dops)
+      return (VmRt_String str, dops, True)
     Multiname_Multiname stringIdx _ -> do
       str <- get_string cp stringIdx
-      return (VmRt_String str, dops)
-    otherwise -> return (head dops, tail dops)
-
-  --p$ "dops    " ++ show dops
-  --p$ "dopsNew " ++ show dopsNew
-  --p$ "prop    " ++ show prop
-  --p$ "vmrt    " ++ show vmrt
+      return (VmRt_String str, dops, True)
+    otherwise -> return (head dops, tail dops, False)
 
   d <- case vmrt of
     VmRt_Undefined -> return VmRt_Undefined
@@ -477,10 +470,33 @@ r_f {-0x66-} (dops, aops, GetProperty idx:bops, ss, reg, cp, iid) = do
       otherwise -> fail "GetProperty - VmRt_Object - only strings"
     --VmRt_Closure f
   
-  --p$ "GetProperty - got prop " ++ show d
-  --p$ "new data stack" ++ (show$ d:dopsNew)
+  if replace
+    then do
+      let (VmRt_String prop2) = prop
+      r_f (d:dopsNew, GetProperty_ idx prop2:aops, bops, ss, reg, cp, iid)
+    else r_f (d:dopsNew, GetProperty idx:aops, bops, ss, reg, cp, iid)
 
-  r_f (d:dopsNew, GetProperty idx:aops, bops, ss, reg, cp, iid)
+r_f {-    -} (vmrt:dops, aops, GetProperty_ idx prop:bops, ss, reg, cp, iid) = do
+  --po dops aops$ GetProperty_ idx prop:bops
+
+  d <- case vmrt of
+    VmRt_Undefined -> return VmRt_Undefined
+    VmRt_Null -> return VmRt_Undefined
+    VmRt_Boolean bool -> return VmRt_Undefined
+    VmRt_Int v -> return VmRt_Undefined
+    VmRt_Uint v -> return VmRt_Undefined
+    VmRt_Number v -> return VmRt_Undefined
+    VmRt_String v -> return VmRt_Undefined
+    VmRt_Array v _ -> case prop of
+      p_length -> return . VmRt_Int . fromIntegral$ length v
+      otherwise -> fail$ "GetProperty - VmRt_Array - can't get property " ++ BC.unpack prop
+    VmRt_Object this _ -> do
+      maybeProp <- H.lookup this$ Ext prop
+      case maybeProp of
+        Just prop -> return prop
+        Nothing -> return VmRt_Undefined
+
+  r_f (d:dops, GetProperty_ idx prop:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x68-} (value:VmRt_Object this iidThis:dops, aops, InitProperty idx:bops, ss, reg, cp, iid) = do
   --po (value:VmRt_Object this iidThis:dops) aops (InitProperty idx:bops)
@@ -604,7 +620,7 @@ r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) = do
 
 r_f {-0xD7-} (dops, aops, op:bops, ss, reg, cp, iid) = fail$ "didn't match opcode " ++ show op
 
-  {-(_, ((newsp,newops,_,_):_), _) <- get
+  {-(_, ((newsp, newops, _, _):_), _) <- get
   case newsp of
     -1 -> let (D ret:_) = newops in return ret
     otherwise -> r_f-}

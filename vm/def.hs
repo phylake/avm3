@@ -1,6 +1,6 @@
 module Vm.Def where
 
-import           Abc.Def
+import           Abc.Def as Abc
 import           Data.Hashable
 import           Data.Int
 import           Data.Word
@@ -15,7 +15,6 @@ type VmObject = H.CuckooHashTable VmRtP VmRt
 -- Part of FunctionStack
 type ScopeStack = [(VmObject, InstanceId)] -- this is a tuple for purity
 type Registers = H.CuckooHashTable Int VmRt
-type Ops = [VmRtOp]
 type D_Ops = [VmRt] -- data ops
 type A_Ops = [OpCode] -- above stack pointer
 type B_Ops = [OpCode] -- below stack pointer
@@ -36,10 +35,6 @@ data VmRtP = Ext B.ByteString -- all run time, external properties
 instance Hashable VmRtP where
   hashWithSalt salt (Ext a) = hashWithSalt salt$ B.cons 1 a
   hashWithSalt salt (ClassIdx a) = hashWithSalt salt$ B.cons 2 a
-
-data VmRtOp = O OpCode
-            | D VmRt
-            deriving (Show)
 
 {-
 TODO
@@ -268,111 +263,3 @@ data VmAbc = VmAbc_Int Int32
            | VmAbc_Script ScriptInfo
            | VmAbc_MethodBody MethodBody
            deriving (Show)
-
-{-liftIO :: IO a -> AVM3 a
-liftIO = ML.lift . ML.lift-}
-
-{-
-  Monad helpers
--}
-
-{-get :: AVM3 Execution
-get = ML.lift$ ML.get
-
-set :: Execution -> AVM3 ()
-set = ML.lift . ML.set
-
-push_activation :: (Int, Ops, ScopeStack, Registers) -> AVM3 ()
-push_activation f = do
-  (cp, fs, iid) <- get
-  set (cp, f:fs, iid)
-
-pop_activation :: AVM3 ()
-pop_activation = do
-  (cp, (_:fs), iid) <- get
-  set (cp, fs, iid)
-
-push :: VmRtOp -> AVM3 ()
-push op = do
-  (cp, ((sp,ops,ss,reg):fs), iid) <- get
-  set (cp, ((sp+1,op:ops,ss,reg):fs), iid)
-
-pushd :: VmRt -> AVM3 ()
-pushd = push . D
-
-pop :: AVM3 VmRtOp
-pop = do
-  (cp, ((sp,(op:ops),ss,reg):fs), iid) <- get
-  if sp-1 < 0
-    then ML.raise "pop would cause sp to be -1"
-    else return ()
-  set (cp, ((sp-1,ops,ss,reg):fs), iid)
-  return op-}
-
--- InstanceId
-
-{-next_iid :: AVM3 InstanceId
-next_iid = do
-  (cp, fs, iid) <- get
-  set (cp, fs, iid+1)
-  return$ iid+1-}
-
--- ConstantPool
-
-{-get_cp :: AVM3 ConstantPool
-get_cp = get >>= return. t31
-
-set_cp :: ConstantPool -> AVM3 ()
-set_cp cp = do
-  (_,ops,iid) <- get
-  set (cp,ops,iid)-}
-
--- Ops
-
-{-get_ops :: AVM3 Ops
-get_ops = do
-  (cp, ((sp,ops,ss,reg):fs), iid) <- get
-  return ops
-
-mod_ops :: (Ops -> Ops) -> AVM3 ()
-mod_ops f = do
-  (cp, ((sp,ops,ss,reg):fs), iid) <- get
-  set (cp, ((sp,f ops,ss,reg):fs), iid)
-
-set_ops :: Ops -> AVM3 ()
-set_ops ops = mod_ops$ \_ -> ops-}
-
--- StackPointer
-
-{-mod_sp :: (Int -> Int) -> AVM3 ()
-mod_sp f = do
-  (cp, ((sp,ops,ss,reg):fs), iid) <- get
-  set (cp, ((f sp,ops,ss,reg):fs), iid)
-
-set_sp :: Int -> AVM3 ()
-set_sp sp = mod_sp$ \_ -> sp-}
-
--- ScopeStack
-
-{-get_ss :: AVM3 ScopeStack
-get_ss = do
-  (cp, ((a,b,ss,reg):fs), iid) <- get
-  return ss
-
-mod_ss :: (ScopeStack -> ScopeStack) -> AVM3 ()
-mod_ss f = do
-  (cp, ((a,b,ss,reg):fs), iid) <- get
-  set (cp, (a,b,f ss,reg):fs, iid)
-
-push_ss :: (VmObject, InstanceId) -> AVM3 ()
-push_ss = mod_ss . (:)
-
-pop_ss :: AVM3 ()
-pop_ss = mod_ss tail-}
-
--- Registers
-
-{-mod_reg :: (Registers -> Registers) -> AVM3 ()
-mod_reg f = do
-  (cp, ((a,b,ss,reg):fs), iid) <- get
-  set (cp, (a,b,ss,f reg):fs, iid)-}
