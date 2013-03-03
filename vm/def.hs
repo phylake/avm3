@@ -10,7 +10,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.HashTable.IO as H
 
-type VmObject = H.BasicHashTable VmRtP VmRt
+type VmObject = H.CuckooHashTable VmRtP VmRt
 
 -- Part of FunctionStack
 type ScopeStack = [(VmObject, InstanceId)] -- this is a tuple for purity
@@ -21,12 +21,11 @@ type A_Ops = [OpCode] -- above stack pointer
 type B_Ops = [OpCode] -- below stack pointer
 
 -- Part of Execution
-type FunctionStack = [(D_Ops, A_Ops, B_Ops, ScopeStack, Registers)]
 type ConstantPool = H.CuckooHashTable B.ByteString VmAbc
 type InstanceId = Word64 -- Global instance id
 type AVM3Exception = String -- Exception string
 
-type Execution = (FunctionStack, ConstantPool, InstanceId)
+type Execution = (D_Ops, A_Ops, B_Ops, ScopeStack, Registers, ConstantPool, InstanceId)
 type AVM3 = IO
 
 data VmRtP = Ext B.ByteString -- all run time, external properties

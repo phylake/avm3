@@ -97,7 +97,7 @@ execute_abc abc = do
   let ops = [NewClass idx,ReturnVoid]
   (registers :: Registers) <- H.new
   H.insert registers 0 $ VmRt_Object global $ globalid+1
-  (vmrt, _) <- r_f ([([], [], ops, [(global, globalid)], registers)], cp, globalid+2)
+  (vmrt, _) <- r_f ([], [], ops, [(global, globalid)], registers, cp, globalid+2)
   p$ "-------------------------------------------"
   t1 <- getCurrentTime
   putStrLn$ show$ diffUTCTime t1 t0
@@ -173,157 +173,157 @@ REMEMBER the stack order here is the REVERSE of the docs
           ++ "\t--------------------" ++ show sp ++ "\n"
           ++ (unlines$ map (\s -> "\t" ++ show s) belowSp)-}
 r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, InstanceId)
-r_f {-0x08-} (((dops, aops, Kill regIdx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x08-} (dops, aops, Kill regIdx:bops, ss, reg, cp, iid) = do
   --po dops aops$ Kill regIdx:bops
   H.insert reg (fromIntegral regIdx) VmRt_Undefined
-  r_f ((dops,Kill regIdx:aops,bops,ss,reg):fs, cp, iid)
+  r_f (dops,Kill regIdx:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x09-} (((dops, aops, Label:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x09-} (dops, aops, Label:bops, ss, reg, cp, iid) = do
   --po dops aops$ Label:bops
-  r_f ((dops,Label:aops,bops,ss,reg):fs, cp, iid)
+  r_f (dops,Label:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x10-} (((dops, aops, Jump s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x10-} (dops, aops, Jump s24:bops, ss, reg, cp, iid) = do
   --po dops aops$ Jump s24:bops
-  r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
+  r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (Jump s24:aops, bops)
 
-r_f {-0x11-} (((a:dops, aops, IfTrue s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x11-} (a:dops, aops, IfTrue s24:bops, ss, reg, cp, iid) = do
   --po (a:dops) aops$ IfTrue s24:bops
   if to_boolean a == True
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfTrue s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfTrue s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfTrue s24:aops, bops)
 
-r_f {-0x12-} (((a:dops, aops, IfFalse s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x12-} (a:dops, aops, IfFalse s24:bops, ss, reg, cp, iid) = do
   --po (a:dops) aops$ IfFalse s24:bops
   if to_boolean a == False
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfFalse s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfFalse s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfFalse s24:aops, bops)
 
-r_f {-0x13-} (((a:b:dops, aops, IfEqual s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x13-} (a:b:dops, aops, IfEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfEqual s24:bops
   if b == a
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfEqual s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfEqual s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfEqual s24:aops, bops)
 
-r_f {-0x14-} (((a:b:dops, aops, IfNotEqual s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x14-} (a:b:dops, aops, IfNotEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfNotEqual s24:bops
   if b /= a
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfNotEqual s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfNotEqual s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfNotEqual s24:aops, bops)
 
-r_f {-0x15-} (((a:b:dops, aops, IfLessThan s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x15-} (a:b:dops, aops, IfLessThan s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfLessThan s24:bops
   if b < a
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfLessThan s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfLessThan s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfLessThan s24:aops, bops)
 
-r_f {-0x16-} (((a:b:dops, aops, IfLessEqual s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x16-} (a:b:dops, aops, IfLessEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfLessEqual s24:bops
   if b <= a
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfLessEqual s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfLessEqual s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfLessEqual s24:aops, bops)
 
-r_f {-0x17-} (((a:b:dops, aops, IfGreaterThan s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x17-} (a:b:dops, aops, IfGreaterThan s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfGreaterThan s24:bops
   if b > a
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfGreaterThan s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfGreaterThan s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfGreaterThan s24:aops, bops)
 
-r_f {-0x18-} (((a:b:dops, aops, IfGreaterEqual s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x18-} (a:b:dops, aops, IfGreaterEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfGreaterEqual s24:bops
   if b >= a
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfGreaterEqual s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfGreaterEqual s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfGreaterEqual s24:aops, bops)
 
-r_f {-0x19-} (((a:b:dops, aops, IfStrictEqual s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x19-} (a:b:dops, aops, IfStrictEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfStrictEqual s24:bops
   if a == b -- TODO class StrictEq ===
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfStrictEqual s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfStrictEqual s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfStrictEqual s24:aops, bops)
 
-r_f {-0x1A-} (((a:b:dops, aops, IfStrictNotEqual s24:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x1A-} (a:b:dops, aops, IfStrictNotEqual s24:bops, ss, reg, cp, iid) = do
   --po (a:b:dops) aops$ IfStrictNotEqual s24:bops
   if a /= b -- TODO class StrictEq /==
-    then r_f ((dops,aopsNew,bopsNew,ss,reg):fs, cp, iid)
-    else r_f ((dops,IfStrictNotEqual s24:aops,bops,ss,reg):fs, cp, iid)
+    then r_f (dops,aopsNew,bopsNew,ss,reg, cp, iid)
+    else r_f (dops,IfStrictNotEqual s24:aops,bops,ss,reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (IfStrictNotEqual s24:aops, bops)
 
-r_f {-0x1D-} (((dops, aops, PopScope:bops, (_:ss), reg):fs), cp, iid) = do
-  r_f ((dops,PopScope:aops,bops,ss,reg):fs, cp, iid)
+r_f {-0x1D-} (dops, aops, PopScope:bops, (_:ss), reg, cp, iid) = do
+  r_f (dops,PopScope:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x24-} (((dops, aops, PushByte u8:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x24-} (dops, aops, PushByte u8:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushByte u8:bops
-  r_f ((VmRt_Int (fromIntegral u8):dops,PushByte u8:aops,bops,ss,reg):fs, cp, iid)
+  r_f (VmRt_Int (fromIntegral u8):dops,PushByte u8:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x25-} (((dops, aops, PushShort u30:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x25-} (dops, aops, PushShort u30:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushShort u30:bops
-  r_f ((VmRt_Uint u30:dops,PushShort u30:aops,bops,ss,reg):fs, cp, iid)
+  r_f (VmRt_Uint u30:dops,PushShort u30:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x26-} (((dops, aops, PushTrue:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x26-} (dops, aops, PushTrue:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushTrue:bops
-  r_f ((VmRt_Boolean True:dops,PushTrue:aops,bops,ss,reg):fs, cp, iid)
+  r_f (VmRt_Boolean True:dops,PushTrue:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x27-} (((dops, aops, PushFalse:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x27-} (dops, aops, PushFalse:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushFalse:bops
-  r_f ((VmRt_Boolean False:dops,PushFalse:aops,bops,ss,reg):fs, cp, iid)
+  r_f (VmRt_Boolean False:dops,PushFalse:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x28-} (((dops, aops, PushNaN:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x28-} (dops, aops, PushNaN:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushNaN:bops
-  r_f ((VmRt_Number nan:dops,PushNaN:aops,bops,ss,reg):fs, cp, iid)
+  r_f (VmRt_Number nan:dops,PushNaN:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x2A-} (((a:dops, aops, Dup:bops, ss, reg):fs), cp, iid) = do
-  r_f ((a:a:dops,Dup:aops,bops,ss,reg):fs, cp, iid)
+r_f {-0x2A-} (a:dops, aops, Dup:bops, ss, reg, cp, iid) = do
+  r_f (a:a:dops,Dup:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x2B-} (((a:b:dops, aops, Swap:bops, ss, reg):fs), cp, iid) = do
-  r_f ((b:a:dops,Swap:aops,bops,ss,reg):fs, cp, iid)
+r_f {-0x2B-} (a:b:dops, aops, Swap:bops, ss, reg, cp, iid) = do
+  r_f (b:a:dops,Swap:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x2C-} (((dops, aops, PushString idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x2C-} (dops, aops, PushString idx:bops, ss, reg, cp, iid) = do
   --po dops aops$ PushString idx:bops
   a <- liftM VmRt_String$ get_string cp idx
-  r_f ((a:dops,PushString idx:aops,bops,ss,reg):fs, cp, iid)
+  r_f (a:dops,PushString idx:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x2D-} (((dops, aops, PushInt idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x2D-} (dops, aops, PushInt idx:bops, ss, reg, cp, iid) = do
   a <- liftM VmRt_Int$ get_int cp idx
-  r_f ((a:dops,PushInt idx:aops,bops,ss,reg):fs, cp, iid)
+  r_f (a:dops,PushInt idx:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x2E-} (((dops, aops, PushUInt idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x2E-} (dops, aops, PushUInt idx:bops, ss, reg, cp, iid) = do
   a <- liftM VmRt_Uint$ get_uint cp idx
-  r_f ((a:dops,PushUInt idx:aops,bops,ss,reg):fs, cp, iid)
+  r_f (a:dops,PushUInt idx:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x2F-} (((dops, aops, PushDouble idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x2F-} (dops, aops, PushDouble idx:bops, ss, reg, cp, iid) = do
   a <- liftM VmRt_Number$ get_double cp idx
-  r_f ((a:dops,PushDouble idx:aops,bops,ss,reg):fs, cp, iid)
+  r_f (a:dops,PushDouble idx:aops,bops,ss,reg, cp, iid)
 
-r_f {-0x30-} (((VmRt_Object v i:dops, aops, PushScope:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x30-} (VmRt_Object v i:dops, aops, PushScope:bops, ss, reg, cp, iid) = do
   --po (VmRt_Object v i:dops) aops$ PushScope:bops
-  r_f ((dops,PushScope:aops,bops,(v,i):ss,reg):fs, cp, iid)
+  r_f (dops,PushScope:aops,bops,(v,i):ss,reg, cp, iid)
 
-r_f {-0x47-} (((dops, aops, ReturnVoid:bops, ss, reg):fs), cp, iid) = return (Right VmRt_Undefined, iid)
+r_f {-0x47-} (dops, aops, ReturnVoid:bops, ss, reg, cp, iid) = return (Right VmRt_Undefined, iid)
 
-r_f {-0x48-} (((a:dops, aops, ReturnValue:bops, ss, reg):fs), cp, iid) = return (Right a, iid)
+r_f {-0x48-} (a:dops, aops, ReturnValue:bops, ss, reg, cp, iid) = return (Right a, iid)
 
 -- TODO check for [ns] [name]
-r_f {-0x4F-} (((dops, aops, CallPropVoid idx args:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x4F-} (dops, aops, CallPropVoid idx args:bops, ss, reg, cp, iid) = do
   --po dops aops$ CallPropVoid idx args:bops
   maybeClassInfoIdx <- H.lookup this pfx_class_info_idx
   TraitsInfo _ _ _ (TT_Method (TraitMethod _ methodId)) _ <- case maybeClassInfoIdx of
@@ -344,35 +344,35 @@ r_f {-0x4F-} (((dops, aops, CallPropVoid idx args:bops, ss, reg):fs), cp, iid) =
   MethodBody _ _ _ _ _ code _ _ <- get_methodBody cp methodId
   p$ show code
 
-  (registers :: Registers) <- H.new
+  (registers :: Registers) <- H.newSized$ fromIntegral args+1
   H.insert registers 0 $ VmRt_Object this iidThis
   forM_ (zip [1..length nArgs] nArgs) (\(i,arg) -> H.insert registers i arg)
 
   -- CallPropVoid, only need the latest instance id counter
-  (_, iid2) <- r_f ([([], [], code, [last ss], registers)], cp, iid)
+  (_, iid2) <- r_f ([], [], code, [last ss], registers, cp, iid)
 
-  r_f ((dopsNew,CallPropVoid idx args:aops,bops,ss,reg):fs, cp, iid2)
+  r_f (dopsNew,CallPropVoid idx args:aops,bops,ss,reg, cp, iid2)
   where
     (nArgs, (VmRt_Object this iidThis):dopsNew) = splitAt (fromIntegral args) dops
 
-r_f {-0x55-} (((dops, aops, NewObject args:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x55-} (dops, aops, NewObject args:bops, ss, reg, cp, iid) = do
   --po dops aops$ NewObject args:bops
   vmrto@(VmRt_Object obj iid2) <- new_object iid
   forM_ (kvps nArgs)$ \(v,VmRt_String k) -> insert obj (Ext k) v
-  r_f ((vmrto:dopsNew,NewObject args:aops,bops,ss,reg):fs, cp, iid2)
+  r_f (vmrto:dopsNew,NewObject args:aops,bops,ss,reg, cp, iid2)
   where
     (nArgs, dopsNew) = splitAt (fromIntegral args*2) dops
     kvps (v:k:kvs) = (v,k):kvps kvs
     kvps [] = []
 
-r_f {-0x56-} (((dops, aops, NewArray args:bops, ss, reg):fs), cp, iid) = do
-  r_f ((newArray:dopsNew,NewArray args:aops,bops,ss,reg):fs, cp, iid2)
+r_f {-0x56-} (dops, aops, NewArray args:bops, ss, reg, cp, iid) = do
+  r_f (newArray:dopsNew,NewArray args:aops,bops,ss,reg, cp, iid2)
   where
     iid2 = iid + 1
     (nArgs, dopsNew) = splitAt (fromIntegral args) dops
     newArray = VmRt_Array (reverse nArgs) iid2
 
-r_f {-0x58-} (((dops, aops, NewClass idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   p$ "########## NewClass " ++ show idx
   ClassInfo msi traits <- get_class cp idx
 
@@ -387,28 +387,28 @@ r_f {-0x58-} (((dops, aops, NewClass idx:bops, ss, reg):fs), cp, iid) = do
   H.insert registers 0 vmrto
 
   -- NewClass, only need the latest instance id counter
-  (_, iid3) <- r_f ([([], [], code, [(global, globalid)], registers)], cp, iid2)
+  (_, iid3) <- r_f ([], [], code, [(global, globalid)], registers, cp, iid2)
 
   insert global (Ext$ BC.pack "Test") vmrto
   p$ "########## " ++ show idx
 
-  r_f ((dops,NewClass idx:aops,bops,ss,reg):fs, cp, iid3)
+  r_f (dops,NewClass idx:aops,bops,ss,reg, cp, iid3)
   where
     (global, globalid) = last ss
 
-r_f {-0x5D-} (((dops, aops, FindPropStrict idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x5D-} (dops, aops, FindPropStrict idx:bops, ss, reg, cp, iid) = do
   --po dops aops$ FindPropStrict idx:bops
   vmrt <- find_property cp idx ss -- TODO this need error checking
-  r_f (((vmrt:dops, FindPropStrict idx:aops, bops, ss, reg):fs), cp, iid)
+  r_f (vmrt:dops, FindPropStrict idx:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x5E-} (((dops, aops, FindProperty idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x5E-} (dops, aops, FindProperty idx:bops, ss, reg, cp, iid) = do
   --po dops aops$ FindProperty idx:bops
   vmrt <- find_property cp idx ss -- TODO this need error checking
-  r_f (((vmrt:dops, FindProperty idx:aops, bops, ss, reg):fs), cp, iid)
+  r_f (vmrt:dops, FindProperty idx:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x60-} (((dops, aops, GetLex idx:bops, ss, reg):fs), cp, iid) = fail "GetLex should have been replaced"
+r_f {-0x60-} (dops, aops, GetLex idx:bops, ss, reg, cp, iid) = fail "GetLex should have been replaced"
 
-r_f {-0x61-} (((value:dops, aops, SetProperty idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x61-} (value:dops, aops, SetProperty idx:bops, ss, reg, cp, iid) = do
   multiname <- get_multiname cp idx
   (VmRt_String prop, (VmRt_Object this iidThis):dopsNew) <- case multiname of
     Multiname_QName _ stringIdx -> do
@@ -419,25 +419,25 @@ r_f {-0x61-} (((value:dops, aops, SetProperty idx:bops, ss, reg):fs), cp, iid) =
       return (VmRt_String str, dops)
     otherwise -> return (head dops, tail dops)
   insert this (Ext prop) value
-  r_f (((dopsNew, SetProperty idx:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dopsNew, SetProperty idx:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x62-} (((dops, aops, GetLocal u30:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x62-} (dops, aops, GetLocal u30:bops, ss, reg, cp, iid) = do
   maybeR <- H.lookup reg $ fromIntegral u30
   case maybeR of
     Nothing -> fail$ "GetLocal" ++ show u30 ++ " - register doesn't exist"
-    Just r -> r_f (((r:dops, GetLocal u30:aops, bops, ss, reg):fs), cp, iid)
+    Just r -> r_f (r:dops, GetLocal u30:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x63-} (((new:dops, aops, SetLocal u30:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x63-} (new:dops, aops, SetLocal u30:bops, ss, reg, cp, iid) = do
   H.insert reg (fromIntegral u30) new
-  r_f (((dops, SetLocal u30:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dops, SetLocal u30:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x65-} (((dops, aops, GetScopeObject idx:bops, ss, reg):fs), cp, iid) =
-  r_f (((scopedObject:dops, GetScopeObject idx:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0x65-} (dops, aops, GetScopeObject idx:bops, ss, reg, cp, iid) =
+  r_f (scopedObject:dops, GetScopeObject idx:aops, bops, ss, reg, cp, iid)
   where
     (obj, iid) = ss !! fromIntegral idx
     scopedObject = VmRt_Object obj iid
 
-r_f {-0x66-} (((dops, aops, GetProperty idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x66-} (dops, aops, GetProperty idx:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetProperty idx:bops
   multiname <- get_multiname cp idx
   p$ show multiname
@@ -480,9 +480,9 @@ r_f {-0x66-} (((dops, aops, GetProperty idx:bops, ss, reg):fs), cp, iid) = do
   --p$ "GetProperty - got prop " ++ show d
   --p$ "new data stack" ++ (show$ d:dopsNew)
 
-  r_f (((d:dopsNew, GetProperty idx:aops, bops, ss, reg):fs), cp, iid)
+  r_f (d:dopsNew, GetProperty idx:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x68-} (((value:VmRt_Object this iidThis:dops, aops, InitProperty idx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x68-} (value:VmRt_Object this iidThis:dops, aops, InitProperty idx:bops, ss, reg, cp, iid) = do
   --po (value:VmRt_Object this iidThis:dops) aops (InitProperty idx:bops)
   Multiname_QName nSInfoIdx stringIdx <- get_multiname cp idx
   name <- liftM2 B.append (resolve_nsinfo cp nSInfoIdx) (get_string cp stringIdx)
@@ -493,116 +493,116 @@ r_f {-0x68-} (((value:VmRt_Object this iidThis:dops, aops, InitProperty idx:bops
       insert this (Ext name) value
       return ()
     otherwise -> fail$ "init_property - property [" ++ BC.unpack name ++ "] exists"
-  r_f (((dops, InitProperty idx:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dops, InitProperty idx:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x70-} (((v:dops, aops, ConvertString:bops, ss, reg):fs), cp, iid) = do
-  r_f (((convert_string v:dops, ConvertString:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0x70-} (v:dops, aops, ConvertString:bops, ss, reg, cp, iid) = do
+  r_f (convert_string v:dops, ConvertString:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x73-} (((v:dops, aops, ConvertInt:bops, ss, reg):fs), cp, iid) = do
-  r_f (((convert_int v:dops, ConvertInt:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0x73-} (v:dops, aops, ConvertInt:bops, ss, reg, cp, iid) = do
+  r_f (convert_int v:dops, ConvertInt:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x74-} (((v:dops, aops, ConvertUInt:bops, ss, reg):fs), cp, iid) = do
-  r_f (((convert_uint v:dops, ConvertUInt:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0x74-} (v:dops, aops, ConvertUInt:bops, ss, reg, cp, iid) = do
+  r_f (convert_uint v:dops, ConvertUInt:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x75-} (((v:dops, aops, ConvertDouble:bops, ss, reg):fs), cp, iid) = do
-  r_f (((convert_double v:dops, ConvertDouble:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0x75-} (v:dops, aops, ConvertDouble:bops, ss, reg, cp, iid) = do
+  r_f (convert_double v:dops, ConvertDouble:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x76-} (((v:dops, aops, ConvertBoolean:bops, ss, reg):fs), cp, iid) = do
-  r_f (((convert_boolean v:dops, ConvertBoolean:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0x76-} (v:dops, aops, ConvertBoolean:bops, ss, reg, cp, iid) = do
+  r_f (convert_boolean v:dops, ConvertBoolean:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x77-} (((v:dops, aops, ConvertObject:bops, ss, reg):fs), cp, iid) = fail "NI: ConvertObject"
+r_f {-0x77-} (v:dops, aops, ConvertObject:bops, ss, reg, cp, iid) = fail "NI: ConvertObject"
 
-r_f {-0x90-} (((a:dops, aops, Negate:bops, ss, reg):fs), cp, iid) = do
+r_f {-0x90-} (a:dops, aops, Negate:bops, ss, reg, cp, iid) = do
   vmrt <- case a of
     VmRt_Int i -> return$ VmRt_Int$ negate i
     VmRt_Uint i -> return$ VmRt_Uint$ negate i
     VmRt_Number i -> return$ VmRt_Number$ negate i
     otherwise -> fail$ "can't negate " ++ show a
-  r_f (((vmrt:dops, Negate:aops, bops, ss, reg):fs), cp, iid)
+  r_f (vmrt:dops, Negate:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x91-} (((a:dops, aops, Increment:bops, ss, reg):fs), cp, iid) =
-  r_f (((a + 1:dops, Increment:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0x91-} (a:dops, aops, Increment:bops, ss, reg, cp, iid) =
+  r_f (a + 1:dops, Increment:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x93-} (((a:dops, aops, Decrement:bops, ss, reg):fs), cp, iid) =
-  r_f (((a - 1:dops, Decrement:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0x93-} (a:dops, aops, Decrement:bops, ss, reg, cp, iid) =
+  r_f (a - 1:dops, Decrement:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xA0-} (((a:b:dops, aops, Add:bops, ss, reg):fs), cp, iid) =
-  r_f (((b + a:dops, Add:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0xA0-} (a:b:dops, aops, Add:bops, ss, reg, cp, iid) =
+  r_f (b + a:dops, Add:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xA1-} (((a:b:dops, aops, Subtract:bops, ss, reg):fs), cp, iid) =
-  r_f (((b - a:dops, Subtract:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0xA1-} (a:b:dops, aops, Subtract:bops, ss, reg, cp, iid) =
+  r_f (b - a:dops, Subtract:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xA2-} (((a:b:dops, aops, Multiply:bops, ss, reg):fs), cp, iid) =
-  r_f (((b * a:dops, Multiply:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0xA2-} (a:b:dops, aops, Multiply:bops, ss, reg, cp, iid) =
+  r_f (b * a:dops, Multiply:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xA3-} (((a:b:dops, aops, Divide:bops, ss, reg):fs), cp, iid) =
-  r_f (((b / a:dops, Divide:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0xA3-} (a:b:dops, aops, Divide:bops, ss, reg, cp, iid) =
+  r_f (b / a:dops, Divide:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xC0-} (((a:dops, aops, IncrementInt:bops, ss, reg):fs), cp, iid) =
-  r_f (((a + 1:dops, IncrementInt:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0xC0-} (a:dops, aops, IncrementInt:bops, ss, reg, cp, iid) =
+  r_f (a + 1:dops, IncrementInt:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xC1-} (((a:dops, aops, DecrementInt:bops, ss, reg):fs), cp, iid) =
-  r_f (((a - 1:dops, DecrementInt:aops, bops, ss, reg):fs), cp, iid)
+r_f {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) =
+  r_f (a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xC2-} (((dops, aops, IncLocalInt regIdx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xC2-} (dops, aops, IncLocalInt regIdx:bops, ss, reg, cp, iid) = do
   maybeReg <- H.lookup reg (fromIntegral regIdx)
   case maybeReg of
     Nothing -> fail$ "register " ++ show regIdx ++ " didn't exist"
     Just r -> H.insert reg (fromIntegral regIdx) (r + 1)
-  r_f (((dops, IncLocalInt regIdx:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dops, IncLocalInt regIdx:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xC3-} (((dops, aops, DecLocalInt regIdx:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xC3-} (dops, aops, DecLocalInt regIdx:bops, ss, reg, cp, iid) = do
   maybeReg <- H.lookup reg (fromIntegral regIdx)
   case maybeReg of
     Nothing -> fail$ "register " ++ show regIdx ++ " didn't exist"
     Just r -> H.insert reg (fromIntegral regIdx) (r - 1)
-  r_f (((dops, DecLocalInt regIdx:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dops, DecLocalInt regIdx:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD0-} (((dops, aops, GetLocal0:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xD0-} (dops, aops, GetLocal0:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal0:bops
   maybeR <- H.lookup reg 0
   case maybeR of
     Nothing -> fail "GetLocal0 - register doesn't exist"
-    Just r -> r_f (((r:dops, GetLocal0:aops, bops, ss, reg):fs), cp, iid)
+    Just r -> r_f (r:dops, GetLocal0:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD1-} (((dops, aops, GetLocal1:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xD1-} (dops, aops, GetLocal1:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal1:bops
   maybeR <- H.lookup reg 1
   case maybeR of
     Nothing -> fail "GetLocal1 - register doesn't exist"
-    Just r -> r_f (((r:dops, GetLocal1:aops, bops, ss, reg):fs), cp, iid)
+    Just r -> r_f (r:dops, GetLocal1:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD2-} (((dops, aops, GetLocal2:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xD2-} (dops, aops, GetLocal2:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal2:bops
   maybeR <- H.lookup reg 2
   case maybeR of
     Nothing -> fail "GetLocal2 - register doesn't exist"
-    Just r -> r_f (((r:dops, GetLocal2:aops, bops, ss, reg):fs), cp, iid)
+    Just r -> r_f (r:dops, GetLocal2:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD3-} (((dops, aops, GetLocal3:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xD3-} (dops, aops, GetLocal3:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal3:bops
   maybeR <- H.lookup reg 3
   case maybeR of
     Nothing -> fail "GetLocal3 - register doesn't exist"
-    Just r -> r_f (((r:dops, GetLocal3:aops, bops, ss, reg):fs), cp, iid)
+    Just r -> r_f (r:dops, GetLocal3:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD4-} (((new:dops, aops, SetLocal0:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xD4-} (new:dops, aops, SetLocal0:bops, ss, reg, cp, iid) = do
   H.insert reg 0 new
-  r_f (((dops, SetLocal0:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dops, SetLocal0:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD5-} (((new:dops, aops, SetLocal1:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xD5-} (new:dops, aops, SetLocal1:bops, ss, reg, cp, iid) = do
   H.insert reg 1 new
-  r_f (((dops, SetLocal1:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dops, SetLocal1:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD6-} (((new:dops, aops, SetLocal2:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) = do
   H.insert reg 2 new
-  r_f (((dops, SetLocal2:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dops, SetLocal2:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD7-} (((new:dops, aops, SetLocal3:bops, ss, reg):fs), cp, iid) = do
+r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) = do
   H.insert reg 3 new
-  r_f (((dops, SetLocal3:aops, bops, ss, reg):fs), cp, iid)
+  r_f (dops, SetLocal3:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xD7-} (((dops, aops, op:bops, ss, reg):fs), cp, iid) = fail$ "didn't match opcode " ++ show op
+r_f {-0xD7-} (dops, aops, op:bops, ss, reg, cp, iid) = fail$ "didn't match opcode " ++ show op
 
   {-(_, ((newsp,newops,_,_):_), _) <- get
   case newsp of
