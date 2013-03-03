@@ -257,15 +257,19 @@ data VmAbc = VmAbc_Int Int32
            | VmAbc_NsInfo Abc.NSInfo
            | VmAbc_NsSet Abc.NSSet
            | VmAbc_Multiname Abc.Multiname
-           | VmAbc_MethodSig MethodSignature {- Maybe MethodBody -}
+           | VmAbc_MethodSig Abc.MethodSignature {- Maybe MethodBody -}
            | VmAbc_Metadata Abc.Metadata
            | VmAbc_Instance Abc.InstanceInfo
            | VmAbc_Class Abc.ClassInfo
            | VmAbc_Script Abc.ScriptInfo
-           -- | VmAbc_MethodBody Abc.MethodBody
+           | VmAbc_MethodBody MethodBody
            deriving (Show)
 
-data MethodSignature = MethodSignature {
+{-
+diff Abc.MethodSignature MethodSignature
+  + maybeMethodBody
+-}
+{-data MethodSignature = MethodSignature {
                                          msReturnType :: Abc.MultinameIdx
                                        , msParamTypes :: [Abc.MultinameIdx]
                                        , msMethodName :: Abc.StringIdx -- debug
@@ -274,8 +278,13 @@ data MethodSignature = MethodSignature {
                                        , msParamNames :: Maybe [Abc.StringIdx] -- debug
                                        , maybeMethodBody :: Maybe MethodBody
                                        }
-                                       deriving (Show)
+                                       deriving (Show)-}
 
+{-
+TODO need to keep mbMethod until new MethodSignature comes online
+diff Abc.MethodBody MethodBody
+  - mbMethod
+-}
 data MethodBody = MethodBody {
                                mbMethod :: Abc.MethodSignatureIdx
                              , mbMaxStack :: Abc.U30
@@ -596,18 +605,18 @@ toBytes {- 0x2F -} (PushDouble u30 _) = 1 + u30Bytes u30
 toBytes {- 0x30 -} (PushScope) = 1
 toBytes {- 0x31 -} (PushNamespace u30) = 1 + u30Bytes u30
 toBytes {- 0x32 -} (HasNext2 w32 w32_2) = 1 + 4 + 4
-toBytes {- 0x33 -} (PushDecimal    {-NEW: PushDecimal according to FlexSDK, lix8 according to Tamarin-}) = 1
-toBytes {- 0x34 -} (PushDNaN       {-NEW: PushDNaN according to Flex SDK, lix16 according to Tamarin-}) = 1
---toBytes   {- 0x35 -} {-GetByte-}   {- Alchemy -}
---toBytes   {- 0x36 -} {-GetShort-}  {- Alchemy -}
---toBytes   {- 0x37 -} {-GetInt-}    {- Alchemy -}
---toBytes   {- 0x38 -} {-GetFloat-}  {- Alchemy -}
---toBytes   {- 0x39 -} {-GetDouble-} {- Alchemy -}
---toBytes   {- 0x3A -} {-SetByte-}   {- Alchemy -}
---toBytes   {- 0x3B -} {-SetShort-}  {- Alchemy -}
---toBytes   {- 0x3C -} {-SetInt-}    {- Alchemy -}
---toBytes   {- 0x3D -} {-SetFloat-}  {- Alchemy -}
---toBytes   {- 0x3E -} {-SetDouble-} {- Alchemy -}
+toBytes {- 0x33 -} (PushDecimal) = 1
+toBytes {- 0x34 -} (PushDNaN) = 1
+--toBytes   {- 0x35 -} {-GetByte-}
+--toBytes   {- 0x36 -} {-GetShort-}
+--toBytes   {- 0x37 -} {-GetInt-}
+--toBytes   {- 0x38 -} {-GetFloat-}
+--toBytes   {- 0x39 -} {-GetDouble-}
+--toBytes   {- 0x3A -} {-SetByte-}
+--toBytes   {- 0x3B -} {-SetShort-}
+--toBytes   {- 0x3C -} {-SetInt-}
+--toBytes   {- 0x3D -} {-SetFloat-}
+--toBytes   {- 0x3E -} {-SetDouble-}
 --toBytes   {- 0x3F -}
 toBytes {- 0x40 -} (NewFunction u30) = 1 + u30Bytes u30
 toBytes {- 0x41 -} (Call u30) = 1 + u30Bytes u30
@@ -620,14 +629,14 @@ toBytes {- 0x47 -} (ReturnVoid) = 1
 toBytes {- 0x48 -} (ReturnValue) = 1
 toBytes {- 0x49 -} (ConstructSuper u30) = 1 + u30Bytes u30
 toBytes {- 0x4A -} (ConstructProp u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
-toBytes {- 0x4B -} (CallSuperId    {-NOT HANDLED-}) = 1
+toBytes {- 0x4B -} (CallSuperId) = 1
 toBytes {- 0x4C -} (CallPropLex u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
-toBytes {- 0x4D -} (CallInterface  {-NOT HANDLED-}) = 1
+toBytes {- 0x4D -} (CallInterface) = 1
 toBytes {- 0x4E -} (CallSuperVoid u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
 toBytes {- 0x4F -} (CallPropVoid u30_1 u30_2 _) = 1 + u30Bytes u30_1 + u30Bytes u30_2
---toBytes   {- 0x50 -} {-Sign1-}  {- Alchemy -}
---toBytes   {- 0x51 -} {-Sign8-}  {- Alchemy -}
---toBytes   {- 0x52 -} {-Sign16-} {- Alchemy -}
+--toBytes   {- 0x50 -} {-Sign1-}
+--toBytes   {- 0x51 -} {-Sign8-}
+--toBytes   {- 0x52 -} {-Sign16-}
 toBytes {- 0x53 -} (ApplyType) = 1
 toBytes {- 0x55 -} (NewObject u30) = 1 + u30Bytes u30
 toBytes {- 0x56 -} (NewArray u30) = 1 + u30Bytes u30
@@ -635,11 +644,11 @@ toBytes {- 0x57 -} (NewActivation) = 1
 toBytes {- 0x58 -} (NewClass u30) = 1 + u30Bytes u30
 toBytes {- 0x59 -} (GetDescendants u30 _) = 1 + u30Bytes u30
 toBytes {- 0x5A -} (NewCatch u30) = 1 + u30Bytes u30
-toBytes {- 0x5B -} (FindPropGlobalStrict   {-NEW from Tamarin (internal)-}) = 1
-toBytes {- 0x5C -} (FindPropGlobal         {-NEW from Tamarin (internal)-}) = 1
+toBytes {- 0x5B -} (FindPropGlobalStrict) = 1
+toBytes {- 0x5C -} (FindPropGlobal) = 1
 toBytes {- 0x5D -} (FindPropStrict u30 _) = 1 + u30Bytes u30
 toBytes {- 0x5E -} (FindProperty u30 _) = 1 + u30Bytes u30
-toBytes {- 0x5F -} (FindDef        {-NOT HANDLED-}) = 1
+toBytes {- 0x5F -} (FindDef) = 1
 --toBytes   {- 0x60 -} {-GetLex-}
 toBytes {- 0x61 -} (SetProperty u30 _) = 1 + u30Bytes u30
 toBytes {- 0x62 -} (GetLocal u30) = 1 + u30Bytes u30

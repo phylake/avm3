@@ -490,7 +490,7 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x32 -} HasNext2 Word32 Word32
             | {- 0x33 -} PushDecimal    {-NEW: PushDecimal according to FlexSDK, lix8 according to Tamarin-}
             | {- 0x34 -} PushDNaN       {-NEW: PushDNaN according to Flex SDK, lix16 according to Tamarin-}
-              {- 0x35 -} {-GetByte-}   {- Alchemy -}    
+              {- 0x35 -} {-GetByte-}   {- Alchemy -}
               {- 0x36 -} {-GetShort-}  {- Alchemy -}
               {- 0x37 -} {-GetInt-}    {- Alchemy -}
               {- 0x38 -} {-GetFloat-}  {- Alchemy -}
