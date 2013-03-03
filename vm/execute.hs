@@ -135,7 +135,6 @@ neg_jump s24 t@(aop:aops, bops)
   | s24 > 0 = neg_jump (s24 - (fromIntegral$ toBytes aop)) (aops, aop:bops)
   | otherwise = t
 
-
 {-
   Since interrupts wait for the stack to wind down I don't have to handle them
   explicitly in run_function
@@ -150,20 +149,6 @@ REMEMBER the stack order here is the REVERSE of the docs
   top, mid, bottom => newvalue
 -}
 
-{-
- dops (top:bottoms)
- aops (bottom:tops)
- bops (top:bottoms)
-
- D1, D2 dops
- O2, O1 aops
- O3, O4 bops
--}
-
-        {-p$ "run_function"
-        p$ (unlines$ map (\s -> "\t" ++ show s) aboveSp)
-          ++ "\t--------------------" ++ show sp ++ "\n"
-          ++ (unlines$ map (\s -> "\t" ++ show s) belowSp)-}
 r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, InstanceId)
 r_f {-0x08-} (dops, aops, Kill regIdx:bops, ss, reg, cp, iid) = do
   --po dops aops$ Kill regIdx:bops
@@ -402,7 +387,7 @@ r_f {-0x60-} (dops, aops, GetLex idx:bops, ss, reg, cp, iid) = fail "GetLex shou
 
 r_f {-0x61-} (value:dops, aops, SetProperty idx:bops, ss, reg, cp, iid) = do
   multiname <- get_multiname cp idx
-  (VmRt_String prop, (VmRt_Object this iidThis):dopsNew, replace) <- case multiname of
+  (VmRt_String prop, (VmRt_Object this iidThis):dopsNew, rewrite) <- case multiname of
     Multiname_QName _ stringIdx -> do
       str <- get_string cp stringIdx
       return (VmRt_String str, dops, True)
@@ -411,7 +396,7 @@ r_f {-0x61-} (value:dops, aops, SetProperty idx:bops, ss, reg, cp, iid) = do
       return (VmRt_String str, dops, True)
     otherwise -> return (head dops, tail dops, False)
   insert this (Ext prop) value
-  if replace
+  if rewrite
     then r_f (dopsNew, SetProperty_ idx prop:aops, bops, ss, reg, cp, iid)
     else r_f (dopsNew, SetProperty idx:aops, bops, ss, reg, cp, iid)
 
@@ -439,7 +424,7 @@ r_f {-0x66-} (dops, aops, GetProperty idx:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetProperty idx:bops
   multiname <- get_multiname cp idx
   p$ show multiname
-  (prop, vmrt:dopsNew, replace) <- case multiname of
+  (prop, vmrt:dopsNew, rewrite) <- case multiname of
     Multiname_QName _ stringIdx -> do
       str <- get_string cp stringIdx
       return (VmRt_String str, dops, True)
@@ -470,7 +455,7 @@ r_f {-0x66-} (dops, aops, GetProperty idx:bops, ss, reg, cp, iid) = do
       otherwise -> fail "GetProperty - VmRt_Object - only strings"
     --VmRt_Closure f
   
-  if replace
+  if rewrite
     then do
       let (VmRt_String prop2) = prop
       r_f (d:dopsNew, GetProperty_ idx prop2:aops, bops, ss, reg, cp, iid)
@@ -620,11 +605,6 @@ r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) = do
 
 r_f {-0xD7-} (dops, aops, op:bops, ss, reg, cp, iid) = fail$ "didn't match opcode " ++ show op
 
-  {-(_, ((newsp, newops, _, _):_), _) <- get
-  case newsp of
-    -1 -> let (D ret:_) = newops in return ret
-    otherwise -> r_f-}
-
 convert_string :: VmRt -> VmRt
 convert_string = VmRt_String . BC.pack . to_string
 
@@ -707,15 +687,3 @@ find_property cp idx ss = do
 
 {-get_scoped_object :: ScopeStack -> U8 -> AVM3 Ops
 get_scoped_object ss idx = undefined-}
-
-init_property :: ConstantPool -> VmObject -> MultinameIdx -> VmRt -> AVM3 ()
-init_property cp this idx value = do
-  Multiname_QName nSInfoIdx stringIdx <- get_multiname cp idx
-  name <- liftM2 B.append (resolve_nsinfo cp nSInfoIdx) (get_string cp stringIdx)
-  p$ "InitProperty [" ++ show idx ++ " " ++ BC.unpack name ++ "]"
-  maybeProp <- H.lookup this (Ext name)
-  case maybeProp of
-    Nothing -> do
-      insert this (Ext name) value
-      return ()
-    otherwise -> fail$ "init_property - property [" ++ BC.unpack name ++ "] exists"
