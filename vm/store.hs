@@ -85,7 +85,6 @@ build_cp (Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs 
   -- reverse lookup: get_methodBody expects a method signature index since a
   -- method body index doesn't exist
   mapM_ (\(idx, a) -> put_methodBody cp idx a) $ zip (map Abc.mbMethod methodBodies) methodBodiesNew
-  --mapM_ (putStrLn . show) methodBodiesNew
   return cp
   where
     byteStrings = xform_strings strings
@@ -129,24 +128,36 @@ maybeMultiname :: (Abc.U30 -> B.ByteString) -- string resolution
                -> (Abc.U30 -> B.ByteString) -- nsinfo resolution
                -> Abc.Multiname
                -> Maybe B.ByteString
-maybeMultiname string_res nsinfo_res (Abc.Multiname_QName a b)
+maybeMultiname string_res nsinfo_res (Abc.Multiname_QName ns str)
   | B.null nsinfo = Just string
   | otherwise = Just$ B.append nsinfo$ B.append colons string
   where
-    nsinfo = nsinfo_res a
-    string = string_res b
+    nsinfo = nsinfo_res ns
+    string = string_res str
     colons = BC.pack "::"
-maybeMultiname string_res nsinfo_res (Abc.Multiname_QNameA a b)
+maybeMultiname string_res nsinfo_res (Abc.Multiname_QNameA ns str)
   | B.null nsinfo = Just string
   | otherwise = Just$ B.append nsinfo$ B.append colons string
   where
-    nsinfo = nsinfo_res a
-    string = string_res b
+    nsinfo = nsinfo_res ns
+    string = string_res str
+    colons = BC.pack "::"
+maybeMultiname string_res nsinfo_res (Abc.Multiname_Multiname str ns)
+  | B.null nsinfo = Just string
+  | otherwise = Just$ B.append nsinfo$ B.append colons string
+  where
+    nsinfo = nsinfo_res ns
+    string = string_res str
+    colons = BC.pack "::"
+maybeMultiname string_res nsinfo_res (Abc.Multiname_MultinameA str ns)
+  | B.null nsinfo = Just string
+  | otherwise = Just$ B.append nsinfo$ B.append colons string
+  where
+    nsinfo = nsinfo_res ns
+    string = string_res str
     colons = BC.pack "::"
 maybeMultiname _ _ (Abc.Multiname_RTQName a) = Nothing
 maybeMultiname _ _ (Abc.Multiname_RTQNameA a) = Nothing
-maybeMultiname _ _ (Abc.Multiname_Multiname a b) = Nothing
-maybeMultiname _ _ (Abc.Multiname_MultinameA a b) = Nothing
 maybeMultiname _ _ (Abc.Multiname_MultinameL a) = Nothing
 maybeMultiname _ _ (Abc.Multiname_MultinameLA a) = Nothing
 maybeMultiname _ _ Abc.Multiname_Any = Nothing
