@@ -16,6 +16,7 @@ module Vm.Store (
 ) where
 
 import           Control.Applicative ((<$>))
+import           Control.DeepSeq
 import           Data.Bits
 import           Data.Int
 import           Data.Word
@@ -197,10 +198,10 @@ xform_methodBodies :: (Abc.IntIdx -> Abc.S32)                  -- int resolution
                    -> (Abc.MultinameIdx -> Maybe B.ByteString) -- multiname resolution
                    -> [Abc.MethodBody]
                    -> [MethodBody]
-xform_methodBodies i u d s m = map f where
-  f (Abc.MethodBody ma mb mc md me code mf mg) = MethodBody ma mb mc md me newCode mf mg
+xform_methodBodies fi fu fd fs fm = map f where
+  f (Abc.MethodBody a b c d e code f g)= newCode `deepseq` MethodBody a b c d e newCode f g
     where
-      newCode = concatMap (xform_opCode i u d s m) code
+      newCode = concatMap (xform_opCode fi fu fd fs fm) code
 
 xform_opCode :: (Abc.IntIdx -> Abc.S32)                  -- int resolution
              -> (Abc.UintIdx -> Abc.U32)                 -- uint resolution
@@ -288,12 +289,16 @@ xform_opCode {- 0x5D -} i u d s m (Abc.FindPropStrict u30) = [FindPropStrict u30
 xform_opCode {- 0x5E -} i u d s m (Abc.FindProperty u30) = [FindProperty u30 $ m u30]
 xform_opCode {- 0x5F -} i u d s m (Abc.FindDef) = [FindDef]
 xform_opCode {- 0x60 -} i u d s m (Abc.GetLex idx) = [FindPropStrict idx$ m idx, GetProperty idx$ m idx]
-xform_opCode {- 0x61 -} i u d s m (Abc.SetProperty u30) = [SetProperty u30 $ m u30]
+xform_opCode {- 0x61 -} i u d s m (Abc.SetProperty u30) = case m u30 of
+                                                            Nothing -> [SetProperty u30 Nothing]
+                                                            Just name -> [SetProperty_ u30 name]
 xform_opCode {- 0x62 -} i u d s m (Abc.GetLocal u30) = [GetLocal u30]
 xform_opCode {- 0x63 -} i u d s m (Abc.SetLocal u30) = [SetLocal u30]
 xform_opCode {- 0x64 -} i u d s m (Abc.GetGlobalScope) = [GetGlobalScope]
 xform_opCode {- 0x65 -} i u d s m (Abc.GetScopeObject u8) = [GetScopeObject u8]
-xform_opCode {- 0x66 -} i u d s m (Abc.GetProperty u30) = [GetProperty u30 $ m u30]
+xform_opCode {- 0x66 -} i u d s m (Abc.GetProperty u30) = case m u30 of
+                                                            Nothing -> [GetProperty u30 Nothing]
+                                                            Just name -> [GetProperty_ u30 name]
 xform_opCode {- 0x67 -} i u d s m (Abc.GetPropertyLate) = [GetPropertyLate]
 xform_opCode {- 0x68 -} i u d s m (Abc.InitProperty u30) = [InitProperty u30 $ m u30]
 xform_opCode {- 0x69 -} i u d s m (Abc.SetPropertyLate) = [SetPropertyLate]
