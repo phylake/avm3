@@ -85,6 +85,7 @@ build_cp (Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs 
   -- reverse lookup: get_methodBody expects a method signature index since a
   -- method body index doesn't exist
   mapM_ (\(idx, a) -> put_methodBody cp idx a) $ zip (map Abc.mbMethod methodBodies) methodBodiesNew
+  --mapM_ (putStrLn . show) methodBodiesNew
   return cp
   where
     byteStrings = xform_strings strings
@@ -94,7 +95,7 @@ build_cp (Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs 
       uint_res
       double_res
       string_res
-      (\idx -> maybeMultiname_res string_res nsinfo_res$ multinames !! fromIntegral idx)
+      multiname_res
       methodBodies
 
     int_res :: Abc.U30 -> Abc.S32
@@ -106,8 +107,8 @@ build_cp (Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs 
     double_res :: Abc.U30 -> Double
     double_res i = doubles !! fromIntegral i
 
-    multiname_res :: Abc.U30 -> B.ByteString
-    multiname_res i = multiname string_res nsinfo_res $ multinames !! fromIntegral i
+    multiname_res :: Abc.U30 -> Maybe B.ByteString
+    multiname_res i = maybeMultiname string_res nsinfo_res $ multinames !! fromIntegral i
 
     string_res :: Abc.U30 -> B.ByteString
     string_res i = BC.pack$ strings !! fromIntegral i
@@ -124,57 +125,31 @@ build_cp (Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs 
     {-vmMethodBodies :: [MethodBody]
     vmMethodBodies = undefined-}
 
-maybeMultiname_res :: (Abc.U30 -> B.ByteString) -- string resolution
-                   -> (Abc.U30 -> B.ByteString) -- nsinfo resolution
-                   -> Abc.Multiname
-                   -> Maybe B.ByteString
-maybeMultiname_res string_res nsinfo_res (Abc.Multiname_QName a b)
+maybeMultiname :: (Abc.U30 -> B.ByteString) -- string resolution
+               -> (Abc.U30 -> B.ByteString) -- nsinfo resolution
+               -> Abc.Multiname
+               -> Maybe B.ByteString
+maybeMultiname string_res nsinfo_res (Abc.Multiname_QName a b)
   | B.null nsinfo = Just string
   | otherwise = Just$ B.append nsinfo$ B.append colons string
   where
     nsinfo = nsinfo_res a
     string = string_res b
     colons = BC.pack "::"
-maybeMultiname_res string_res nsinfo_res (Abc.Multiname_QNameA a b)
+maybeMultiname string_res nsinfo_res (Abc.Multiname_QNameA a b)
   | B.null nsinfo = Just string
   | otherwise = Just$ B.append nsinfo$ B.append colons string
   where
     nsinfo = nsinfo_res a
     string = string_res b
     colons = BC.pack "::"
-maybeMultiname_res _ _ (Abc.Multiname_RTQName a) = Nothing
-maybeMultiname_res _ _ (Abc.Multiname_RTQNameA a) = Nothing
-maybeMultiname_res _ _ (Abc.Multiname_Multiname a b) = Nothing
-maybeMultiname_res _ _ (Abc.Multiname_MultinameA a b) = Nothing
-maybeMultiname_res _ _ (Abc.Multiname_MultinameL a) = Nothing
-maybeMultiname_res _ _ (Abc.Multiname_MultinameLA a) = Nothing
-maybeMultiname_res _ _ Abc.Multiname_Any = Nothing
-
-multiname :: (Abc.U30 -> B.ByteString) -- string resolution
-          -> (Abc.U30 -> B.ByteString) -- nsinfo resolution
-          -> Abc.Multiname
-          -> B.ByteString
-multiname string_res nsinfo_res (Abc.Multiname_QName a b)
-  | B.null nsinfo = string
-  | otherwise = B.append nsinfo$ B.append colons string
-  where
-    nsinfo = nsinfo_res a
-    string = string_res b
-    colons = BC.pack "::"
-multiname string_res nsinfo_res (Abc.Multiname_QNameA a b)
-  | B.null nsinfo = string
-  | otherwise = B.append nsinfo$ B.append colons string
-  where
-    nsinfo = nsinfo_res a
-    string = string_res b
-    colons = BC.pack "::"
-multiname string_res nsinfo_res m@(Abc.Multiname_RTQName a) = BC.pack$ show m
-multiname string_res nsinfo_res m@(Abc.Multiname_RTQNameA a) = BC.pack$ show m
-multiname string_res nsinfo_res m@(Abc.Multiname_Multiname a b) = BC.pack$ show m
-multiname string_res nsinfo_res m@(Abc.Multiname_MultinameA a b) = BC.pack$ show m
-multiname string_res nsinfo_res m@(Abc.Multiname_MultinameL a) = BC.pack$ show m
-multiname string_res nsinfo_res m@(Abc.Multiname_MultinameLA a) = BC.pack$ show m
-multiname string_res nsinfo_res Abc.Multiname_Any = BC.pack "*"
+maybeMultiname _ _ (Abc.Multiname_RTQName a) = Nothing
+maybeMultiname _ _ (Abc.Multiname_RTQNameA a) = Nothing
+maybeMultiname _ _ (Abc.Multiname_Multiname a b) = Nothing
+maybeMultiname _ _ (Abc.Multiname_MultinameA a b) = Nothing
+maybeMultiname _ _ (Abc.Multiname_MultinameL a) = Nothing
+maybeMultiname _ _ (Abc.Multiname_MultinameLA a) = Nothing
+maybeMultiname _ _ Abc.Multiname_Any = Nothing
 
 nsinfo_raw :: (Abc.U30 -> B.ByteString) -- string resolution
            -> Abc.NSInfo
@@ -289,16 +264,12 @@ xform_opCode {- 0x5D -} i u d s m (Abc.FindPropStrict u30) = [FindPropStrict u30
 xform_opCode {- 0x5E -} i u d s m (Abc.FindProperty u30) = [FindProperty u30 $ m u30]
 xform_opCode {- 0x5F -} i u d s m (Abc.FindDef) = [FindDef]
 xform_opCode {- 0x60 -} i u d s m (Abc.GetLex idx) = [FindPropStrict idx$ m idx, GetProperty idx$ m idx]
-xform_opCode {- 0x61 -} i u d s m (Abc.SetProperty u30) = case m u30 of
-                                                            Nothing -> [SetProperty u30 Nothing]
-                                                            Just name -> [SetProperty_ u30 name]
+xform_opCode {- 0x61 -} i u d s m (Abc.SetProperty u30) = [SetProperty u30 $ m u30]
 xform_opCode {- 0x62 -} i u d s m (Abc.GetLocal u30) = [GetLocal u30]
 xform_opCode {- 0x63 -} i u d s m (Abc.SetLocal u30) = [SetLocal u30]
 xform_opCode {- 0x64 -} i u d s m (Abc.GetGlobalScope) = [GetGlobalScope]
 xform_opCode {- 0x65 -} i u d s m (Abc.GetScopeObject u8) = [GetScopeObject u8]
-xform_opCode {- 0x66 -} i u d s m (Abc.GetProperty u30) = case m u30 of
-                                                            Nothing -> [GetProperty u30 Nothing]
-                                                            Just name -> [GetProperty_ u30 name]
+xform_opCode {- 0x66 -} i u d s m (Abc.GetProperty u30) = [GetProperty u30 $ m u30]
 xform_opCode {- 0x67 -} i u d s m (Abc.GetPropertyLate) = [GetPropertyLate]
 xform_opCode {- 0x68 -} i u d s m (Abc.InitProperty u30) = [InitProperty u30 $ m u30]
 xform_opCode {- 0x69 -} i u d s m (Abc.SetPropertyLate) = [SetPropertyLate]

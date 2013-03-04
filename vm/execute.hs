@@ -419,10 +419,6 @@ r_f {-0x61-} (value:VmRt_Object this _:dops, aops, SetProperty idx (Just prop):b
   insert this (Ext prop) value
   r_f (dops, SetProperty idx (Just prop):aops, bops, ss, reg, cp, iid)
 
-r_f {-0x61-} (value:VmRt_Object this _:dops, aops, SetProperty_ idx prop:bops, ss, reg, cp, iid) = do
-  insert this (Ext prop) value
-  r_f (dops, SetProperty_ idx prop:aops, bops, ss, reg, cp, iid)
-
 r_f {-0x62-} (dops, aops, GetLocal u30:bops, ss, reg, cp, iid) = do
   maybeR <- H.lookup reg $ fromIntegral u30
   case maybeR of
@@ -496,28 +492,6 @@ r_f {-0x66-} (vmrt:dops, aops, GetProperty idx (Just prop):bops, ss, reg, cp, ii
         Nothing -> return VmRt_Undefined
 
   r_f (d:dops, GetProperty idx (Just prop):aops, bops, ss, reg, cp, iid)
-
-r_f {-0x66-} (vmrt:dops, aops, GetProperty_ idx prop:bops, ss, reg, cp, iid) = do
-  --po dops aops$ GetProperty_ idx (Just prop):bops
-
-  d <- case vmrt of
-    VmRt_Undefined -> return VmRt_Undefined
-    VmRt_Null -> return VmRt_Undefined
-    VmRt_Boolean bool -> return VmRt_Undefined
-    VmRt_Int v -> return VmRt_Undefined
-    VmRt_Uint v -> return VmRt_Undefined
-    VmRt_Number v -> return VmRt_Undefined
-    VmRt_String v -> return VmRt_Undefined
-    VmRt_Array v _ -> case prop of
-      p_length -> return . VmRt_Int . fromIntegral$ length v
-      otherwise -> fail$ "GetProperty_ - VmRt_Array - can't get property " ++ BC.unpack prop
-    VmRt_Object this _ -> do
-      maybeProp <- H.lookup this$ Ext prop
-      case maybeProp of
-        Just prop -> return prop
-        Nothing -> return VmRt_Undefined
-
-  r_f (d:dops, GetProperty_ idx prop:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x68-} (value:VmRt_Object this iidThis:dops, aops, InitProperty idx maybeName:bops, ss, reg, cp, iid) = do
   --po (value:VmRt_Object this iidThis:dops) aops (InitProperty idx maybeName:bops)
