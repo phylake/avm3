@@ -416,7 +416,7 @@ r_f {-0x61-} (value:dops, aops, SetProperty idx Nothing:bops, ss, reg, cp, iid) 
   r_f (dopsNew, SetProperty idx Nothing:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x61-} (value:VmRt_Object this _:dops, aops, SetProperty idx (Just prop):bops, ss, reg, cp, iid) = do
-  insert this (Ext prop) value
+  {-# SCC "SetProperty_idx_Just" #-} insert this (Ext prop) value
   r_f (dops, SetProperty idx (Just prop):aops, bops, ss, reg, cp, iid)
 
 r_f {-0x62-} (dops, aops, GetLocal u30:bops, ss, reg, cp, iid) = do
@@ -474,7 +474,7 @@ r_f {-0x66-} (dops, aops, GetProperty idx Nothing:bops, ss, reg, cp, iid) = do
 r_f {-0x66-} (vmrt:dops, aops, GetProperty idx (Just prop):bops, ss, reg, cp, iid) = do
   --po dops aops$ GetProperty idx (Just prop):bops
 
-  d <- case vmrt of
+  d <- {-# SCC "GetProperty_idx_Just" #-} case vmrt of
     VmRt_Undefined -> return VmRt_Undefined
     VmRt_Null -> return VmRt_Undefined
     VmRt_Boolean bool -> return VmRt_Undefined
