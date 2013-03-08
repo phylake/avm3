@@ -8,22 +8,22 @@ import           Vm.Store
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
-resolve_nsinfo :: ConstantPool -> MultinameIdx -> IO B.ByteString
-resolve_nsinfo cp idx = do
-  nsinfo <- get_nsInfo cp idx
-  case nsinfo of
-    NSInfo_Namespace stringIdx -> get_string cp stringIdx
-    NSInfo_PackageNamespace stringIdx -> get_string cp stringIdx
-    NSInfo_PackageInternalNs stringIdx -> get_string cp stringIdx
-    NSInfo_ProtectedNamespace stringIdx -> get_string cp stringIdx
-    NSInfo_ExplicitNamespace stringIdx -> get_string cp stringIdx
-    NSInfo_StaticProtectedNs stringIdx -> get_string cp stringIdx
-    NSInfo_PrivateNs stringIdx -> get_string cp stringIdx
-    NSInfo_Any -> return$ BC.pack "*"
+resolve_nsinfo :: ConstantPool -> MultinameIdx -> B.ByteString
+resolve_nsinfo cp idx = case nsinfo of
+  NSInfo_Namespace stringIdx -> get_string cp stringIdx
+  NSInfo_PackageNamespace stringIdx -> get_string cp stringIdx
+  NSInfo_PackageInternalNs stringIdx -> get_string cp stringIdx
+  NSInfo_ProtectedNamespace stringIdx -> get_string cp stringIdx
+  NSInfo_ExplicitNamespace stringIdx -> get_string cp stringIdx
+  NSInfo_StaticProtectedNs stringIdx -> get_string cp stringIdx
+  NSInfo_PrivateNs stringIdx -> get_string cp stringIdx
+  NSInfo_Any -> BC.pack "*"
+  where
+    nsinfo = get_nsInfo cp idx
 
 -- finding a need to handle this logic in execute.hs
 -- so not exporting for now
-resolve_multiname :: ConstantPool -> MultinameIdx -> IO B.ByteString
+{-resolve_multiname :: ConstantPool -> MultinameIdx -> B.ByteString
 resolve_multiname cp idx = do
   --putStrLn "resolve_multiname"
   multiname <- get_multiname cp idx
@@ -45,4 +45,4 @@ resolve_multiname cp idx = do
     Multiname_MultinameA stringIdx nSSetIdx -> fail "unsupported lookup: Multiname_MultinameA"
     Multiname_MultinameL nSSetIdx -> fail "unsupported lookup: Multiname_MultinameL"
     Multiname_MultinameLA nSSetIdx -> fail "unsupported lookup: Multiname_MultinameLA"
-    Multiname_Any -> fail "unsupported lookup: Multiname_Any"
+    Multiname_Any -> fail "unsupported lookup: Multiname_Any"-}

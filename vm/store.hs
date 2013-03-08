@@ -26,7 +26,7 @@ import           Vm.Def
 import qualified Abc.Def as Abc
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
-import qualified Data.HashTable.IO as H
+import qualified Data.Map as Map
 
 key_int :: B.ByteString
 key_int = BC.pack "_int"
@@ -67,29 +67,45 @@ key_script = BC.pack "_script"
 key_methodBody :: B.ByteString
 key_methodBody = BC.pack "_methodBody"
 
-build_cp :: Abc.Abc -> IO ConstantPool
-build_cp (Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs metadata instances classes scripts methodBodies) = do
-  cp <- H.new
-  mapM_ (\(idx, a) -> put_int cp idx a) $ zip (map fromIntegral [0..length ints]) ints
-  mapM_ (\(idx, a) -> put_uint cp idx a) $ zip (map fromIntegral [0..length uints]) uints
-  mapM_ (\(idx, a) -> put_double cp idx a) $ zip (map fromIntegral [0..length doubles]) doubles
-  mapM_ (\(idx, a) -> put_string cp idx a) $ zip (map fromIntegral [0..length strings]) byteStrings
-  mapM_ (\(idx, a) -> put_nsInfo cp idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
-  mapM_ (\(idx, a) -> put_nsSet cp idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
-  mapM_ (\(idx, a) -> put_multiname cp idx a) $ zip (map fromIntegral [0..length multinames]) multinames
-  mapM_ (\(idx, a) -> put_methodSig cp idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
-  mapM_ (\(idx, a) -> put_metadata cp idx a) $ zip (map fromIntegral [0..length metadata]) metadata
-  mapM_ (\(idx, a) -> put_instance cp idx a) $ zip (map fromIntegral [0..length instances]) instances
-  mapM_ (\(idx, a) -> put_class cp idx a) $ zip (map fromIntegral [0..length classes]) classes
-  mapM_ (\(idx, a) -> put_script cp idx a) $ zip (map fromIntegral [0..length scripts]) scripts
-  -- reverse lookup: get_methodBody expects a method signature index since a
-  -- method body index doesn't exist
-  mapM_ (\(idx, a) -> put_methodBody cp idx a) $ zip (map Abc.mbMethod methodBodies) methodBodiesNew
-  return cp
+build_cp :: Abc.Abc -> ConstantPool
+build_cp (Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs metadata instances classes scripts methodBodies) =
+  Map.fromList allAbcs
   where
-    byteStrings = xform_strings strings
-    methodBodiesNew :: [MethodBody]
-    methodBodiesNew = xform_methodBodies
+    allAbcs = intsNew
+      ++ uintsNew
+      ++ doublesNew
+      ++ stringsNew
+      ++ nsInfoNew
+      ++ nsSetNew
+      ++ multinamesNew
+      ++ methodSigsNew
+      ++ metadataNew
+      ++ instancesNew
+      ++ classesNew
+      ++ scriptsNew
+      ++ methodBodiesNew
+    
+    intsNew =         map (\(k, v) -> (B.cons k key_int, VmAbc_Int v)) $ zip (map fromIntegral [0..length ints]) ints
+    uintsNew =        map (\(k, v) -> (B.cons k key_uint, VmAbc_Uint v)) $ zip (map fromIntegral [0..length uints]) uints
+    doublesNew =      map (\(k, v) -> (B.cons k key_double, VmAbc_Double v)) $ zip (map fromIntegral [0..length doubles]) doubles
+    stringsNew =      map (\(k, v) -> (B.cons k key_string, VmAbc_String v)) $ zip (map fromIntegral [0..length strings]) xStrings
+    nsInfoNew =       map (\(k, v) -> (B.cons k key_nsInfo, VmAbc_NsInfo v)) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
+    nsSetNew =        map (\(k, v) -> (B.cons k key_nsSet, VmAbc_NsSet v)) $ zip (map fromIntegral [0..length nsSet]) nsSet
+    multinamesNew =   map (\(k, v) -> (B.cons k key_multiname, VmAbc_Multiname v)) $ zip (map fromIntegral [0..length multinames]) multinames
+    methodSigsNew =   map (\(k, v) -> (B.cons k key_methodSig, VmAbc_MethodSig v)) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
+    metadataNew =     map (\(k, v) -> (B.cons k key_metadata, VmAbc_Metadata v)) $ zip (map fromIntegral [0..length metadata]) metadata
+    instancesNew =    map (\(k, v) -> (B.cons k key_instance, VmAbc_Instance v)) $ zip (map fromIntegral [0..length instances]) instances
+    classesNew =      map (\(k, v) -> (B.cons k key_class, VmAbc_Class v)) $ zip (map fromIntegral [0..length classes]) classes
+    scriptsNew =      map (\(k, v) -> (B.cons k key_script, VmAbc_Script v)) $ zip (map fromIntegral [0..length scripts]) scripts
+    methodBodiesNew = map (\(k, v) -> (B.cons k key_methodBody, VmAbc_MethodBody v)) $ zip (map (fromIntegral . Abc.mbMethod) methodBodies) xMethodBodies
+    -- reverse lookup: get_methodBody expects a method signature index since a
+    -- method body index doesn't exist
+
+    xStrings :: [B.ByteString]
+    xStrings = xform_strings strings
+    
+    xMethodBodies :: [MethodBody]
+    xMethodBodies = xform_methodBodies
       int_res
       uint_res
       double_res
@@ -361,98 +377,105 @@ xform_opCode {- 0xF0 -} i u d s m (Abc.DebugLine u30) = [DebugLine u30]
 xform_opCode {- 0xF1 -} i u d s m (Abc.DebugFile u30) = [DebugFile u30]
 xform_opCode {- 0xF2 -} i u d s m (Abc.BreakpointLine) = [BreakpointLine]
 
-get_int :: ConstantPool -> Abc.U30 -> IO Abc.S32
-get_int cp u30 = do VmAbc_Int a <- get_ht cp key_int u30;return a
+get_int :: ConstantPool -> Abc.U30 -> Abc.S32
+get_int cp u30 = a where
+  VmAbc_Int a = get_ht cp key_int u30
 
-put_int :: ConstantPool -> Abc.U30 -> Abc.S32 -> IO ()
-put_int cp k v = put_ht cp key_int k $ VmAbc_Int v
+{-put_int :: ConstantPool -> Abc.U30 -> Abc.S32 -> ConstantPool
+put_int cp k v = put_ht cp key_int k $ VmAbc_Int v-}
 
-get_uint :: ConstantPool -> Abc.U30 -> IO Abc.U30
-get_uint cp u30 = do VmAbc_Uint a <- get_ht cp key_uint u30;return a
+get_uint :: ConstantPool -> Abc.U30 -> Abc.U30
+get_uint cp u30 = a where
+  VmAbc_Uint a = get_ht cp key_uint u30
 
-put_uint :: ConstantPool -> Abc.U30 -> Abc.U30 -> IO ()
-put_uint cp k v = put_ht cp key_uint k $ VmAbc_Uint v
+{-put_uint :: ConstantPool -> Abc.U30 -> Abc.U30 -> ConstantPool
+put_uint cp k v = put_ht cp key_uint k $ VmAbc_Uint v-}
 
-get_double :: ConstantPool -> Abc.U30 -> IO Double
-get_double cp u30 = do VmAbc_Double a <- get_ht cp key_double u30;return a
+get_double :: ConstantPool -> Abc.U30 -> Double
+get_double cp u30 = a where
+  VmAbc_Double a = get_ht cp key_double u30
 
-put_double :: ConstantPool -> Abc.U30 -> Double -> IO ()
-put_double cp k v = put_ht cp key_double k $ VmAbc_Double v
+{-put_double :: ConstantPool -> Abc.U30 -> Double -> ConstantPool
+put_double cp k v = put_ht cp key_double k $ VmAbc_Double v-}
 
-get_string :: ConstantPool -> Abc.U30 -> IO B.ByteString
-get_string cp u30 = do VmAbc_String a <- get_ht cp key_string u30;return a
+get_string :: ConstantPool -> Abc.U30 -> B.ByteString
+get_string cp u30 = a where
+  VmAbc_String a = get_ht cp key_string u30
 
-put_string :: ConstantPool -> Abc.U30 -> B.ByteString -> IO ()
-put_string cp k v = put_ht cp key_string k $ VmAbc_String v
+{-put_string :: ConstantPool -> Abc.U30 -> B.ByteString -> ConstantPool
+put_string cp k v = put_ht cp key_string k $ VmAbc_String v-}
 
-get_nsInfo :: ConstantPool -> Abc.U30 -> IO Abc.NSInfo
-get_nsInfo cp u30 = do VmAbc_NsInfo a <- get_ht cp key_nsInfo u30;return a
+get_nsInfo :: ConstantPool -> Abc.U30 -> Abc.NSInfo
+get_nsInfo cp u30 = a where
+  VmAbc_NsInfo a = get_ht cp key_nsInfo u30
 
-put_nsInfo :: ConstantPool -> Abc.U30 -> Abc.NSInfo -> IO ()
-put_nsInfo cp k v = put_ht cp key_nsInfo k $ VmAbc_NsInfo v
+{-put_nsInfo :: ConstantPool -> Abc.U30 -> Abc.NSInfo -> ConstantPool
+put_nsInfo cp k v = put_ht cp key_nsInfo k $ VmAbc_NsInfo v-}
 
-get_nsSet :: ConstantPool -> Abc.U30 -> IO Abc.NSSet
-get_nsSet cp u30 = do VmAbc_NsSet a <- get_ht cp key_nsSet u30;return a
+get_nsSet :: ConstantPool -> Abc.U30 -> Abc.NSSet
+get_nsSet cp u30 = a where
+  VmAbc_NsSet a = get_ht cp key_nsSet u30
 
-put_nsSet :: ConstantPool -> Abc.U30 -> Abc.NSSet -> IO ()
-put_nsSet cp k v = put_ht cp key_nsSet k $ VmAbc_NsSet v
+{-put_nsSet :: ConstantPool -> Abc.U30 -> Abc.NSSet -> ConstantPool
+put_nsSet cp k v = put_ht cp key_nsSet k $ VmAbc_NsSet v-}
 
-get_multiname :: ConstantPool -> Abc.U30 -> IO Abc.Multiname
-get_multiname cp u30 = do VmAbc_Multiname a <- get_ht cp key_multiname u30;return a
+get_multiname :: ConstantPool -> Abc.U30 -> Abc.Multiname
+get_multiname cp u30 = a where
+  VmAbc_Multiname a = get_ht cp key_multiname u30
 
-put_multiname :: ConstantPool -> Abc.U30 -> Abc.Multiname -> IO ()
-put_multiname cp k v = put_ht cp key_multiname k $ VmAbc_Multiname v
+{-put_multiname :: ConstantPool -> Abc.U30 -> Abc.Multiname -> ConstantPool
+put_multiname cp k v = put_ht cp key_multiname k $ VmAbc_Multiname v-}
 
-get_methodSig :: ConstantPool -> Abc.U30 -> IO Abc.MethodSignature
-get_methodSig cp u30 = do VmAbc_MethodSig a <- get_ht cp key_methodSig u30;return a
+get_methodSig :: ConstantPool -> Abc.U30 -> Abc.MethodSignature
+get_methodSig cp u30 = a where
+  VmAbc_MethodSig a = get_ht cp key_methodSig u30
 
-put_methodSig :: ConstantPool -> Abc.U30 -> Abc.MethodSignature -> IO ()
-put_methodSig cp k v = put_ht cp key_methodSig k $ VmAbc_MethodSig v
+{-put_methodSig :: ConstantPool -> Abc.U30 -> Abc.MethodSignature -> ConstantPool
+put_methodSig cp k v = put_ht cp key_methodSig k $ VmAbc_MethodSig v-}
 
-get_metadata :: ConstantPool -> Abc.U30 -> IO Abc.Metadata
-get_metadata cp u30 = do VmAbc_Metadata a <- get_ht cp key_metadata u30;return a
+get_metadata :: ConstantPool -> Abc.U30 -> Abc.Metadata
+get_metadata cp u30 = a where
+  VmAbc_Metadata a = get_ht cp key_metadata u30
 
-put_metadata :: ConstantPool -> Abc.U30 -> Abc.Metadata -> IO ()
-put_metadata cp k v = put_ht cp key_metadata k $ VmAbc_Metadata v
+{-put_metadata :: ConstantPool -> Abc.U30 -> Abc.Metadata -> ConstantPool
+put_metadata cp k v = put_ht cp key_metadata k $ VmAbc_Metadata v-}
 
-get_instance :: ConstantPool -> Abc.U30 -> IO Abc.InstanceInfo
-get_instance cp u30 = do VmAbc_Instance a <- get_ht cp key_instance u30;return a
+get_instance :: ConstantPool -> Abc.U30 -> Abc.InstanceInfo
+get_instance cp u30 = a where
+  VmAbc_Instance a = get_ht cp key_instance u30
 
-put_instance :: ConstantPool -> Abc.U30 -> Abc.InstanceInfo -> IO ()
-put_instance cp k v = put_ht cp key_instance k $ VmAbc_Instance v
+{-put_instance :: ConstantPool -> Abc.U30 -> Abc.InstanceInfo -> ConstantPool
+put_instance cp k v = put_ht cp key_instance k $ VmAbc_Instance v-}
 
-get_class :: ConstantPool -> Abc.U30 -> IO Abc.ClassInfo
-get_class cp u30 = do VmAbc_Class a <- get_ht cp key_class u30;return a
+get_class :: ConstantPool -> Abc.U30 -> Abc.ClassInfo
+get_class cp u30 = a where
+  VmAbc_Class a = get_ht cp key_class u30
 
-put_class :: ConstantPool -> Abc.U30 -> Abc.ClassInfo -> IO ()
-put_class cp k v = put_ht cp key_class k $ VmAbc_Class v
+{-put_class :: ConstantPool -> Abc.U30 -> Abc.ClassInfo -> ConstantPool
+put_class cp k v = put_ht cp key_class k $ VmAbc_Class v-}
 
-get_script :: ConstantPool -> Abc.U30 -> IO Abc.ScriptInfo
-get_script cp u30 = do VmAbc_Script a <- get_ht cp key_script u30;return a
+get_script :: ConstantPool -> Abc.U30 -> Abc.ScriptInfo
+get_script cp u30 = a where
+  VmAbc_Script a = get_ht cp key_script u30
 
-put_script :: ConstantPool -> Abc.U30 -> Abc.ScriptInfo -> IO ()
-put_script cp k v = put_ht cp key_script k $ VmAbc_Script v
+{-put_script :: ConstantPool -> Abc.U30 -> Abc.ScriptInfo -> ConstantPool
+put_script cp k v = put_ht cp key_script k $ VmAbc_Script v-}
 
-get_methodBody :: ConstantPool -> Abc.U30 -> IO MethodBody
-get_methodBody cp u30 = do VmAbc_MethodBody a <- get_ht cp key_methodBody u30;return a
+get_methodBody :: ConstantPool -> Abc.U30 -> MethodBody
+get_methodBody cp u30 = a where
+  VmAbc_MethodBody a = get_ht cp key_methodBody u30
 
-put_methodBody :: ConstantPool -> Abc.U30 -> MethodBody -> IO ()
-put_methodBody cp k v = put_ht cp key_methodBody k $ VmAbc_MethodBody v
+{-put_methodBody :: ConstantPool -> Abc.U30 -> MethodBody -> ConstantPool
+put_methodBody cp k v = put_ht cp key_methodBody k $ VmAbc_MethodBody v-}
 
-get_ht :: ConstantPool -> B.ByteString -> Abc.U30 -> IO VmAbc
-get_ht ht prefix k = do
-  --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
-  m <- H.lookup ht fullKey
-  case m of
-    Nothing -> fail$ "get_ht - " ++ (show k ++ BC.unpack prefix)
-    Just ret -> return ret
+get_ht :: ConstantPool -> B.ByteString -> Abc.U30 -> VmAbc
+get_ht ht prefix k = abc
   where
+    (Just abc) = Map.lookup fullKey ht
     fullKey = foldr B.cons prefix$ u30ToWord8 k
 
-put_ht :: ConstantPool -> B.ByteString -> Abc.U30 -> VmAbc -> IO ()
-put_ht cp prefix k v = do
-  --liftIO.putStrLn$ "prefix " ++ show prefix ++ show k
-  H.insert cp fullKey v
+put_ht :: ConstantPool -> B.ByteString -> Abc.U30 -> VmAbc -> ConstantPool
+put_ht cp prefix k v = Map.insert fullKey v cp
   where
     fullKey = foldr B.cons prefix$ u30ToWord8 k
 

@@ -31,6 +31,7 @@ import qualified Data.Enumerator as E
 import qualified Data.Enumerator.Binary as EB
 import qualified Data.Enumerator.List as EL
 import qualified Data.HashTable.IO as H
+import qualified Data.Map as Map
 
 p :: String -> AVM3 ()
 --p = putStrLn
@@ -64,21 +65,21 @@ returnN = return Nothing
 avm_prefix :: String
 avm_prefix = "avm3internal_"
 
-insert :: VmObject -> VmRtP -> VmRt -> AVM3 ()
-insert h k v = H.insert h k v
+insert :: VmObject -> VmRtP -> VmRt -> VmObject
+insert h k v = Map.insert k v h
 {-# INLINE insert #-}
 
-lookup :: VmObject -> VmRtP -> AVM3 (Maybe VmRt)
-lookup h k = H.lookup h k
+lookup :: VmObject -> VmRtP -> Maybe VmRt
+lookup h k = Map.lookup k h
 {-# INLINE lookup #-}
 
 pfx_class_info_idx :: VmRtP
 pfx_class_info_idx = ClassIdx$ BC.pack$ avm_prefix ++ "class_info_idx"
 
-new_object :: InstanceId -> AVM3 VmRt
-new_object iid = do
-  obj <- H.new
-  return$ VmRt_Object obj$ iid+1
+new_object :: InstanceId -> [VmRt] -> (VmRt, InstanceId)
+new_object iid props = (VmRt_Object (Map.fromList props) iid2, iid2)
+  where
+    iid2 = iid+1
 
 test_file = do
   (abc :: Abc.Abc) <- E.run_ (EB.enumFile "abc/Test.abc" E.$$ parseAbc)
@@ -96,9 +97,7 @@ execute_abc abc = do
   p$ "-------------------------------------------"
   (global, globalid) <- build_global_scope 0
   let ops = [NewClass idx, ReturnVoid]
-  (registers :: Registers) <- H.new
-  H.insert registers 0 $ VmRt_Object global $ globalid+1
-  (vmrt, _) <- r_f ([], [], ops, [(global, globalid)], registers, cp, globalid+2)
+  (vmrt, _) <- r_f ([], [], ops, [(global, globalid)], Map.fromList [(0, VmRt_Object global globalid)], cp, globalid+1)
   p$ "-------------------------------------------"
   t1 <- getCurrentTime
   putStrLn$ show$ diffUTCTime t1 t0
@@ -149,11 +148,12 @@ REMEMBER the stack order here is the REVERSE of the docs
   top, mid, bottom => newvalue
 -}
 
-r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, InstanceId)
+r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, ScopeStack, Registers, InstanceId)
 r_f {-0x08-} (dops, aops, Kill regIdx:bops, ss, reg, cp, iid) = do
   --po dops aops$ Kill regIdx:bops
-  H.insert reg (fromIntegral regIdx) VmRt_Undefined
-  r_f (dops, Kill regIdx:aops, bops, ss, reg, cp, iid)
+  r_f (dops, Kill regIdx:aops, bops, ss, reg2, cp, iid)
+  where
+    reg2 = insert reg (fromIntegral regIdx) VmRt_Undefined
 
 r_f {-0x09-} (dops, aops, Label:bops, ss, reg, cp, iid) = do
   --po dops aops$ Label:bops
@@ -298,18 +298,17 @@ r_f {-0x30-} (VmRt_Object v i:dops, aops, PushScope:bops, ss, reg, cp, iid) = do
   --po (VmRt_Object v i:dops) aops$ PushScope:bops
   r_f (dops, PushScope:aops, bops, (v, i):ss, reg, cp, iid)
 
-r_f {-0x47-} (dops, aops, ReturnVoid:bops, ss, reg, cp, iid) = return (Right VmRt_Undefined, iid)
+r_f {-0x47-} (dops, aops, ReturnVoid:bops, ss, reg, cp, iid) = return (Right VmRt_Undefined, ss, reg, iid)
 
-r_f {-0x48-} (a:dops, aops, ReturnValue:bops, ss, reg, cp, iid) = return (Right a, iid)
+r_f {-0x48-} (a:dops, aops, ReturnValue:bops, ss, reg, cp, iid) = return (Right a, ss, reg, iid)
 
 -- TODO check for [ns] [name]
 r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid) = do
   --po dops aops$ CallPropVoid idx args maybeName:bops
   
-  maybeClassInfoIdx <- H.lookup this pfx_class_info_idx
   Abc.TraitsInfo _ _ _ (Abc.TT_Method (Abc.TraitMethod _ methodId)) _ <- case maybeClassInfoIdx of
     Just (VmRtInternalInt classIdx) -> do
-      Abc.ClassInfo _ traits <- get_class cp classIdx
+      let Abc.ClassInfo _ traits = get_class cp classIdx
       let matchingTraits = filter (\(Abc.TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits
       p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
       case length matchingTraits of
@@ -319,35 +318,34 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid
     otherwise -> do
       name <- case maybeName of
         Nothing -> do
-          Abc.Multiname_QName nSInfoIdx stringIdx <- get_multiname cp idx
-          liftM2 B.append (resolve_nsinfo cp nSInfoIdx) (get_string cp stringIdx)
+          let Abc.Multiname_QName nSInfoIdx stringIdx = get_multiname cp idx
+          return$ B.append (resolve_nsinfo cp nSInfoIdx) (get_string cp stringIdx)
         Just n -> return n
-      proplist <- H.toList this
+      proplist <- return$ Map.toList this
       fail$ "couldn't find " ++ BC.unpack name ++ " on " ++ show proplist
 
-  MethodBody _ _ _ _ _ code _ _ <- get_methodBody cp methodId
+  let MethodBody _ _ _ _ _ code _ _ = get_methodBody cp methodId
   p$ show code
 
-  (registers :: Registers) <- H.newSized$ fromIntegral args+1
-  H.insert registers 0 $ VmRt_Object this iidThis
-  forM_ (zip [1..length nArgs] nArgs) (\(i, arg) -> H.insert registers i arg)
+  -- CallPropVoid
+  (_, ss2, reg2, iid2) <- r_f ([], [], code, [last ss], registers, cp, iid)
 
-  -- CallPropVoid, only need the latest instance id counter
-  (_, iid2) <- r_f ([], [], code, [last ss], registers, cp, iid)
-
-  r_f (dopsNew, CallPropVoid idx args maybeName:aops, bops, ss, reg, cp, iid2)
+  r_f (dopsNew, CallPropVoid idx args maybeName:aops, bops, init ss ++ last ss2, reg, cp, iid2)
   where
+    maybeClassInfoIdx = lookup this pfx_class_info_idx
     (nArgs, (VmRt_Object this iidThis):dopsNew) = splitAt (fromIntegral args) dops
+    registers = Map.fromList$ (0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs
 
 r_f {-0x55-} (dops, aops, NewObject args:bops, ss, reg, cp, iid) = do
   --po dops aops$ NewObject args:bops
-  vmrto@(VmRt_Object obj iid2) <- new_object iid
-  forM_ (kvps nArgs)$ \(v, VmRt_String k) -> insert obj (Ext k) v
   r_f (vmrto:dopsNew, NewObject args:aops, bops, ss, reg, cp, iid2)
   where
     (nArgs, dopsNew) = splitAt (fromIntegral args*2) dops
-    kvps (v:k:kvs) = (v, k):kvps kvs
+    kvps (v:k:kvs) = (k, v):kvps kvs
     kvps [] = []
+    
+    properties = map (kvps nArgs)$ \(VmRt_String k, v) -> (Ext k, v)
+    vmrto@(VmRt_Object obj iid2) = new_object iid properties
 
 r_f {-0x56-} (dops, aops, NewArray args:bops, ss, reg, cp, iid) = do
   r_f (newArray:dopsNew, NewArray args:aops, bops, ss, reg, cp, iid2)
@@ -358,27 +356,28 @@ r_f {-0x56-} (dops, aops, NewArray args:bops, ss, reg, cp, iid) = do
 
 r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   p$ "########## NewClass " ++ show idx
-  Abc.ClassInfo msi traits <- get_class cp idx
-
-  MethodBody _ _ _ _ _ code _ _ <- get_methodBody cp msi
   --p$ "\tops: " ++ show code
 
-  vmrto@(VmRt_Object klass iid2) <- new_object iid
-  -- store this class's identity in it
-  insert klass pfx_class_info_idx (VmRtInternalInt idx)
+  -- run the class initializer
+  (_, ss2, reg2, iid3) <- r_f ([], [], code, [last ss], registers, cp, iid2)
 
-  (registers :: Registers) <- H.new
-  H.insert registers 0 vmrto
-
-  -- NewClass, only need the latest instance id counter
-  (_, iid3) <- r_f ([], [], code, [(global, globalid)], registers, cp, iid2)
-
-  insert global (Ext$ BC.pack "Test") vmrto
   p$ "########## " ++ show idx
 
-  r_f (dops, NewClass idx:aops, bops, ss, reg, cp, iid3)
+  r_f (dops, NewClass idx:aops, bops, rebuildSS ss2 reg2, reg, cp, iid3)
   where
-    (global, globalid) = last ss
+    Abc.ClassInfo msi _ = get_class cp idx
+    MethodBody _ _ _ _ _ code _ _ = get_methodBody cp msi
+    registers = Map.fromList [(0, vmrto)]
+    
+    -- store this class's identity in it
+    vmrto@(VmRt_Object klass iid2) = new_object iid [(pfx_class_info_idx, VmRtInternalInt idx)]
+
+    rebuildSS :: ScopeStack -> Registers -> ScopeStack
+    rebuildSS ss reg = init ss ++ lastSs
+      where
+        Just vmrto = lookup 0 reg
+        -- modify global
+        lastSs = insert (last ss) (Ext$ BC.pack "Test") vmrto
 
 r_f {-0x5D-} (dops, aops, FindPropStrict idx maybeName:bops, ss, reg, cp, iid) = do
   --po dops aops$ FindPropStrict idx maybeName:bops
@@ -420,13 +419,13 @@ r_f {-0x61-} (value:VmRt_Object this _:dops, aops, SetProperty idx (Just prop):b
   r_f (dops, SetProperty idx (Just prop):aops, bops, ss, reg, cp, iid)
 
 r_f {-0x62-} (dops, aops, GetLocal u30:bops, ss, reg, cp, iid) = do
-  maybeR <- H.lookup reg $ fromIntegral u30
+  maybeR <- lookup reg $ fromIntegral u30
   case maybeR of
     Nothing -> fail$ "GetLocal" ++ show u30 ++ " - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal u30:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x63-} (new:dops, aops, SetLocal u30:bops, ss, reg, cp, iid) = do
-  H.insert reg (fromIntegral u30) new
+  insert reg (fromIntegral u30) new
   r_f (dops, SetLocal u30:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x65-} (dops, aops, GetScopeObject idx:bops, ss, reg, cp, iid) =
@@ -463,7 +462,7 @@ r_f {-0x66-} (dops, aops, GetProperty idx Nothing:bops, ss, reg, cp, iid) = do
       VmRt_Int i -> return$ v !! fromIntegral i
     VmRt_Object this _ -> case prop of
       VmRt_String name -> do
-        maybeProp <- H.lookup this$ Ext name
+        maybeProp <- lookup this$ Ext name
         case maybeProp of
           Just prop -> return prop
           Nothing -> return VmRt_Undefined
@@ -486,7 +485,7 @@ r_f {-0x66-} (vmrt:dops, aops, GetProperty idx (Just prop):bops, ss, reg, cp, ii
       p_length -> return . VmRt_Int . fromIntegral$ length v
       otherwise -> fail$ "GetProperty - VmRt_Array - can't get property " ++ BC.unpack prop
     VmRt_Object this _ -> do
-      maybeProp <- H.lookup this$ Ext prop
+      maybeProp <- lookup this$ Ext prop
       case maybeProp of
         Just prop -> return prop
         Nothing -> return VmRt_Undefined
@@ -501,7 +500,7 @@ r_f {-0x68-} (value:VmRt_Object this iidThis:dops, aops, InitProperty idx maybeN
       liftM2 B.append (resolve_nsinfo cp nSInfoIdx) (get_string cp stringIdx)
     Just n -> return n
   p$ "InitProperty [" ++ show idx ++ " " ++ BC.unpack name ++ "]"
-  maybeProp <- H.lookup this (Ext name)
+  maybeProp <- lookup this (Ext name)
   case maybeProp of
     Nothing -> do
       insert this (Ext name) value
@@ -559,62 +558,64 @@ r_f {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) =
   r_f (a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xC2-} (dops, aops, IncLocalInt regIdx:bops, ss, reg, cp, iid) = do
-  maybeReg <- H.lookup reg (fromIntegral regIdx)
   case maybeReg of
     Nothing -> fail$ "register " ++ show regIdx ++ " didn't exist"
-    Just r -> H.insert reg (fromIntegral regIdx) (r + 1)
+    Just r -> insert reg (fromIntegral regIdx) (r + 1)
   r_f (dops, IncLocalInt regIdx:aops, bops, ss, reg, cp, iid)
+  where
+    maybeReg = lookup reg (fromIntegral regIdx)
 
 r_f {-0xC3-} (dops, aops, DecLocalInt regIdx:bops, ss, reg, cp, iid) = do
-  maybeReg <- H.lookup reg (fromIntegral regIdx)
   case maybeReg of
     Nothing -> fail$ "register " ++ show regIdx ++ " didn't exist"
-    Just r -> H.insert reg (fromIntegral regIdx) (r - 1)
+    Just r -> insert reg (fromIntegral regIdx) (r - 1)
   r_f (dops, DecLocalInt regIdx:aops, bops, ss, reg, cp, iid)
+  where
+    maybeReg = lookup reg (fromIntegral regIdx)
 
 r_f {-0xD0-} (dops, aops, GetLocal0:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal0:bops
-  maybeR <- H.lookup reg 0
   case maybeR of
     Nothing -> fail "GetLocal0 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal0:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup 0 reg
 
 r_f {-0xD1-} (dops, aops, GetLocal1:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal1:bops
-  maybeR <- H.lookup reg 1
   case maybeR of
     Nothing -> fail "GetLocal1 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal1:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup 1 reg
 
 r_f {-0xD2-} (dops, aops, GetLocal2:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal2:bops
-  maybeR <- H.lookup reg 2
   case maybeR of
     Nothing -> fail "GetLocal2 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal2:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup 2 reg
 
 r_f {-0xD3-} (dops, aops, GetLocal3:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal3:bops
-  maybeR <- H.lookup reg 3
   case maybeR of
     Nothing -> fail "GetLocal3 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal3:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup 3 reg
 
-r_f {-0xD4-} (new:dops, aops, SetLocal0:bops, ss, reg, cp, iid) = do
-  H.insert reg 0 new
-  r_f (dops, SetLocal0:aops, bops, ss, reg, cp, iid)
+r_f {-0xD4-} (new:dops, aops, SetLocal0:bops, ss, reg, cp, iid) =
+  r_f (dops, SetLocal0:aops, bops, ss, Map.insert 0 new reg, cp, iid)
 
-r_f {-0xD5-} (new:dops, aops, SetLocal1:bops, ss, reg, cp, iid) = do
-  H.insert reg 1 new
-  r_f (dops, SetLocal1:aops, bops, ss, reg, cp, iid)
+r_f {-0xD5-} (new:dops, aops, SetLocal1:bops, ss, reg, cp, iid) =
+  r_f (dops, SetLocal1:aops, bops, ss, Map.insert 1 new reg, cp, iid)
 
-r_f {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) = do
-  H.insert reg 2 new
-  r_f (dops, SetLocal2:aops, bops, ss, reg, cp, iid)
+r_f {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) =
+  r_f (dops, SetLocal2:aops, bops, ss, Map.insert 2 new reg, cp, iid)
 
-r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) = do
-  H.insert reg 3 new
-  r_f (dops, SetLocal3:aops, bops, ss, reg, cp, iid)
+r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) =
+  r_f (dops, SetLocal3:aops, bops, ss, Map.insert 3 new reg, cp, iid)
 
 r_f {-0xD7-} (dops, aops, op:bops, ss, reg, cp, iid) = fail$ "didn't match opcode " ++ show op
 
@@ -646,50 +647,34 @@ TODO resolve against
   5. script traits (global object (for classes))
 -}
 find_property :: B.ByteString -> Abc.MultinameIdx -> ConstantPool -> ScopeStack -> AVM3 VmRt
-find_property name idx cp ss = do
-  --p$ "FindProperty [" ++ show idx ++ " " ++ name ++ "]"
-  --p$ "\tscope_stack length " ++ (show$ length ss)
-  attempt1 <- search_stack (Ext name) ss
-  case attempt1 of
-    Just obj -> do
-      --p$ "found obj in attempt1"
-      return obj
-    Nothing -> do
-      attempt2 <- traits_ref cp idx ss
-      case attempt2 of
-        Just obj -> do
-          --p$ "found obj in attempt2"
-          return obj
-        Nothing -> fail "find_property - couldn't find_property"
+find_property name idx cp ss = case attempts of
+  Nothing -> fail "find_property - couldn't find_property"
+  Just p -> return p
   where
-    search_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
-    search_stack key [] = return Nothing
-    search_stack key@(Ext str) ((top, iid):stack) = do
-      if str == BC.pack "Foo"
-        then do
-          list <- H.toList top
-          p$ show list
-          p$ "key " ++ show key
-        else return ()
-      maybeValue <- H.lookup top key
-      case maybeValue of
-        Nothing -> search_stack key stack
-        Just value -> returnJ$ VmRt_Object top iid
+    attempts = search_stack (Ext name) ss <|> traits_ref cp idx ss
+    
+    search_stack :: VmRtP -> ScopeStack -> Maybe VmRt
+    search_stack key [] = Nothing
+    search_stack key@(Ext str) ((top, iid):stack) = case maybeValue of
+      Nothing -> search_stack key stack
+      Just value -> Just$ VmRt_Object top iid
+      where
+        maybeValue = lookup top key
 
-    traits_ref :: ConstantPool -> Abc.MultinameIdx -> ScopeStack -> AVM3 (Maybe VmRt)
-    traits_ref cp idx [] = return Nothing
-    traits_ref cp idx ((top, iid):stack) = do
-      maybeClassInfoIdx <- H.lookup top pfx_class_info_idx
-      case maybeClassInfoIdx of
-        Just (VmRtInternalInt classIdx) -> do
-          Abc.ClassInfo _ traits <- get_class cp classIdx
-          let matchingTraits = filter (\(Abc.TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits
-          --p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
-          case length matchingTraits of
-            0 -> return Nothing
-            1 -> returnJ$ VmRt_Object top iid
-            otherwise -> fail "traits_ref - too many matching traits"
-        otherwise -> traits_ref cp idx stack
+    traits_ref :: ConstantPool -> Abc.MultinameIdx -> ScopeStack -> Maybe VmRt
+    traits_ref cp idx [] = Nothing
+    traits_ref cp idx ((top, iid):stack) = case maybeClassInfoIdx of
+      Just (VmRtInternalInt classIdx) -> 
+        let Abc.ClassInfo _ traits = get_class cp classIdx in
+        let matchingTraits = filter (\(Abc.TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits in
+        --p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
+        case length matchingTraits of
+          0 -> Nothing
+          1 -> Just$ VmRt_Object top iid
+          otherwise -> fail "traits_ref - too many matching traits"
+      otherwise -> traits_ref cp idx stack
+      where
+        maybeClassInfoIdx = lookup top pfx_class_info_idx
 
 {-
   "The indexing of elements on the local scope stack is the reverse of the

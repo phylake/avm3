@@ -3,6 +3,7 @@ module Vm.Def where
 import           Control.DeepSeq
 import           Data.Hashable
 import           Data.Int
+import           Data.Map (Map)
 import           Data.Word
 import           Ecma.Prims
 import           Util.Misc
@@ -10,19 +11,19 @@ import           Util.Words (u30Bytes)
 import qualified Abc.Def as Abc
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
-import qualified Data.HashTable.IO as H
+import qualified Data.Map as Map
 
-type VmObject = H.CuckooHashTable VmRtP VmRt
+type VmObject = Map VmRtP VmRt
 
 -- Part of FunctionStack
 type ScopeStack = [(VmObject, InstanceId)] -- this is a tuple for purity
-type Registers = H.CuckooHashTable Int VmRt
+type Registers = Map Int VmRt
 type D_Ops = [VmRt] -- data ops
 type A_Ops = [OpCode] -- above stack pointer
 type B_Ops = [OpCode] -- below stack pointer
 
 -- Part of Execution
-type ConstantPool = H.CuckooHashTable B.ByteString VmAbc
+type ConstantPool = Map B.ByteString VmAbc
 type InstanceId = Word64 -- Global instance id
 type AVM3Exception = String -- Exception string
 
