@@ -31,6 +31,7 @@ import qualified Data.Enumerator as E
 import qualified Data.Enumerator.Binary as EB
 import qualified Data.Enumerator.List as EL
 import qualified Data.HashTable.IO as H
+import qualified Data.Map as Map
 
 p :: String -> AVM3 ()
 --p = putStrLn
@@ -96,9 +97,7 @@ execute_abc abc = do
   p$ "-------------------------------------------"
   (global, globalid) <- build_global_scope 0
   let ops = [NewClass idx, ReturnVoid]
-  (registers :: Registers) <- H.new
-  H.insert registers 0 $ VmRt_Object global $ globalid+1
-  (vmrt, _) <- r_f ([], [], ops, [(global, globalid)], registers, cp, globalid+2)
+  (vmrt, _) <- r_f ([], [], ops, [(global, globalid)], Map.fromList [(0, VmRt_Object global globalid)], cp, globalid+1)
   p$ "-------------------------------------------"
   t1 <- getCurrentTime
   putStrLn$ show$ diffUTCTime t1 t0
@@ -152,8 +151,9 @@ REMEMBER the stack order here is the REVERSE of the docs
 r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, InstanceId)
 r_f {-0x08-} (dops, aops, Kill regIdx:bops, ss, reg, cp, iid) = do
   --po dops aops$ Kill regIdx:bops
-  H.insert reg (fromIntegral regIdx) VmRt_Undefined
-  r_f (dops, Kill regIdx:aops, bops, ss, reg, cp, iid)
+  r_f (dops, Kill regIdx:aops, bops, ss, reg2, cp, iid)
+  where
+    reg2 = Map.insert (fromIntegral regIdx) VmRt_Undefined reg
 
 r_f {-0x09-} (dops, aops, Label:bops, ss, reg, cp, iid) = do
   --po dops aops$ Label:bops
@@ -328,16 +328,13 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid
   MethodBody _ _ _ _ _ code _ _ <- get_methodBody cp methodId
   p$ show code
 
-  (registers :: Registers) <- H.newSized$ fromIntegral args+1
-  H.insert registers 0 $ VmRt_Object this iidThis
-  forM_ (zip [1..length nArgs] nArgs) (\(i, arg) -> H.insert registers i arg)
-
   -- CallPropVoid, only need the latest instance id counter
   (_, iid2) <- r_f ([], [], code, [last ss], registers, cp, iid)
 
   r_f (dopsNew, CallPropVoid idx args maybeName:aops, bops, ss, reg, cp, iid2)
   where
     (nArgs, (VmRt_Object this iidThis):dopsNew) = splitAt (fromIntegral args) dops
+    registers = Map.fromList$ (0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs
 
 r_f {-0x55-} (dops, aops, NewObject args:bops, ss, reg, cp, iid) = do
   --po dops aops$ NewObject args:bops
@@ -367,11 +364,8 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   -- store this class's identity in it
   insert klass pfx_class_info_idx (VmRtInternalInt idx)
 
-  (registers :: Registers) <- H.new
-  H.insert registers 0 vmrto
-
   -- NewClass, only need the latest instance id counter
-  (_, iid3) <- r_f ([], [], code, [(global, globalid)], registers, cp, iid2)
+  (_, iid3) <- r_f ([], [], code, [(global, globalid)], Map.fromList [(0,vmrto)], cp, iid2)
 
   insert global (Ext$ BC.pack "Test") vmrto
   p$ "########## " ++ show idx
@@ -420,14 +414,16 @@ r_f {-0x61-} (value:VmRt_Object this _:dops, aops, SetProperty idx (Just prop):b
   r_f (dops, SetProperty idx (Just prop):aops, bops, ss, reg, cp, iid)
 
 r_f {-0x62-} (dops, aops, GetLocal u30:bops, ss, reg, cp, iid) = do
-  maybeR <- H.lookup reg $ fromIntegral u30
   case maybeR of
     Nothing -> fail$ "GetLocal" ++ show u30 ++ " - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal u30:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup (fromIntegral u30) reg
 
 r_f {-0x63-} (new:dops, aops, SetLocal u30:bops, ss, reg, cp, iid) = do
-  H.insert reg (fromIntegral u30) new
-  r_f (dops, SetLocal u30:aops, bops, ss, reg, cp, iid)
+  r_f (dops, SetLocal u30:aops, bops, ss, reg2, cp, iid)
+  where
+    reg2 = Map.insert (fromIntegral u30) new reg
 
 r_f {-0x65-} (dops, aops, GetScopeObject idx:bops, ss, reg, cp, iid) =
   r_f (scopedObject:dops, GetScopeObject idx:aops, bops, ss, reg, cp, iid)
@@ -559,62 +555,66 @@ r_f {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) =
   r_f (a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xC2-} (dops, aops, IncLocalInt regIdx:bops, ss, reg, cp, iid) = do
-  maybeReg <- H.lookup reg (fromIntegral regIdx)
   case maybeReg of
     Nothing -> fail$ "register " ++ show regIdx ++ " didn't exist"
-    Just r -> H.insert reg (fromIntegral regIdx) (r + 1)
-  r_f (dops, IncLocalInt regIdx:aops, bops, ss, reg, cp, iid)
+    Just r -> do
+      let reg2 = Map.insert (fromIntegral regIdx) (r + 1) reg
+      r_f (dops, IncLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
+  where
+    maybeReg = Map.lookup (fromIntegral regIdx) reg
 
 r_f {-0xC3-} (dops, aops, DecLocalInt regIdx:bops, ss, reg, cp, iid) = do
-  maybeReg <- H.lookup reg (fromIntegral regIdx)
   case maybeReg of
     Nothing -> fail$ "register " ++ show regIdx ++ " didn't exist"
-    Just r -> H.insert reg (fromIntegral regIdx) (r - 1)
-  r_f (dops, DecLocalInt regIdx:aops, bops, ss, reg, cp, iid)
+    Just r -> do
+      let reg2 = Map.insert (fromIntegral regIdx) (r - 1) reg
+      r_f (dops, DecLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
+  where
+    maybeReg = Map.lookup (fromIntegral regIdx) reg
 
 r_f {-0xD0-} (dops, aops, GetLocal0:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal0:bops
-  maybeR <- H.lookup reg 0
   case maybeR of
     Nothing -> fail "GetLocal0 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal0:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup 0 reg
 
 r_f {-0xD1-} (dops, aops, GetLocal1:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal1:bops
-  maybeR <- H.lookup reg 1
   case maybeR of
     Nothing -> fail "GetLocal1 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal1:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup 1 reg
 
 r_f {-0xD2-} (dops, aops, GetLocal2:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal2:bops
-  maybeR <- H.lookup reg 2
   case maybeR of
     Nothing -> fail "GetLocal2 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal2:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup 2 reg
 
 r_f {-0xD3-} (dops, aops, GetLocal3:bops, ss, reg, cp, iid) = do
   --po dops aops$ GetLocal3:bops
-  maybeR <- H.lookup reg 3
   case maybeR of
     Nothing -> fail "GetLocal3 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal3:aops, bops, ss, reg, cp, iid)
+  where
+    maybeR = Map.lookup 3 reg
 
-r_f {-0xD4-} (new:dops, aops, SetLocal0:bops, ss, reg, cp, iid) = do
-  H.insert reg 0 new
-  r_f (dops, SetLocal0:aops, bops, ss, reg, cp, iid)
+r_f {-0xD4-} (new:dops, aops, SetLocal0:bops, ss, reg, cp, iid) =
+  r_f (dops, SetLocal0:aops, bops, ss, Map.insert 0 new reg, cp, iid)
 
-r_f {-0xD5-} (new:dops, aops, SetLocal1:bops, ss, reg, cp, iid) = do
-  H.insert reg 1 new
-  r_f (dops, SetLocal1:aops, bops, ss, reg, cp, iid)
+r_f {-0xD5-} (new:dops, aops, SetLocal1:bops, ss, reg, cp, iid) =
+  r_f (dops, SetLocal1:aops, bops, ss, Map.insert 1 new reg, cp, iid)
 
-r_f {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) = do
-  H.insert reg 2 new
-  r_f (dops, SetLocal2:aops, bops, ss, reg, cp, iid)
+r_f {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) =
+  r_f (dops, SetLocal2:aops, bops, ss, Map.insert 2 new reg, cp, iid)
 
-r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) = do
-  H.insert reg 3 new
-  r_f (dops, SetLocal3:aops, bops, ss, reg, cp, iid)
+r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) =
+  r_f (dops, SetLocal3:aops, bops, ss, Map.insert 3 new reg, cp, iid)
 
 r_f {-0xD7-} (dops, aops, op:bops, ss, reg, cp, iid) = fail$ "didn't match opcode " ++ show op
 
