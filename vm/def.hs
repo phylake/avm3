@@ -11,9 +11,10 @@ import           Util.Words (u30Bytes)
 import qualified Abc.Def as Abc
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.HashTable.IO as H
 import qualified Data.Map as Map
 
-type VmObject = Map VmRtP VmRt
+type VmObject = H.CuckooHashTable VmRtP VmRt
 
 -- Part of FunctionStack
 type ScopeStack = [(VmObject, InstanceId)] -- this is a tuple for purity

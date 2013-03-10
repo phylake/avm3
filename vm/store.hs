@@ -85,19 +85,19 @@ build_cp (Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs 
       ++ scriptsNew
       ++ methodBodiesNew
     
-    intsNew =         map (\(k, v) -> (B.cons k key_int, VmAbc_Int v)) $ zip (map fromIntegral [0..length ints]) ints
-    uintsNew =        map (\(k, v) -> (B.cons k key_uint, VmAbc_Uint v)) $ zip (map fromIntegral [0..length uints]) uints
-    doublesNew =      map (\(k, v) -> (B.cons k key_double, VmAbc_Double v)) $ zip (map fromIntegral [0..length doubles]) doubles
-    stringsNew =      map (\(k, v) -> (B.cons k key_string, VmAbc_String v)) $ zip (map fromIntegral [0..length strings]) xStrings
-    nsInfoNew =       map (\(k, v) -> (B.cons k key_nsInfo, VmAbc_NsInfo v)) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
-    nsSetNew =        map (\(k, v) -> (B.cons k key_nsSet, VmAbc_NsSet v)) $ zip (map fromIntegral [0..length nsSet]) nsSet
-    multinamesNew =   map (\(k, v) -> (B.cons k key_multiname, VmAbc_Multiname v)) $ zip (map fromIntegral [0..length multinames]) multinames
-    methodSigsNew =   map (\(k, v) -> (B.cons k key_methodSig, VmAbc_MethodSig v)) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
-    metadataNew =     map (\(k, v) -> (B.cons k key_metadata, VmAbc_Metadata v)) $ zip (map fromIntegral [0..length metadata]) metadata
-    instancesNew =    map (\(k, v) -> (B.cons k key_instance, VmAbc_Instance v)) $ zip (map fromIntegral [0..length instances]) instances
-    classesNew =      map (\(k, v) -> (B.cons k key_class, VmAbc_Class v)) $ zip (map fromIntegral [0..length classes]) classes
-    scriptsNew =      map (\(k, v) -> (B.cons k key_script, VmAbc_Script v)) $ zip (map fromIntegral [0..length scripts]) scripts
-    methodBodiesNew = map (\(k, v) -> (B.cons k key_methodBody, VmAbc_MethodBody v)) $ zip (map (fromIntegral . Abc.mbMethod) methodBodies) xMethodBodies
+    intsNew =         map (\(k, v) -> (foldr B.cons key_int $ u30ToWord8 k, VmAbc_Int v)) $ zip (map fromIntegral [0..length ints]) ints
+    uintsNew =        map (\(k, v) -> (foldr B.cons key_uint $ u30ToWord8 k, VmAbc_Uint v)) $ zip (map fromIntegral [0..length uints]) uints
+    doublesNew =      map (\(k, v) -> (foldr B.cons key_double $ u30ToWord8 k, VmAbc_Double v)) $ zip (map fromIntegral [0..length doubles]) doubles
+    stringsNew =      map (\(k, v) -> (foldr B.cons key_string $ u30ToWord8 k, VmAbc_String v)) $ zip (map fromIntegral [0..length strings]) xStrings
+    nsInfoNew =       map (\(k, v) -> (foldr B.cons key_nsInfo $ u30ToWord8 k, VmAbc_NsInfo v)) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
+    nsSetNew =        map (\(k, v) -> (foldr B.cons key_nsSet $ u30ToWord8 k, VmAbc_NsSet v)) $ zip (map fromIntegral [0..length nsSet]) nsSet
+    multinamesNew =   map (\(k, v) -> (foldr B.cons key_multiname $ u30ToWord8 k, VmAbc_Multiname v)) $ zip (map fromIntegral [0..length multinames]) multinames
+    methodSigsNew =   map (\(k, v) -> (foldr B.cons key_methodSig $ u30ToWord8 k, VmAbc_MethodSig v)) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
+    metadataNew =     map (\(k, v) -> (foldr B.cons key_metadata $ u30ToWord8 k, VmAbc_Metadata v)) $ zip (map fromIntegral [0..length metadata]) metadata
+    instancesNew =    map (\(k, v) -> (foldr B.cons key_instance $ u30ToWord8 k, VmAbc_Instance v)) $ zip (map fromIntegral [0..length instances]) instances
+    classesNew =      map (\(k, v) -> (foldr B.cons key_class $ u30ToWord8 k, VmAbc_Class v)) $ zip (map fromIntegral [0..length classes]) classes
+    scriptsNew =      map (\(k, v) -> (foldr B.cons key_script $ u30ToWord8 k, VmAbc_Script v)) $ zip (map fromIntegral [0..length scripts]) scripts
+    methodBodiesNew = map (\(k, v) -> (foldr B.cons key_methodBody $ u30ToWord8 k, VmAbc_MethodBody v)) $ zip (map (fromIntegral . Abc.mbMethod) methodBodies) xMethodBodies
     -- reverse lookup: get_methodBody expects a method signature index since a
     -- method body index doesn't exist
 
