@@ -33,12 +33,13 @@ type AVM3 = IO
 
 data VmRtP = Ext B.ByteString -- all run time, external properties
            | ClassIdx B.ByteString -- the identity of the class
+           | SlotIdx B.ByteString
            deriving (Eq, Show)
 
--- consing to prevent hash collision
 instance Hashable VmRtP where
   hashWithSalt salt (Ext a) = hashWithSalt salt$ B.cons 1 a
-  hashWithSalt salt (ClassIdx a) = hashWithSalt salt$ B.cons 2 a
+  hashWithSalt salt (ClassIdx a) = hashWithSalt salt a
+  hashWithSalt salt (SlotIdx a) = hashWithSalt salt a
 
 {-
 TODO
@@ -60,8 +61,9 @@ data VmRt = VmRt_Undefined
           | VmRt_Number Double
           | VmRt_String B.ByteString
           | VmRt_Array [VmRt] InstanceId
+          | VmRt_Activation VmObject
           | VmRt_Object VmObject InstanceId{-RefCount-} {-(Maybe ScopeStack)-}
-          -- | VmRt_Closure -- TODO
+          | VmRt_Function [OpCode] ScopeStack InstanceId
           | VmRtInternalInt Abc.U30
 
 instance Coerce VmRt where
@@ -240,17 +242,18 @@ instance Fractional VmRt where
   --fromRational = VmRt_Number . fromIntegral
 
 instance Show VmRt where
-  show VmRt_Undefined      = "VmRt_Undefined"
-  show VmRt_Null           = "VmRt_Null"
-  show (VmRt_Boolean a)    = "VmRt_Boolean " ++ show a
-  show (VmRt_Int a)        = "VmRt_Int " ++ show a
-  show (VmRt_Uint a)       = "VmRt_Uint " ++ show a
-  show (VmRt_Number a)     = "VmRt_Number " ++ show a
-  show (VmRt_String a)     = "VmRt_String " ++ show a
-  show (VmRt_Array a _)    = "VmRt_Array " ++ show a
-  show (VmRt_Object a _)   = "VmRt_Object [Object]"
-  --show (VmRt_Closure _)    = "VmRt_Closure"
-  show (VmRtInternalInt a) = "VmRtInternalInt " ++ show a
+  show VmRt_Undefined        = "VmRt_Undefined"
+  show VmRt_Null             = "VmRt_Null"
+  show (VmRt_Boolean a)      = "VmRt_Boolean " ++ show a
+  show (VmRt_Int a)          = "VmRt_Int " ++ show a
+  show (VmRt_Uint a)         = "VmRt_Uint " ++ show a
+  show (VmRt_Number a)       = "VmRt_Number " ++ show a
+  show (VmRt_String a)       = "VmRt_String " ++ show a
+  show (VmRt_Array a _)      = "VmRt_Array " ++ show a
+  show (VmRt_Object a _)     = "VmRt_Object [Object]"
+  show (VmRt_Activation _)   = "VmRt_Activation [Object]"
+  show (VmRt_Function _ _ _) = "VmRt_Function"
+  show (VmRtInternalInt a)   = "VmRtInternalInt " ++ show a
 
 {- close to 1:1 transformation of Abc to an ADT -}
 data VmAbc = VmAbc_Int Int32

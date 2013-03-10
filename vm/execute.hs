@@ -34,8 +34,8 @@ import qualified Data.HashTable.IO as H
 import qualified Data.Map as Map
 
 p :: String -> AVM3 ()
---p = putStrLn
-p _ = return ()
+p = putStrLn
+--p _ = return ()
 {-# INLINE p #-}
 
 po :: D_Ops -> A_Ops -> B_Ops -> AVM3 ()
@@ -47,8 +47,11 @@ po dops aops bops = do
     ++ (unlines$ map (\s -> "\t" ++ show s) bops)
 {-# INLINE po #-}
 
-p_length :: B.ByteString
-p_length = BC.pack "length"
+ic_length :: B.ByteString
+ic_length = BC.pack "length"
+
+ic_function :: B.ByteString
+ic_function = BC.pack "Function"
 
 returnR :: a -> AVM3 (Either AVM3Exception a)
 returnR = return . Right
@@ -62,19 +65,25 @@ returnN :: AVM3 (Maybe a)
 returnN = return Nothing
 {-# INLINE returnN #-}
 
-avm_prefix :: String
-avm_prefix = "avm3internal_"
-
 insert :: VmObject -> VmRtP -> VmRt -> AVM3 ()
-insert h k v = H.insert h k v
+insert = H.insert
 {-# INLINE insert #-}
 
 lookup :: VmObject -> VmRtP -> AVM3 (Maybe VmRt)
-lookup h k = H.lookup h k
+lookup = H.lookup
 {-# INLINE lookup #-}
+
+avm_prefix :: String
+avm_prefix = "avm3internal_"
 
 pfx_class_info_idx :: VmRtP
 pfx_class_info_idx = ClassIdx$ BC.pack$ avm_prefix ++ "class_info_idx"
+
+pfx_slot_idx :: Abc.U30 -> VmRtP
+pfx_slot_idx u30 = SlotIdx$ BC.pack$ avm_prefix ++ "slot_idx[" ++ idx ++ "]"
+  where
+    idx = show $ fromIntegral u30
+{-# INLINE pfx_slot_idx #-}
 
 new_object :: InstanceId -> AVM3 VmRt
 new_object iid = do
@@ -150,23 +159,23 @@ REMEMBER the stack order here is the REVERSE of the docs
 
 r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, InstanceId)
 r_f {-0x08-} (dops, aops, Kill regIdx:bops, ss, reg, cp, iid) = do
-  --po dops aops$ Kill regIdx:bops
+  po dops aops$ Kill regIdx:bops
   r_f (dops, Kill regIdx:aops, bops, ss, reg2, cp, iid)
   where
     reg2 = Map.insert (fromIntegral regIdx) VmRt_Undefined reg
 
 r_f {-0x09-} (dops, aops, Label:bops, ss, reg, cp, iid) = do
-  --po dops aops$ Label:bops
+  po dops aops$ Label:bops
   r_f (dops, Label:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x10-} (dops, aops, Jump s24:bops, ss, reg, cp, iid) = do
-  --po dops aops$ Jump s24:bops
+  po dops aops$ Jump s24:bops
   r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
   where
     (aopsNew, bopsNew) = jump s24 (Jump s24:aops, bops)
 
 r_f {-0x11-} (a:dops, aops, IfTrue s24:bops, ss, reg, cp, iid) = do
-  --po (a:dops) aops$ IfTrue s24:bops
+  po (a:dops) aops$ IfTrue s24:bops
   if to_boolean a == True
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfTrue s24:aops, bops, ss, reg, cp, iid)
@@ -174,7 +183,7 @@ r_f {-0x11-} (a:dops, aops, IfTrue s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfTrue s24:aops, bops)
 
 r_f {-0x12-} (a:dops, aops, IfFalse s24:bops, ss, reg, cp, iid) = do
-  --po (a:dops) aops$ IfFalse s24:bops
+  po (a:dops) aops$ IfFalse s24:bops
   if to_boolean a == False
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfFalse s24:aops, bops, ss, reg, cp, iid)
@@ -182,7 +191,7 @@ r_f {-0x12-} (a:dops, aops, IfFalse s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfFalse s24:aops, bops)
 
 r_f {-0x13-} (a:b:dops, aops, IfEqual s24:bops, ss, reg, cp, iid) = do
-  --po (a:b:dops) aops$ IfEqual s24:bops
+  po (a:b:dops) aops$ IfEqual s24:bops
   if b == a
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfEqual s24:aops, bops, ss, reg, cp, iid)
@@ -190,7 +199,7 @@ r_f {-0x13-} (a:b:dops, aops, IfEqual s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfEqual s24:aops, bops)
 
 r_f {-0x14-} (a:b:dops, aops, IfNotEqual s24:bops, ss, reg, cp, iid) = do
-  --po (a:b:dops) aops$ IfNotEqual s24:bops
+  po (a:b:dops) aops$ IfNotEqual s24:bops
   if b /= a
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfNotEqual s24:aops, bops, ss, reg, cp, iid)
@@ -198,7 +207,7 @@ r_f {-0x14-} (a:b:dops, aops, IfNotEqual s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfNotEqual s24:aops, bops)
 
 r_f {-0x15-} (a:b:dops, aops, IfLessThan s24:bops, ss, reg, cp, iid) = do
-  --po (a:b:dops) aops$ IfLessThan s24:bops
+  po (a:b:dops) aops$ IfLessThan s24:bops
   if b < a
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfLessThan s24:aops, bops, ss, reg, cp, iid)
@@ -206,7 +215,7 @@ r_f {-0x15-} (a:b:dops, aops, IfLessThan s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfLessThan s24:aops, bops)
 
 r_f {-0x16-} (a:b:dops, aops, IfLessEqual s24:bops, ss, reg, cp, iid) = do
-  --po (a:b:dops) aops$ IfLessEqual s24:bops
+  po (a:b:dops) aops$ IfLessEqual s24:bops
   if b <= a
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfLessEqual s24:aops, bops, ss, reg, cp, iid)
@@ -214,7 +223,7 @@ r_f {-0x16-} (a:b:dops, aops, IfLessEqual s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfLessEqual s24:aops, bops)
 
 r_f {-0x17-} (a:b:dops, aops, IfGreaterThan s24:bops, ss, reg, cp, iid) = do
-  --po (a:b:dops) aops$ IfGreaterThan s24:bops
+  po (a:b:dops) aops$ IfGreaterThan s24:bops
   if b > a
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfGreaterThan s24:aops, bops, ss, reg, cp, iid)
@@ -222,7 +231,7 @@ r_f {-0x17-} (a:b:dops, aops, IfGreaterThan s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfGreaterThan s24:aops, bops)
 
 r_f {-0x18-} (a:b:dops, aops, IfGreaterEqual s24:bops, ss, reg, cp, iid) = do
-  --po (a:b:dops) aops$ IfGreaterEqual s24:bops
+  po (a:b:dops) aops$ IfGreaterEqual s24:bops
   if b >= a
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfGreaterEqual s24:aops, bops, ss, reg, cp, iid)
@@ -230,7 +239,7 @@ r_f {-0x18-} (a:b:dops, aops, IfGreaterEqual s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfGreaterEqual s24:aops, bops)
 
 r_f {-0x19-} (a:b:dops, aops, IfStrictEqual s24:bops, ss, reg, cp, iid) = do
-  --po (a:b:dops) aops$ IfStrictEqual s24:bops
+  po (a:b:dops) aops$ IfStrictEqual s24:bops
   if a == b -- TODO class StrictEq ===
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfStrictEqual s24:aops, bops, ss, reg, cp, iid)
@@ -238,7 +247,7 @@ r_f {-0x19-} (a:b:dops, aops, IfStrictEqual s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfStrictEqual s24:aops, bops)
 
 r_f {-0x1A-} (a:b:dops, aops, IfStrictNotEqual s24:bops, ss, reg, cp, iid) = do
-  --po (a:b:dops) aops$ IfStrictNotEqual s24:bops
+  po (a:b:dops) aops$ IfStrictNotEqual s24:bops
   if a /= b -- TODO class StrictEq /==
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfStrictNotEqual s24:aops, bops, ss, reg, cp, iid)
@@ -246,65 +255,91 @@ r_f {-0x1A-} (a:b:dops, aops, IfStrictNotEqual s24:bops, ss, reg, cp, iid) = do
     (aopsNew, bopsNew) = jump s24 (IfStrictNotEqual s24:aops, bops)
 
 r_f {-0x1D-} (dops, aops, PopScope:bops, (_:ss), reg, cp, iid) = do
+  po dops aops$ PopScope:bops
   r_f (dops, PopScope:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x24-} (dops, aops, PushByte u8:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushByte u8:bops
+  po dops aops$ PushByte u8:bops
   r_f (VmRt_Int (fromIntegral u8):dops, PushByte u8:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x25-} (dops, aops, PushShort u30:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushShort u30:bops
+  po dops aops$ PushShort u30:bops
   r_f (VmRt_Uint u30:dops, PushShort u30:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x26-} (dops, aops, PushTrue:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushTrue:bops
+  po dops aops$ PushTrue:bops
   r_f (VmRt_Boolean True:dops, PushTrue:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x27-} (dops, aops, PushFalse:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushFalse:bops
+  po dops aops$ PushFalse:bops
   r_f (VmRt_Boolean False:dops, PushFalse:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x28-} (dops, aops, PushNaN:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushNaN:bops
+  po dops aops$ PushNaN:bops
   r_f (VmRt_Number nan:dops, PushNaN:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2A-} (a:dops, aops, Dup:bops, ss, reg, cp, iid) = do
+  po (a:dops) aops$ Dup:bops
   r_f (a:a:dops, Dup:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2B-} (a:b:dops, aops, Swap:bops, ss, reg, cp, iid) = do
   r_f (b:a:dops, Swap:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2C-} (dops, aops, PushString idx a:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushString idx a:bops
+  po dops aops$ PushString idx a:bops
   --a <- liftM VmRt_Int$ get_string cp idx
   r_f (VmRt_String a:dops, PushString idx a:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2D-} (dops, aops, PushInt idx a:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushInt idx a:bops
+  po dops aops$ PushInt idx a:bops
   --a <- liftM VmRt_Int$ get_int cp idx
   r_f (VmRt_Int a:dops, PushInt idx a:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2E-} (dops, aops, PushUInt idx a:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushUInt idx a:bops
+  po dops aops$ PushUInt idx a:bops
   --a <- liftM VmRt_Uint$ get_uint cp idx
   r_f (VmRt_Uint a:dops, PushUInt idx a:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2F-} (dops, aops, PushDouble idx a:bops, ss, reg, cp, iid) = do
-  --po dops aops$ PushDouble idx a:bops
+  po dops aops$ PushDouble idx a:bops
   --a <- liftM VmRt_Number$ get_double cp idx
   r_f (VmRt_Number a:dops, PushDouble idx a:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x30-} (VmRt_Object v i:dops, aops, PushScope:bops, ss, reg, cp, iid) = do
-  --po (VmRt_Object v i:dops) aops$ PushScope:bops
+  po (VmRt_Object v i:dops) aops$ PushScope:bops
   r_f (dops, PushScope:aops, bops, (v, i):ss, reg, cp, iid)
 
-r_f {-0x47-} (dops, aops, ReturnVoid:bops, ss, reg, cp, iid) = return (Right VmRt_Undefined, iid)
+r_f {-0x30-} (VmRt_Activation v:dops, aops, PushScope:bops, ss, reg, cp, iid) = do
+  po (VmRt_Activation v:dops) aops$ PushScope:bops
+  r_f (dops, PushScope:aops, bops, (v, -1):ss, reg, cp, iid)
 
-r_f {-0x48-} (a:dops, aops, ReturnValue:bops, ss, reg, cp, iid) = return (Right a, iid)
+r_f {-0x40-} (dops, aops, NewFunction idx:bops, ss, reg, cp, iid) = do
+  po dops aops$ NewFunction idx:bops
+  MethodBody _ _ _ _ _ code _ _ <- get_methodBody cp idx
+  let function = VmRt_Function code ss iid2
+  r_f (function:dops, NewFunction idx:aops, bops, ss, reg, cp, iid2)
+  where
+    iid2 = iid+1
+
+r_f {-0x41-} (dops, aops, Call args:bops, ss, reg, cp, iid) = do
+  po dops aops$ Call args:bops
+  (ret, iid2) <- r_f ([], [], fops, fss, registers, cp, iid)
+  case ret of
+    Right vmrt -> r_f (vmrt:dopsNew, Call args:aops, bops, ss, reg, cp, iid2)
+    Left err -> return (ret, -1)
+  where
+    (nArgs, (this:VmRt_Function fops fss _:dopsNew)) = splitAt (fromIntegral args) dops
+    registers = Map.fromList$ (0, this):zip [1..length nArgs] nArgs
+
+r_f {-0x47-} (dops, aops, ReturnVoid:bops, ss, reg, cp, iid) = do
+  return (Right VmRt_Undefined, iid)
+
+r_f {-0x48-} (a:dops, aops, ReturnValue:bops, ss, reg, cp, iid) = do
+  return (Right a, iid)
 
 -- TODO check for [ns] [name]
 r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid) = do
-  --po dops aops$ CallPropVoid idx args maybeName:bops
+  po dops aops$ CallPropVoid idx args maybeName:bops
   
   maybeClassInfoIdx <- H.lookup this pfx_class_info_idx
   Abc.TraitsInfo _ _ _ (Abc.TT_Method (Abc.TraitMethod _ methodId)) _ <- case maybeClassInfoIdx of
@@ -337,7 +372,7 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid
     registers = Map.fromList$ (0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs
 
 r_f {-0x55-} (dops, aops, NewObject args:bops, ss, reg, cp, iid) = do
-  --po dops aops$ NewObject args:bops
+  po dops aops$ NewObject args:bops
   vmrto@(VmRt_Object obj iid2) <- new_object iid
   forM_ (kvps nArgs)$ \(v, VmRt_String k) -> insert obj (Ext k) v
   r_f (vmrto:dopsNew, NewObject args:aops, bops, ss, reg, cp, iid2)
@@ -352,6 +387,11 @@ r_f {-0x56-} (dops, aops, NewArray args:bops, ss, reg, cp, iid) = do
     iid2 = iid + 1
     (nArgs, dopsNew) = splitAt (fromIntegral args) dops
     newArray = VmRt_Array (reverse nArgs) iid2
+
+r_f {-0x57-} (dops, aops, NewActivation:bops, ss, reg, cp, iid) = do
+  po dops aops$ NewActivation:bops
+  obj <- H.new
+  r_f (VmRt_Activation obj:dops, NewActivation:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   p$ "########## NewClass " ++ show idx
@@ -375,7 +415,7 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
     (global, globalid) = last ss
 
 r_f {-0x5D-} (dops, aops, FindPropStrict idx maybeName:bops, ss, reg, cp, iid) = do
-  --po dops aops$ FindPropStrict idx maybeName:bops
+  po dops aops$ FindPropStrict idx maybeName:bops
   
   name <- case maybeName of
     Nothing -> do
@@ -387,7 +427,7 @@ r_f {-0x5D-} (dops, aops, FindPropStrict idx maybeName:bops, ss, reg, cp, iid) =
   r_f (vmrt:dops, FindPropStrict idx maybeName:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x5E-} (dops, aops, FindProperty idx maybeName:bops, ss, reg, cp, iid) = do
-  --po dops aops$ FindProperty idx maybeName:bops
+  po dops aops$ FindProperty idx maybeName:bops
   name <- case maybeName of
     Nothing -> do
       Abc.Multiname_QName nSInfoIdx stringIdx <- get_multiname cp idx
@@ -421,18 +461,27 @@ r_f {-0x62-} (dops, aops, GetLocal u30:bops, ss, reg, cp, iid) = do
     maybeR = Map.lookup (fromIntegral u30) reg
 
 r_f {-0x63-} (new:dops, aops, SetLocal u30:bops, ss, reg, cp, iid) = do
+  po (new:dops) aops$ SetLocal u30:bops
   r_f (dops, SetLocal u30:aops, bops, ss, reg2, cp, iid)
   where
     reg2 = Map.insert (fromIntegral u30) new reg
 
-r_f {-0x65-} (dops, aops, GetScopeObject idx:bops, ss, reg, cp, iid) =
+r_f {-0x64-} (dops, aops, GetGlobalScope:bops, ss, reg, cp, iid) = do
+  po dops aops$ GetGlobalScope:bops
+  r_f (global:dops, GetGlobalScope:aops, bops, ss, reg, cp, iid)
+  where
+    (v, iidv) = last ss
+    global = VmRt_Object v iidv
+
+r_f {-0x65-} (dops, aops, GetScopeObject idx:bops, ss, reg, cp, iid) = do
+  po dops aops$ GetScopeObject idx:bops
   r_f (scopedObject:dops, GetScopeObject idx:aops, bops, ss, reg, cp, iid)
   where
-    (obj, iid) = ss !! fromIntegral idx
-    scopedObject = VmRt_Object obj iid
+    (obj, iidObj) = ss !! fromIntegral idx
+    scopedObject = VmRt_Object obj iidObj
 
 r_f {-0x66-} (dops, aops, GetProperty idx Nothing:bops, ss, reg, cp, iid) = do
-  --po dops aops$ GetProperty idx Nothing:bops
+  po dops aops$ GetProperty idx Nothing:bops
   multiname <- get_multiname cp idx
   p$ show multiname
   (prop, vmrt:dopsNew) <- case multiname of
@@ -454,7 +503,7 @@ r_f {-0x66-} (dops, aops, GetProperty idx Nothing:bops, ss, reg, cp, iid) = do
     VmRt_String v -> return VmRt_Undefined
     VmRt_Array v _ -> case prop of
       VmRt_String name -> case name of
-        p_length -> return . VmRt_Int . fromIntegral$ length v
+        ic_length -> return . VmRt_Int . fromIntegral$ length v
         otherwise -> fail$ "GetProperty - VmRt_Array - can't get property " ++ BC.unpack name
       VmRt_Int i -> return$ v !! fromIntegral i
     VmRt_Object this _ -> case prop of
@@ -468,7 +517,7 @@ r_f {-0x66-} (dops, aops, GetProperty idx Nothing:bops, ss, reg, cp, iid) = do
   r_f (d:dopsNew, GetProperty idx Nothing:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x66-} (vmrt:dops, aops, GetProperty idx (Just prop):bops, ss, reg, cp, iid) = do
-  --po dops aops$ GetProperty idx (Just prop):bops
+  po dops aops$ GetProperty idx (Just prop):bops
 
   d <- {-# SCC "GetProperty_idx_Just" #-} case vmrt of
     VmRt_Undefined -> return VmRt_Undefined
@@ -479,7 +528,7 @@ r_f {-0x66-} (vmrt:dops, aops, GetProperty idx (Just prop):bops, ss, reg, cp, ii
     VmRt_Number v -> return VmRt_Undefined
     VmRt_String v -> return VmRt_Undefined
     VmRt_Array v _ -> case prop of
-      p_length -> return . VmRt_Int . fromIntegral$ length v
+      ic_length -> return . VmRt_Int . fromIntegral$ length v
       otherwise -> fail$ "GetProperty - VmRt_Array - can't get property " ++ BC.unpack prop
     VmRt_Object this _ -> do
       maybeProp <- H.lookup this$ Ext prop
@@ -490,7 +539,7 @@ r_f {-0x66-} (vmrt:dops, aops, GetProperty idx (Just prop):bops, ss, reg, cp, ii
   r_f (d:dops, GetProperty idx (Just prop):aops, bops, ss, reg, cp, iid)
 
 r_f {-0x68-} (value:VmRt_Object this iidThis:dops, aops, InitProperty idx maybeName:bops, ss, reg, cp, iid) = do
-  --po (value:VmRt_Object this iidThis:dops) aops (InitProperty idx maybeName:bops)
+  po (value:VmRt_Object this iidThis:dops) aops (InitProperty idx maybeName:bops)
   name <- case maybeName of
     Nothing -> do
       Abc.Multiname_QName nSInfoIdx stringIdx <- get_multiname cp idx
@@ -504,6 +553,26 @@ r_f {-0x68-} (value:VmRt_Object this iidThis:dops, aops, InitProperty idx maybeN
       return ()
     otherwise -> fail$ "init_property - property [" ++ BC.unpack name ++ "] exists"
   r_f (dops, InitProperty idx maybeName:aops, bops, ss, reg, cp, iid)
+
+r_f {-0x6C-} (VmRt_Object obj _:dops, aops, GetSlot u30:bops, ss, reg, cp, iid) = do
+  po (VmRt_Object obj 0:dops) aops$ GetSlot u30:bops
+  Just slot <- lookup obj $ pfx_slot_idx u30
+  r_f (slot:dops, GetSlot u30:aops, bops, ss, reg, cp, iid)
+
+r_f {-0x6D-} (value:VmRt_Object obj _:dops, aops, SetSlot u30:bops, ss, reg, cp, iid) = do
+  po (value:VmRt_Object obj 0:dops) aops$ SetSlot u30:bops
+  insert obj (pfx_slot_idx u30) value
+  r_f (dops, SetSlot u30:aops, bops, ss, reg, cp, iid)
+
+r_f {-0x6E-} (VmRt_Object obj _:dops, aops, GetGlobalSlot u30:bops, ss, reg, cp, iid) = do
+  po (VmRt_Object obj 0:dops) aops$ GetGlobalSlot u30:bops
+  Just slot <- lookup obj $ pfx_slot_idx u30
+  r_f (slot:dops, GetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
+
+r_f {-0x6F-} (value:VmRt_Object obj _:dops, aops, SetGlobalSlot u30:bops, ss, reg, cp, iid) = do
+  po (value:VmRt_Object obj 0:dops) aops$ SetGlobalSlot u30:bops
+  insert obj (pfx_slot_idx u30) value
+  r_f (dops, SetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x70-} (v:dops, aops, ConvertString:bops, ss, reg, cp, iid) = do
   r_f (convert_string v:dops, ConvertString:aops, bops, ss, reg, cp, iid)
@@ -522,6 +591,13 @@ r_f {-0x76-} (v:dops, aops, ConvertBoolean:bops, ss, reg, cp, iid) = do
 
 r_f {-0x77-} (v:dops, aops, ConvertObject:bops, ss, reg, cp, iid) = fail "NI: ConvertObject"
 
+r_f {-0x80-} (obj:dops, aops, Coerce idx (Just t):bops, ss, reg, cp, iid) = do
+  po (obj:dops) aops$ Coerce idx (Just t):bops
+  case t of
+    ic_function -> case obj of
+      f@(VmRt_Function _ _ _) -> r_f (f:dops, Coerce idx (Just t):aops, bops, ss, reg, cp, iid)
+    otherwise -> fail$ "unsupported Coerce " ++ BC.unpack t
+
 r_f {-0x90-} (a:dops, aops, Negate:bops, ss, reg, cp, iid) = do
   vmrt <- case a of
     VmRt_Int i -> return$ VmRt_Int$ negate i
@@ -530,28 +606,28 @@ r_f {-0x90-} (a:dops, aops, Negate:bops, ss, reg, cp, iid) = do
     otherwise -> fail$ "can't negate " ++ show a
   r_f (vmrt:dops, Negate:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x91-} (a:dops, aops, Increment:bops, ss, reg, cp, iid) =
+r_f {-0x91-} (a:dops, aops, Increment:bops, ss, reg, cp, iid) = do
   r_f (a + 1:dops, Increment:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x93-} (a:dops, aops, Decrement:bops, ss, reg, cp, iid) =
+r_f {-0x93-} (a:dops, aops, Decrement:bops, ss, reg, cp, iid) = do
   r_f (a - 1:dops, Decrement:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xA0-} (a:b:dops, aops, Add:bops, ss, reg, cp, iid) =
+r_f {-0xA0-} (a:b:dops, aops, Add:bops, ss, reg, cp, iid) = do
   r_f (b + a:dops, Add:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xA1-} (a:b:dops, aops, Subtract:bops, ss, reg, cp, iid) =
+r_f {-0xA1-} (a:b:dops, aops, Subtract:bops, ss, reg, cp, iid) = do
   r_f (b - a:dops, Subtract:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xA2-} (a:b:dops, aops, Multiply:bops, ss, reg, cp, iid) =
+r_f {-0xA2-} (a:b:dops, aops, Multiply:bops, ss, reg, cp, iid) = do
   r_f (b * a:dops, Multiply:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xA3-} (a:b:dops, aops, Divide:bops, ss, reg, cp, iid) =
+r_f {-0xA3-} (a:b:dops, aops, Divide:bops, ss, reg, cp, iid) = do
   r_f (b / a:dops, Divide:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xC0-} (a:dops, aops, IncrementInt:bops, ss, reg, cp, iid) =
+r_f {-0xC0-} (a:dops, aops, IncrementInt:bops, ss, reg, cp, iid) = do
   r_f (a + 1:dops, IncrementInt:aops, bops, ss, reg, cp, iid)
 
-r_f {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) =
+r_f {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) = do
   r_f (a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xC2-} (dops, aops, IncLocalInt regIdx:bops, ss, reg, cp, iid) = do
@@ -573,7 +649,7 @@ r_f {-0xC3-} (dops, aops, DecLocalInt regIdx:bops, ss, reg, cp, iid) = do
     maybeReg = Map.lookup (fromIntegral regIdx) reg
 
 r_f {-0xD0-} (dops, aops, GetLocal0:bops, ss, reg, cp, iid) = do
-  --po dops aops$ GetLocal0:bops
+  po dops aops$ GetLocal0:bops
   case maybeR of
     Nothing -> fail "GetLocal0 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal0:aops, bops, ss, reg, cp, iid)
@@ -581,7 +657,7 @@ r_f {-0xD0-} (dops, aops, GetLocal0:bops, ss, reg, cp, iid) = do
     maybeR = Map.lookup 0 reg
 
 r_f {-0xD1-} (dops, aops, GetLocal1:bops, ss, reg, cp, iid) = do
-  --po dops aops$ GetLocal1:bops
+  po dops aops$ GetLocal1:bops
   case maybeR of
     Nothing -> fail "GetLocal1 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal1:aops, bops, ss, reg, cp, iid)
@@ -589,7 +665,7 @@ r_f {-0xD1-} (dops, aops, GetLocal1:bops, ss, reg, cp, iid) = do
     maybeR = Map.lookup 1 reg
 
 r_f {-0xD2-} (dops, aops, GetLocal2:bops, ss, reg, cp, iid) = do
-  --po dops aops$ GetLocal2:bops
+  po dops aops$ GetLocal2:bops
   case maybeR of
     Nothing -> fail "GetLocal2 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal2:aops, bops, ss, reg, cp, iid)
@@ -597,26 +673,31 @@ r_f {-0xD2-} (dops, aops, GetLocal2:bops, ss, reg, cp, iid) = do
     maybeR = Map.lookup 2 reg
 
 r_f {-0xD3-} (dops, aops, GetLocal3:bops, ss, reg, cp, iid) = do
-  --po dops aops$ GetLocal3:bops
+  po dops aops$ GetLocal3:bops
   case maybeR of
     Nothing -> fail "GetLocal3 - register doesn't exist"
     Just r -> r_f (r:dops, GetLocal3:aops, bops, ss, reg, cp, iid)
   where
     maybeR = Map.lookup 3 reg
 
-r_f {-0xD4-} (new:dops, aops, SetLocal0:bops, ss, reg, cp, iid) =
+r_f {-0xD4-} (new:dops, aops, SetLocal0:bops, ss, reg, cp, iid) = do
+  po (new:dops) aops$ SetLocal0:bops
   r_f (dops, SetLocal0:aops, bops, ss, Map.insert 0 new reg, cp, iid)
 
-r_f {-0xD5-} (new:dops, aops, SetLocal1:bops, ss, reg, cp, iid) =
+r_f {-0xD5-} (new:dops, aops, SetLocal1:bops, ss, reg, cp, iid) = do
+  po (new:dops) aops$ SetLocal1:bops
   r_f (dops, SetLocal1:aops, bops, ss, Map.insert 1 new reg, cp, iid)
 
-r_f {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) =
+r_f {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) = do
+  po (new:dops) aops$ SetLocal2:bops
   r_f (dops, SetLocal2:aops, bops, ss, Map.insert 2 new reg, cp, iid)
 
-r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) =
+r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) = do
+  po (new:dops) aops$ SetLocal3:bops
   r_f (dops, SetLocal3:aops, bops, ss, Map.insert 3 new reg, cp, iid)
 
-r_f {-0xD7-} (dops, aops, op:bops, ss, reg, cp, iid) = fail$ "didn't match opcode " ++ show op
+r_f {-0xD7-} (dops, aops, op:bops, ss, reg, cp, iid) = do
+  fail$ "didn't match opcode " ++ show op
 
 convert_string :: VmRt -> VmRt
 convert_string = VmRt_String . BC.pack . to_string
