@@ -99,7 +99,7 @@ instance JSON TraitVar where
   readJSON = undefined
   showJSON (TraitVar id name index kind) = kvToObject$
     [
-      ("disp_id", showJSON id)
+      ("id", showJSON id)
     , ("name", showJSON name)
     , ("index", showJSON index)
     , ("kind", maybe JSNull showJSON kind)
@@ -109,7 +109,7 @@ instance JSON TraitClass where
   readJSON = undefined
   showJSON (TraitClass id cii) = kvToObject
     [
-      ("disp_id", showJSON id)
+      ("id", showJSON id)
     , ("class_info", showJSON cii)
     ]
 
@@ -117,7 +117,7 @@ instance JSON TraitFunction where
   readJSON = undefined
   showJSON (TraitFunction id msi) = kvToObject
     [
-      ("disp_id", showJSON id)
+      ("id", showJSON id)
     , ("method_id", showJSON msi)
     ]
 
@@ -125,7 +125,7 @@ instance JSON TraitMethod where
   readJSON = undefined
   showJSON (TraitMethod id msi) = kvToObject
     [
-      ("disp_id", showJSON id)
+      ("id", showJSON id)
     , ("method_id", showJSON msi)
     ]
 
