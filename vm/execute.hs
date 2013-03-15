@@ -559,6 +559,7 @@ r_f {-0x6C-} (VmRt_Object obj _:dops, aops, GetSlot u30:bops, ss, reg, cp, iid) 
   Just slot <- lookup obj $ pfx_slot_idx u30
   r_f (slot:dops, GetSlot u30:aops, bops, ss, reg, cp, iid)
 
+-- TODO traits on method bodies
 r_f {-0x6D-} (value:VmRt_Object obj _:dops, aops, SetSlot u30:bops, ss, reg, cp, iid) = do
   po (value:VmRt_Object obj 0:dops) aops$ SetSlot u30:bops
   insert obj (pfx_slot_idx u30) value

@@ -14,6 +14,7 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.HashTable.IO as H
 import qualified Data.Map as Map
 
+-- TODO IntMap to prevent hashing OR just use Int as key
 type VmObject = H.CuckooHashTable VmRtP VmRt
 
 -- Part of FunctionStack

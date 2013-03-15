@@ -77,8 +77,8 @@ multiname s_res nsi_res nss_res (Multiname_QNameA a b) = case nsi_res a of
   nsinfo -> nsinfo ++ "::" ++ s_res b
 multiname s_res nsi_res nss_res m@(Multiname_RTQName a) = show m
 multiname s_res nsi_res nss_res m@(Multiname_RTQNameA a) = show m
-multiname s_res nsi_res nss_res m@(Multiname_Multiname a b) = show m
-multiname s_res nsi_res nss_res m@(Multiname_MultinameA a b) = show m
+multiname s_res nsi_res nss_res m@(Multiname_Multiname a b) = s_res a
+multiname s_res nsi_res nss_res m@(Multiname_MultinameA a b) = s_res a
 multiname s_res nsi_res nss_res m@(Multiname_MultinameL a) = show m
 multiname s_res nsi_res nss_res m@(Multiname_MultinameLA a) = show m
 multiname s_res nsi_res nss_res Multiname_Any = "*"
