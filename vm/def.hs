@@ -13,13 +13,14 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.HashTable.IO as H
 import qualified Data.Map as Map
+import qualified Data.Vector as V
 
 -- TODO IntMap to prevent hashing OR just use Int as key
 type VmObject = H.CuckooHashTable VmRtP VmRt
 
 -- Part of FunctionStack
 type ScopeStack = [(VmObject, InstanceId)] -- this is a tuple for purity
-type Registers = Map Int VmRt
+type Registers = V.Vector VmRt
 type D_Ops = [VmRt] -- data ops
 type A_Ops = [OpCode] -- above stack pointer
 type B_Ops = [OpCode] -- below stack pointer
@@ -301,6 +302,7 @@ data MethodBody = MethodBody {
                              , mbCode :: [OpCode]
                              , mbExceptions :: [Abc.Exception]
                              , mbTraits :: [Abc.TraitsInfo]
+                             , mbMaxReg :: Int
                              }
                              deriving (Show)
 

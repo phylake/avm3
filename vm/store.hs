@@ -185,9 +185,22 @@ xform_methodBodies :: (Abc.IntIdx -> Abc.S32)                  -- int resolution
                    -> [Abc.MethodBody]
                    -> [MethodBody]
 xform_methodBodies fi fu fd fs fm = map f where
-  f (Abc.MethodBody a b c d e code f g)= newCode `deepseq` MethodBody a b c d e newCode f g
+  f (Abc.MethodBody a b c d e code f g)= newCode `deepseq` MethodBody a b c d e newCode f g $ maxReg newCode
     where
       newCode = concatMap (xform_opCode fi fu fd fs fm) code
+      maxReg :: [OpCode] -> Int
+      maxReg [] = 0
+      maxReg (GetLocal0:ops) = max 1 $ maxReg ops
+      maxReg (GetLocal1:ops) = max 2 $ maxReg ops
+      maxReg (GetLocal2:ops) = max 3 $ maxReg ops
+      maxReg (GetLocal3:ops) = max 4 $ maxReg ops
+      maxReg (GetLocal u30:ops) = max (fromIntegral u30 + 1) $ maxReg ops
+      maxReg (SetLocal0:ops) = max 1 $ maxReg ops
+      maxReg (SetLocal1:ops) = max 2 $ maxReg ops
+      maxReg (SetLocal2:ops) = max 3 $ maxReg ops
+      maxReg (SetLocal3:ops) = max 4 $ maxReg ops
+      maxReg (SetLocal u30:ops) = max (fromIntegral u30 + 1) $ maxReg ops
+      maxReg (op:ops) = maxReg ops
 
 xform_opCode :: (Abc.IntIdx -> Abc.S32)                  -- int resolution
              -> (Abc.UintIdx -> Abc.U32)                 -- uint resolution

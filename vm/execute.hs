@@ -32,10 +32,12 @@ import qualified Data.Enumerator.Binary as EB
 import qualified Data.Enumerator.List as EL
 import qualified Data.HashTable.IO as H
 import qualified Data.Map as Map
+import qualified Data.Vector as V
+import           Data.Vector ((//), (!))
 
 p :: String -> AVM3 ()
-p = putStrLn
---p _ = return ()
+--p = putStrLn
+p _ = return ()
 {-# INLINE p #-}
 
 po :: D_Ops -> A_Ops -> B_Ops -> AVM3 ()
@@ -70,7 +72,7 @@ insert = H.insert
 {-# INLINE insert #-}
 
 lookup :: VmObject -> VmRtP -> AVM3 (Maybe VmRt)
-lookup = H.lookup
+lookup h k = H.lookup h k
 {-# INLINE lookup #-}
 
 avm_prefix :: String
@@ -106,7 +108,7 @@ execute_abc abc = do
   p$ "-------------------------------------------"
   (global, globalid) <- build_global_scope 0
   let ops = [NewClass idx, ReturnVoid]
-  (vmrt, _) <- r_f ([], [], ops, [(global, globalid)], Map.fromList [(0, VmRt_Object global globalid)], cp, globalid+1)
+  (vmrt, _) <- r_f ([], [], ops, [(global, globalid)], V.fromList [VmRt_Object global globalid], cp, globalid+1)
   p$ "-------------------------------------------"
   t1 <- getCurrentTime
   putStrLn$ show$ diffUTCTime t1 t0
@@ -162,7 +164,7 @@ r_f {-0x08-} (dops, aops, Kill regIdx:bops, ss, reg, cp, iid) = do
   po dops aops$ Kill regIdx:bops
   r_f (dops, Kill regIdx:aops, bops, ss, reg2, cp, iid)
   where
-    reg2 = Map.insert (fromIntegral regIdx) VmRt_Undefined reg
+    reg2 = reg // [(fromIntegral regIdx, VmRt_Undefined)]
 
 r_f {-0x09-} (dops, aops, Label:bops, ss, reg, cp, iid) = do
   po dops aops$ Label:bops
@@ -228,7 +230,7 @@ r_f {-0x17-} (a:b:dops, aops, IfGreaterThan s24:bops, ss, reg, cp, iid) = do
     then r_f (dops, aopsNew, bopsNew, ss, reg, cp, iid)
     else r_f (dops, IfGreaterThan s24:aops, bops, ss, reg, cp, iid)
   where
-    (aopsNew, bopsNew) = jump s24 (IfGreaterThan s24:aops, bops)
+    (aopsNew, bopsNew) = {-# SCC "IfGreaterThan.jump" #-} jump s24 (IfGreaterThan s24:aops, bops)
 
 r_f {-0x18-} (a:b:dops, aops, IfGreaterEqual s24:bops, ss, reg, cp, iid) = do
   po (a:b:dops) aops$ IfGreaterEqual s24:bops
@@ -315,7 +317,7 @@ r_f {-0x30-} (VmRt_Activation v:dops, aops, PushScope:bops, ss, reg, cp, iid) = 
 
 r_f {-0x40-} (dops, aops, NewFunction idx:bops, ss, reg, cp, iid) = do
   po dops aops$ NewFunction idx:bops
-  MethodBody _ _ _ _ _ code _ _ <- get_methodBody cp idx
+  MethodBody _ _ _ _ _ code _ _ _ <- get_methodBody cp idx
   let function = VmRt_Function code ss iid2
   r_f (function:dops, NewFunction idx:aops, bops, ss, reg, cp, iid2)
   where
@@ -329,7 +331,7 @@ r_f {-0x41-} (dops, aops, Call args:bops, ss, reg, cp, iid) = do
     Left err -> return (ret, -1)
   where
     (nArgs, (this:VmRt_Function fops fss _:dopsNew)) = splitAt (fromIntegral args) dops
-    registers = Map.fromList$ (0, this):zip [1..length nArgs] nArgs
+    registers = V.fromList$ this:nArgs
 
 r_f {-0x47-} (dops, aops, ReturnVoid:bops, ss, reg, cp, iid) = do
   return (Right VmRt_Undefined, iid)
@@ -360,16 +362,16 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid
       proplist <- H.toList this
       fail$ "couldn't find " ++ BC.unpack name ++ " on " ++ show proplist
 
-  MethodBody _ _ _ _ _ code _ _ <- get_methodBody cp methodId
+  MethodBody _ _ _ _ _ code _ _ maxReg <- get_methodBody cp methodId
   p$ show code
 
   -- CallPropVoid, only need the latest instance id counter
+  let registers = V.replicate maxReg VmRt_Undefined // ((0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs)
   (_, iid2) <- r_f ([], [], code, [last ss], registers, cp, iid)
 
   r_f (dopsNew, CallPropVoid idx args maybeName:aops, bops, ss, reg, cp, iid2)
   where
     (nArgs, (VmRt_Object this iidThis):dopsNew) = splitAt (fromIntegral args) dops
-    registers = Map.fromList$ (0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs
 
 r_f {-0x55-} (dops, aops, NewObject args:bops, ss, reg, cp, iid) = do
   po dops aops$ NewObject args:bops
@@ -397,15 +399,17 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   p$ "########## NewClass " ++ show idx
   Abc.ClassInfo msi traits <- get_class cp idx
 
-  MethodBody _ _ _ _ _ code _ _ <- get_methodBody cp msi
+  MethodBody _ _ _ _ _ code _ _ maxReg <- get_methodBody cp msi
   --p$ "\tops: " ++ show code
+  --p$ "\tmaxReg: " ++ show maxReg
 
   vmrto@(VmRt_Object klass iid2) <- new_object iid
   -- store this class's identity in it
   insert klass pfx_class_info_idx (VmRtInternalInt idx)
 
   -- NewClass, only need the latest instance id counter
-  (_, iid3) <- r_f ([], [], code, [(global, globalid)], Map.fromList [(0,vmrto)], cp, iid2)
+  let registers = V.replicate maxReg VmRt_Undefined // [(0, vmrto)]
+  (_, iid3) <- r_f ([], [], code, [(global, globalid)], registers, cp, iid2)
 
   insert global (Ext$ BC.pack "Test") vmrto
   p$ "########## " ++ show idx
@@ -415,7 +419,7 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
     (global, globalid) = last ss
 
 r_f {-0x5D-} (dops, aops, FindPropStrict idx maybeName:bops, ss, reg, cp, iid) = do
-  po dops aops$ FindPropStrict idx maybeName:bops
+  --po dops aops$ FindPropStrict idx maybeName:bops
   
   name <- case maybeName of
     Nothing -> do
@@ -427,7 +431,7 @@ r_f {-0x5D-} (dops, aops, FindPropStrict idx maybeName:bops, ss, reg, cp, iid) =
   r_f (vmrt:dops, FindPropStrict idx maybeName:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x5E-} (dops, aops, FindProperty idx maybeName:bops, ss, reg, cp, iid) = do
-  po dops aops$ FindProperty idx maybeName:bops
+  --po dops aops$ FindProperty idx maybeName:bops
   name <- case maybeName of
     Nothing -> do
       Abc.Multiname_QName nSInfoIdx stringIdx <- get_multiname cp idx
@@ -454,17 +458,11 @@ r_f {-0x61-} (value:VmRt_Object this _:dops, aops, SetProperty idx (Just prop):b
   r_f (dops, SetProperty idx (Just prop):aops, bops, ss, reg, cp, iid)
 
 r_f {-0x62-} (dops, aops, GetLocal u30:bops, ss, reg, cp, iid) = do
-  case maybeR of
-    Nothing -> fail$ "GetLocal" ++ show u30 ++ " - register doesn't exist"
-    Just r -> r_f (r:dops, GetLocal u30:aops, bops, ss, reg, cp, iid)
-  where
-    maybeR = Map.lookup (fromIntegral u30) reg
+  r_f (reg ! fromIntegral u30:dops, GetLocal u30:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x63-} (new:dops, aops, SetLocal u30:bops, ss, reg, cp, iid) = do
   po (new:dops) aops$ SetLocal u30:bops
-  r_f (dops, SetLocal u30:aops, bops, ss, reg2, cp, iid)
-  where
-    reg2 = Map.insert (fromIntegral u30) new reg
+  r_f (dops, SetLocal u30:aops, bops, ss, reg // [(fromIntegral u30, new)], cp, iid)
 
 r_f {-0x64-} (dops, aops, GetGlobalScope:bops, ss, reg, cp, iid) = do
   po dops aops$ GetGlobalScope:bops
@@ -629,73 +627,51 @@ r_f {-0xC0-} (a:dops, aops, IncrementInt:bops, ss, reg, cp, iid) = do
   r_f (a + 1:dops, IncrementInt:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) = do
-  r_f (a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
+  r_f ( {-# SCC "DecrementInt" #-} a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xC2-} (dops, aops, IncLocalInt regIdx:bops, ss, reg, cp, iid) = do
-  case maybeReg of
-    Nothing -> fail$ "register " ++ show regIdx ++ " didn't exist"
-    Just r -> do
-      let reg2 = Map.insert (fromIntegral regIdx) (r + 1) reg
-      r_f (dops, IncLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
+  r_f (dops, IncLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
   where
-    maybeReg = Map.lookup (fromIntegral regIdx) reg
+    reg2 = reg // [(iidx, (reg ! iidx) + 1)]
+    iidx = fromIntegral regIdx
 
 r_f {-0xC3-} (dops, aops, DecLocalInt regIdx:bops, ss, reg, cp, iid) = do
-  case maybeReg of
-    Nothing -> fail$ "register " ++ show regIdx ++ " didn't exist"
-    Just r -> do
-      let reg2 = Map.insert (fromIntegral regIdx) (r - 1) reg
-      r_f (dops, DecLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
+  r_f (dops, DecLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
   where
-    maybeReg = Map.lookup (fromIntegral regIdx) reg
+    reg2 = reg // [(iidx, (reg ! iidx) - 1)]
+    iidx = fromIntegral regIdx
 
 r_f {-0xD0-} (dops, aops, GetLocal0:bops, ss, reg, cp, iid) = do
   po dops aops$ GetLocal0:bops
-  case maybeR of
-    Nothing -> fail "GetLocal0 - register doesn't exist"
-    Just r -> r_f (r:dops, GetLocal0:aops, bops, ss, reg, cp, iid)
-  where
-    maybeR = Map.lookup 0 reg
+  r_f (reg ! 0:dops, GetLocal0:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xD1-} (dops, aops, GetLocal1:bops, ss, reg, cp, iid) = do
   po dops aops$ GetLocal1:bops
-  case maybeR of
-    Nothing -> fail "GetLocal1 - register doesn't exist"
-    Just r -> r_f (r:dops, GetLocal1:aops, bops, ss, reg, cp, iid)
-  where
-    maybeR = Map.lookup 1 reg
+  r_f (reg ! 1:dops, GetLocal1:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xD2-} (dops, aops, GetLocal2:bops, ss, reg, cp, iid) = do
   po dops aops$ GetLocal2:bops
-  case maybeR of
-    Nothing -> fail "GetLocal2 - register doesn't exist"
-    Just r -> r_f (r:dops, GetLocal2:aops, bops, ss, reg, cp, iid)
-  where
-    maybeR = Map.lookup 2 reg
+  r_f (reg ! 2:dops, GetLocal2:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xD3-} (dops, aops, GetLocal3:bops, ss, reg, cp, iid) = do
   po dops aops$ GetLocal3:bops
-  case maybeR of
-    Nothing -> fail "GetLocal3 - register doesn't exist"
-    Just r -> r_f (r:dops, GetLocal3:aops, bops, ss, reg, cp, iid)
-  where
-    maybeR = Map.lookup 3 reg
+  r_f (reg ! 3:dops, GetLocal3:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xD4-} (new:dops, aops, SetLocal0:bops, ss, reg, cp, iid) = do
   po (new:dops) aops$ SetLocal0:bops
-  r_f (dops, SetLocal0:aops, bops, ss, Map.insert 0 new reg, cp, iid)
+  r_f (dops, SetLocal0:aops, bops, ss, reg // [(0, new)], cp, iid)
 
 r_f {-0xD5-} (new:dops, aops, SetLocal1:bops, ss, reg, cp, iid) = do
   po (new:dops) aops$ SetLocal1:bops
-  r_f (dops, SetLocal1:aops, bops, ss, Map.insert 1 new reg, cp, iid)
+  r_f (dops, SetLocal1:aops, bops, ss, reg // [(1, new)], cp, iid)
 
 r_f {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) = do
   po (new:dops) aops$ SetLocal2:bops
-  r_f (dops, SetLocal2:aops, bops, ss, Map.insert 2 new reg, cp, iid)
+  r_f (dops, SetLocal2:aops, bops, ss, reg // [(2, new)], cp, iid)
 
 r_f {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) = do
   po (new:dops) aops$ SetLocal3:bops
-  r_f (dops, SetLocal3:aops, bops, ss, Map.insert 3 new reg, cp, iid)
+  r_f (dops, SetLocal3:aops, bops, ss, reg // [(3, new)], cp, iid)
 
 r_f {-0xD7-} (dops, aops, op:bops, ss, reg, cp, iid) = do
   fail$ "didn't match opcode " ++ show op
