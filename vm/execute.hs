@@ -12,6 +12,7 @@ import           Control.Monad
 import           Data.Int
 import           Data.Maybe (listToMaybe)
 import           Data.Time.Clock
+import           Data.Vector ((//), (!))
 import           Data.Word
 import           Ecma.Prims
 import           Prelude hiding (lookup)
@@ -33,7 +34,6 @@ import qualified Data.Enumerator.List as EL
 import qualified Data.HashTable.IO as H
 import qualified Data.Map as Map
 import qualified Data.Vector as V
-import           Data.Vector ((//), (!))
 
 p :: String -> AVM3 ()
 --p = putStrLn
@@ -362,12 +362,12 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid
       proplist <- H.toList this
       fail$ "couldn't find " ++ BC.unpack name ++ " on " ++ show proplist
 
-  MethodBody _ _ _ _ _ code _ _ maxReg <- get_methodBody cp methodId
+  MethodBody _ _ _ _ _ code _ _ registers <- get_methodBody cp methodId
   p$ show code
 
   -- CallPropVoid, only need the latest instance id counter
-  let registers = V.replicate maxReg VmRt_Undefined // ((0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs)
-  (_, iid2) <- r_f ([], [], code, [last ss], registers, cp, iid)
+  let registers2 = registers // ((0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs)
+  (_, iid2) <- r_f ([], [], code, [last ss], registers2, cp, iid)
 
   r_f (dopsNew, CallPropVoid idx args maybeName:aops, bops, ss, reg, cp, iid2)
   where
@@ -399,7 +399,7 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   p$ "########## NewClass " ++ show idx
   Abc.ClassInfo msi traits <- get_class cp idx
 
-  MethodBody _ _ _ _ _ code _ _ maxReg <- get_methodBody cp msi
+  MethodBody _ _ _ _ _ code _ _ registers <- get_methodBody cp msi
   --p$ "\tops: " ++ show code
   --p$ "\tmaxReg: " ++ show maxReg
 
@@ -408,8 +408,7 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   insert klass pfx_class_info_idx (VmRtInternalInt idx)
 
   -- NewClass, only need the latest instance id counter
-  let registers = V.replicate maxReg VmRt_Undefined // [(0, vmrto)]
-  (_, iid3) <- r_f ([], [], code, [(global, globalid)], registers, cp, iid2)
+  (_, iid3) <- r_f ([], [], code, [(global, globalid)], registers // [(0, vmrto)], cp, iid2)
 
   insert global (Ext$ BC.pack "Test") vmrto
   p$ "########## " ++ show idx
@@ -419,7 +418,7 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
     (global, globalid) = last ss
 
 r_f {-0x5D-} (dops, aops, FindPropStrict idx maybeName:bops, ss, reg, cp, iid) = do
-  --po dops aops$ FindPropStrict idx maybeName:bops
+  po dops aops$ FindPropStrict idx maybeName:bops
   
   name <- case maybeName of
     Nothing -> do
@@ -431,7 +430,7 @@ r_f {-0x5D-} (dops, aops, FindPropStrict idx maybeName:bops, ss, reg, cp, iid) =
   r_f (vmrt:dops, FindPropStrict idx maybeName:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x5E-} (dops, aops, FindProperty idx maybeName:bops, ss, reg, cp, iid) = do
-  --po dops aops$ FindProperty idx maybeName:bops
+  po dops aops$ FindProperty idx maybeName:bops
   name <- case maybeName of
     Nothing -> do
       Abc.Multiname_QName nSInfoIdx stringIdx <- get_multiname cp idx

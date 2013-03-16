@@ -15,7 +15,6 @@ module Vm.Store (
 , get_methodBody
 ) where
 
-import           Control.Applicative ((<$>))
 import           Control.DeepSeq
 import           Data.Bits
 import           Data.Int
@@ -27,6 +26,7 @@ import qualified Abc.Def as Abc
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.HashTable.IO as H
+import qualified Data.Vector as V
 
 key_int :: B.ByteString
 key_int = BC.pack "_int"
@@ -185,9 +185,13 @@ xform_methodBodies :: (Abc.IntIdx -> Abc.S32)                  -- int resolution
                    -> [Abc.MethodBody]
                    -> [MethodBody]
 xform_methodBodies fi fu fd fs fm = map f where
-  f (Abc.MethodBody a b c d e code f g)= newCode `deepseq` MethodBody a b c d e newCode f g $ maxReg newCode
+  f (Abc.MethodBody a b c d e code f g)= newCode `deepseq` MethodBody a b c d e newCode f g registers
     where
       newCode = concatMap (xform_opCode fi fu fd fs fm) code
+
+      registers :: Registers
+      registers = V.replicate (maxReg newCode) VmRt_Undefined
+
       maxReg :: [OpCode] -> Int
       maxReg [] = 0
       maxReg (GetLocal0:ops) = max 1 $ maxReg ops

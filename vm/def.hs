@@ -302,7 +302,7 @@ data MethodBody = MethodBody {
                              , mbCode :: [OpCode]
                              , mbExceptions :: [Abc.Exception]
                              , mbTraits :: [Abc.TraitsInfo]
-                             , mbMaxReg :: Int
+                             , mbReg :: Registers
                              }
                              deriving (Show)
 
