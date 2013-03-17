@@ -228,9 +228,11 @@ instance Num VmRt where
 
 instance Fractional Int32 where
   a / b = fromIntegral a / fromIntegral b
+  fromRational = fail "Fractional Int32"
 
 instance Fractional Word32 where
   a / b = fromIntegral a / fromIntegral b
+  fromRational = fail "Fractional Word32"
 
 instance Fractional VmRt where
   (VmRt_Int a) / (VmRt_Int b) = VmRt_Int$ a / b
@@ -241,7 +243,7 @@ instance Fractional VmRt where
   (VmRt_Uint a) / (VmRt_Int b) = VmRt_Uint$ a / fromIntegral b
   (VmRt_Uint a) / (VmRt_Number b) = VmRt_Number$ fromIntegral a / b
 
-  --fromRational = VmRt_Number . fromIntegral
+  fromRational = fail "Fractional VmRt"
 
 instance Show VmRt where
   show VmRt_Undefined        = "VmRt_Undefined"

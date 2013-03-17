@@ -12,7 +12,7 @@ toArray :: JSON a => [a] -> JSValue
 toArray = JSArray. map showJSON
 
 abcToJson :: Abc -> JSValue
-abcToJson (Abc i ui d s nsi nss names sigs meta inst klas rx bodies) = kvToObject$
+abcToJson (Abc i ui d s nsi nss names sigs meta inst klas rx bodies) = kvToObject
   [
     ("ints", toArray i)
   , ("uints", toArray ui)
@@ -87,7 +87,7 @@ method_signature :: (U30 -> String) -- multiname resolution
                  -> (U30 -> String) -- string resolution
                  -> MethodSignature
                  -> JSValue
-method_signature m_res s_res (MethodSignature ret ptypes name flags options pnames) = kvToObject$
+method_signature m_res s_res (MethodSignature ret ptypes name flags options pnames) = kvToObject
   [
     ("name", showJSON$ s_res name)
   , ("ret", showJSON$ m_res ret)
@@ -102,7 +102,7 @@ method_body :: (U30 -> String) -- multiname resolution
             -> (TraitsInfo -> JSValue) -- traits info resolution
             -> MethodBody
             -> JSValue
-method_body m_res s_res tt_res (MethodBody init max local initD scopeD code exceptions traits) = kvToObject$
+method_body m_res s_res tt_res (MethodBody init max local initD scopeD code exceptions traits) = kvToObject
   [
     ("method_id", showJSON init)
   , ("max_stack", showJSON max)
@@ -139,38 +139,39 @@ traits_info m_res tt_res (TraitsInfo name final override ttype meta) = kvToObjec
 trait_type :: (U30 -> String) -- multiname resolution
            -> TraitType
            -> JSValue
-trait_type m_res (TT_Var tvar) = trait_var m_res tvar
-trait_type m_res (TT_Const tvar) = trait_var m_res tvar
-trait_type m_res (TT_Method (TraitMethod tId meth)) = kvToObject$
+trait_type m_res (TraitVar tid name idx kind) = kvToObject
+  [
+    ("id", showJSON tid)
+  , ("name", showJSON$ m_res name)
+  , ("index", showJSON idx)
+  , ("kind", showJSON$ maybe 0 id kind)
+  ]
+trait_type m_res (TraitMethod tId meth) = kvToObject
   [
     ("id", showJSON tId)
   , ("method_id", showJSON meth)
   ]
-trait_type m_res (TT_Getter (TraitMethod tId meth)) = kvToObject$
+trait_type m_res (TraitGetter tId meth) = kvToObject
   [
     ("id", showJSON tId)
   , ("method_id", showJSON meth)
   ]
-trait_type m_res (TT_Setter (TraitMethod tId meth)) = kvToObject$
+trait_type m_res (TraitSetter tId meth) = kvToObject
   [
     ("id", showJSON tId)
   , ("method_id", showJSON meth)
   ]
-trait_type m_res (TT_Class (TraitClass id init)) = kvToObject$
+trait_type m_res (TraitClass id init) = kvToObject
   [
     ("id", showJSON id)
   , ("init", showJSON init)
   ]
-trait_type m_res (TT_Function (TraitFunction dispId func)) = kvToObject$
+trait_type m_res (TraitFunction dispId func) = kvToObject
   [
     ("slot_id", showJSON dispId)
   , ("function_id", showJSON func)
   ]
-
-trait_var :: (U30 -> String) -- multiname resolution
-         -> TraitVar
-         -> JSValue
-trait_var m_res (TraitVar tid name idx kind) = kvToObject$
+trait_type m_res (TraitConst tid name idx kind) = kvToObject
   [
     ("id", showJSON tid)
   , ("name", showJSON$ m_res name)

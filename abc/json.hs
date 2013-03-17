@@ -12,7 +12,7 @@ toArray = JSArray. map showJSON
 
 instance JSON Abc where
   readJSON = undefined
-  showJSON (Abc i ui d s nsi nss names sigs meta inst klas rx bodies) = kvToObject$
+  showJSON (Abc i ui d s nsi nss names sigs meta inst klas rx bodies) = kvToObject
     [
       ("ints", toArray i)
     , ("uints", toArray ui)
@@ -39,7 +39,7 @@ instance JSON Multiname where
 
 instance JSON MethodSignature where
   readJSON = undefined
-  showJSON (MethodSignature ret ptypes name flags options pnames) = kvToObject$
+  showJSON (MethodSignature ret ptypes name flags options pnames) = kvToObject
     [
       ("name", showJSON name)
     , ("ret", showJSON ret)
@@ -55,7 +55,7 @@ instance JSON CPC where
 
 instance JSON Metadata where
   readJSON = undefined
-  showJSON (Metadata name kvps) = kvToObject$
+  showJSON (Metadata name kvps) = kvToObject
     [
       ("name", showJSON name)
     , ("kvps", toArray$ map (\(k,v) -> (k, showJSON v)) kvps )
@@ -63,7 +63,7 @@ instance JSON Metadata where
 
 instance JSON InstanceInfo where
   readJSON = undefined
-  showJSON (InstanceInfo name super flags ns ifaces init traits) = kvToObject$
+  showJSON (InstanceInfo name super flags ns ifaces init traits) = kvToObject
     [
       ("name", showJSON name)
     , ("super_name", showJSON super)
@@ -76,7 +76,7 @@ instance JSON InstanceInfo where
 
 instance JSON TraitsInfo where
   readJSON = undefined
-  showJSON (TraitsInfo name final override t meta) = kvToObject$
+  showJSON (TraitsInfo name final override t meta) = kvToObject
     [
       ("multiname", showJSON name)
     , ("final", showJSON final)
@@ -87,46 +87,44 @@ instance JSON TraitsInfo where
 
 instance JSON TraitType where
   readJSON = undefined
-  showJSON (TT_Var a) = showJSON a
-  showJSON (TT_Method a) = showJSON a
-  showJSON (TT_Getter a) = showJSON a
-  showJSON (TT_Setter a) = showJSON a
-  showJSON (TT_Class a) = showJSON a
-  showJSON (TT_Function a) = showJSON a
-  showJSON (TT_Const a) = showJSON a
-
-instance JSON TraitVar where
-  readJSON = undefined
-  showJSON (TraitVar id name index kind) = kvToObject$
+  showJSON (TraitVar id name index kind) = kvToObject
     [
       ("id", showJSON id)
     , ("name", showJSON name)
     , ("index", showJSON index)
     , ("kind", maybe JSNull showJSON kind)
     ]
-
-instance JSON TraitClass where
-  readJSON = undefined
+  showJSON (TraitMethod id msi) = kvToObject
+    [
+      ("id", showJSON id)
+    , ("method_id", showJSON msi)
+    ]
+  showJSON (TraitGetter id msi) = kvToObject
+    [
+      ("id", showJSON id)
+    , ("method_id", showJSON msi)
+    ]
+  showJSON (TraitSetter id msi) = kvToObject
+    [
+      ("id", showJSON id)
+    , ("method_id", showJSON msi)
+    ]
   showJSON (TraitClass id cii) = kvToObject
     [
       ("id", showJSON id)
     , ("class_info", showJSON cii)
     ]
-
-instance JSON TraitFunction where
-  readJSON = undefined
   showJSON (TraitFunction id msi) = kvToObject
     [
       ("id", showJSON id)
     , ("method_id", showJSON msi)
     ]
-
-instance JSON TraitMethod where
-  readJSON = undefined
-  showJSON (TraitMethod id msi) = kvToObject
+  showJSON (TraitConst id name index kind) = kvToObject
     [
       ("id", showJSON id)
-    , ("method_id", showJSON msi)
+    , ("name", showJSON name)
+    , ("index", showJSON index)
+    , ("kind", maybe JSNull showJSON kind)
     ]
 
 instance JSON ClassInfo where

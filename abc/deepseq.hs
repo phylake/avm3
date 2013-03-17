@@ -103,29 +103,13 @@ instance NFData TraitsInfo where
     `deepseq` ()
 
 instance NFData TraitType where
-  rnf (TT_Var a) = a `deepseq` ()
-  rnf (TT_Method a) = a `deepseq` ()
-  rnf (TT_Getter a) = a `deepseq` ()
-  rnf (TT_Setter a) = a `deepseq` ()
-  rnf (TT_Class a) = a `deepseq` ()
-  rnf (TT_Function a) = a `deepseq` ()
-  rnf (TT_Const a) = a `deepseq` ()
-
-instance NFData TraitVar where
-  rnf (TraitVar a b c d) = a
-    `deepseq` b
-    `deepseq` c
-    `deepseq` d
-    `deepseq` ()
-
-instance NFData TraitClass where
-  rnf (TraitClass a b) = a `deepseq` b `deepseq` ()
-
-instance NFData TraitFunction where
-  rnf (TraitFunction a b) = a `deepseq` b `deepseq` ()
-
-instance NFData TraitMethod where
+  rnf (TraitVar a b c d) = a `deepseq` b `deepseq` c `deepseq` d `deepseq` ()
+  rnf (TraitConst a b c d) = a `deepseq` b `deepseq` c `deepseq` d `deepseq` ()
   rnf (TraitMethod a b) = a `deepseq` b `deepseq` ()
+  rnf (TraitGetter a b) = a `deepseq` b `deepseq` ()
+  rnf (TraitSetter a b) = a `deepseq` b `deepseq` ()
+  rnf (TraitClass a b) = a `deepseq` b `deepseq` ()
+  rnf (TraitFunction a b) = a `deepseq` b `deepseq` ()
 
 instance NFData ClassInfo where
   rnf (ClassInfo a b) = a `deepseq` b `deepseq` ()

@@ -36,8 +36,8 @@ import qualified Data.Map as Map
 import qualified Data.Vector as V
 
 p :: String -> AVM3 ()
---p = putStrLn
-p _ = return ()
+p = putStrLn
+--p _ = return ()
 {-# INLINE p #-}
 
 po :: D_Ops -> A_Ops -> B_Ops -> AVM3 ()
@@ -104,7 +104,7 @@ execute_abc :: Abc.Abc -> AVM3 (Either AVM3Exception VmRt)
 execute_abc abc = do
   t0 <- getCurrentTime
   cp <- build_cp abc
-  Abc.ScriptInfo _ ((Abc.TraitsInfo _ _ _ (Abc.TT_Class (Abc.TraitClass _ idx)) _):[]) <- get_script cp 0
+  Abc.ScriptInfo _ ((Abc.TraitsInfo _ _ _ (Abc.TraitClass _ idx) _):[]) <- get_script cp 0
   p$ "-------------------------------------------"
   (global, globalid) <- build_global_scope 0
   let ops = [NewClass idx, ReturnVoid]
@@ -344,7 +344,7 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid
   po dops aops$ CallPropVoid idx args maybeName:bops
   
   maybeClassInfoIdx <- H.lookup this pfx_class_info_idx
-  Abc.TraitsInfo _ _ _ (Abc.TT_Method (Abc.TraitMethod _ methodId)) _ <- case maybeClassInfoIdx of
+  Abc.TraitsInfo _ _ _ (Abc.TraitMethod _ methodId) _ <- case maybeClassInfoIdx of
     Just (VmRtInternalInt classIdx) -> do
       Abc.ClassInfo _ traits <- get_class cp classIdx
       let matchingTraits = filter (\(Abc.TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits

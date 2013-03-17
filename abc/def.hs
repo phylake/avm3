@@ -330,60 +330,14 @@ trait_function = 0x05
 trait_const :: Word8
 trait_const = 0x06
 
-data TraitType = {- 0 -} TT_Var TraitVar
-               | {- 1 -} TT_Method TraitMethod
-               | {- 2 -} TT_Getter TraitMethod
-               | {- 3 -} TT_Setter TraitMethod
-               | {- 4 -} TT_Class TraitClass
-               | {- 5 -} TT_Function TraitFunction
-               | {- 6 -} TT_Const TraitVar
+data TraitType = {- 0 -} TraitVar U30 MultinameIdx U30 (Maybe Word8)
+               | {- 1 -} TraitMethod U30 MethodSignatureIdx
+               | {- 2 -} TraitGetter U30 MethodSignatureIdx
+               | {- 3 -} TraitSetter U30 MethodSignatureIdx
+               | {- 4 -} TraitClass U30 ClassInfoIdx
+               | {- 5 -} TraitFunction U30 MethodSignatureIdx
+               | {- 6 -} TraitConst U30 MultinameIdx U30 (Maybe Word8)
                deriving (Show)
-
-{-
-    4.8.2
-    trait slot
--}
-
-data TraitVar = TraitVar {
-                           tsId :: U30
-                         , tsName :: MultinameIdx
-                         , tsVindex :: U30
-                         , tsVkind :: Maybe Word8
-                         }
-                         deriving (Show)
-
-{-
-    4.8.3
-    trait class
--}
-
-data TraitClass = TraitClass {
-                               tcId :: U30
-                             , tcInit :: ClassInfoIdx
-                             }
-                             deriving (Show)
-
-{-
-    4.8.4
-    trait function
--}
-
-data TraitFunction = TraitFunction {
-                                     tfId :: U30
-                                   , tfFunc :: MethodSignatureIdx
-                                   }
-                                   deriving (Show)
-
-{-
-    4.8.5
-    trait method
--}
-
-data TraitMethod = TraitMethod {
-                                 tmDispId :: U30
-                               , tmMethod :: MethodSignatureIdx
-                               }
-                               deriving (Show)
 
 {-
     4.9

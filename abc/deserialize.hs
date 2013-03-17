@@ -275,15 +275,13 @@ parseTrait = do
   name <- fromU30LE_vl
   kind <- fromU8
   traitType <- traitInfoChoice (kind .&. 0xf)
-  let final = kind .&. 0x10 == 0x10
-  let override = kind .&. 0x20 == 0x20
   meta <- if (kind .&. 0x40 == 0x40)
     then fromU30LE_vl >>= replicateM' fromU30LE_vl >>= returnJ
     else return Nothing
   return TraitsInfo {
     tiName = name
-  , tiFinal = final
-  , tiOverride = override
+  , tiFinal = kind .&. 0x10 == 0x10
+  , tiOverride = kind .&. 0x20 == 0x20
   , tiType = traitType
   , tiMeta = meta
   }
@@ -295,57 +293,24 @@ parseTrait = do
 
 traitInfoChoice :: Word8 -> Parser TraitType
 traitInfoChoice w
-  | w == trait_var      = parseTraitVar TT_Var
-  | w == trait_method   = parseTraitMethod TT_Method
-  | w == trait_getter   = parseTraitMethod TT_Getter
-  | w == trait_setter   = parseTraitMethod TT_Setter
-  | w == trait_class    = parseTraitClass TT_Class
-  | w == trait_function = parseTraitFunction TT_Function
-  | w == trait_const    = parseTraitVar TT_Const
-
-{-
-  4.8.2
-  trait slot
--}
-
-parseTraitVar :: (TraitVar -> TraitType) -> Parser TraitType
-parseTraitVar f = do
-  slot <- fromU30LE_vl
-  name <- fromU30LE_vl
-  index <- fromU30LE_vl
-  kind <- if index == 0
-    then return Nothing
-    else fromU8 >>= returnJ
-  return$ f TraitVar {
-    tsId = slot
-  , tsName = name
-  , tsVindex = index
-  , tsVkind = kind
-  }
-
-{-
-  4.8.3
-  trait class
--}
-
-parseTraitClass :: (TraitClass -> TraitType) -> Parser TraitType
-parseTraitClass f = liftM f$ liftM2 TraitClass fromU30LE_vl fromU30LE_vl
-
-{-
-  4.8.4
-  trait function
--}
-
-parseTraitFunction :: (TraitFunction -> TraitType) -> Parser TraitType
-parseTraitFunction f = liftM f$ liftM2 TraitFunction fromU30LE_vl fromU30LE_vl
-
-{-
-  4.8.5
-  trait method
--}
-
-parseTraitMethod :: (TraitMethod -> TraitType) -> Parser TraitType
-parseTraitMethod f = liftM f$ liftM2 TraitMethod fromU30LE_vl fromU30LE_vl
+  | w == trait_var      = parseTraitVar TraitVar
+  | w == trait_method   = liftM2 TraitMethod fromU30LE_vl fromU30LE_vl
+  | w == trait_getter   = liftM2 TraitGetter fromU30LE_vl fromU30LE_vl
+  | w == trait_setter   = liftM2 TraitSetter fromU30LE_vl fromU30LE_vl
+  | w == trait_class    = liftM2 TraitClass fromU30LE_vl fromU30LE_vl
+  | w == trait_function = liftM2 TraitFunction fromU30LE_vl fromU30LE_vl
+  | w == trait_const    = parseTraitVar TraitConst
+  where
+    parseTraitVar :: (U30 -> MultinameIdx -> U30 -> Maybe Word8 -> TraitType)
+                  -> Parser TraitType
+    parseTraitVar f = do
+      slot <- fromU30LE_vl
+      name <- fromU30LE_vl
+      index <- fromU30LE_vl
+      kind <- if index == 0
+        then return Nothing
+        else fromU8 >>= returnJ
+      return$ f slot name index kind
 
 {-
   4.9
