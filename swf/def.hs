@@ -1,21 +1,14 @@
 module Swf.Def where
 
-import           Control.DeepSeq
-import           Data.Enumerator as E
-import           Data.Enumerator.Binary as EB
-import           Data.Enumerator.List as EL
+import           Data.Conduit
 import           Data.Int
 import           Data.Word
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString as B
 import qualified MonadLib as ML
 
+type Parser a = Sink B.ByteString (ResourceT IO) a
 type State = ML.StateT
-
-type Parser = Iteratee BS.ByteString IO
-
 type BitParser = State (Float, [Word8]) IO
---type BitParser = Iteratee (Float, [Word8]) Identity
 
 type U8 = Word8
 type U30 = Word32
@@ -129,6 +122,7 @@ data ClipEventFlags = ClipEventConstruct
                     | ClipEventRollOut
                     | ClipEventRollOver
                     | ClipEventUnload
+                    deriving (Show)
 
 data ClipActions = ClipActions {
                                  caAllEventFlags :: ClipEventFlags
@@ -157,6 +151,7 @@ data BlendMode = {-0,1 -} Normal
                | {- 12 -} Erase
                | {- 13 -} Overlay
                | {- 14 -} Hardlight
+               deriving (Show)
 
 data PlaceObject3 = PlaceObject3 {
                                    po3Depth :: Word16
@@ -232,6 +227,9 @@ data BevelFilter = BevelFilter {
                                }
                                deriving (Show)
 
+data GradientFilter = GradientFilter deriving (Show)
+data GradientBevelFilter = GradientBevelFilter deriving (Show)
+
 data Filter = {- 0 -} DropShadow DropShadowFilter
             | {- 1 -} Blur BlurFilter
             | {- 2 -} Glow GlowFilter
@@ -240,10 +238,11 @@ data Filter = {- 0 -} DropShadow DropShadowFilter
             | {- 5 -} Convolution ConvolutionFilter
             | {- 6 -} ColorMatrix ColorMatrixFilter
             | {- 7 -} GradientBevel GradientBevelFilter
+            deriving (Show)
 
 
 {- chapter 5 Actions -}
-
+data ActionRecord = ActionRecord deriving (Show)
 
 {- !undocumented tag! -}
 data Swf = Swf_Header Word8 Word32 Rect Float Word16
@@ -304,7 +303,7 @@ data Swf = Swf_Header Word8 Word32 Rect Float Word16
          | {- 76 -} Swf_SymbolClass [(Word16, String)]
          | {- 77 -} Swf_Metadata
          | {- 78 -} Swf_DefineScalingGrid
-         | {- 82 -} Swf_DoABC Word32 String BS.ByteString
+         | {- 82 -} Swf_DoABC Word32 String B.ByteString
          | {- 83 -} Swf_DefineShape4
          | {- 84 -} Swf_DefineMorphShape2
          | {- 86 -} Swf_DefineSceneAndFrameLabelData
