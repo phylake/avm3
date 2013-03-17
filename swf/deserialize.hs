@@ -1,11 +1,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Swf.Deserialize where
+module Swf.Deserialize (deserialize, deserializeBs) where
 
 import           Control.Monad
 import           Control.Monad.IO.Class (liftIO)
 import           Data.Bits
 import           Data.Conduit
 import           Data.Conduit.Binary as CB
+import           Data.Conduit.Zlib
 import           Data.Int (Int64)
 import           Data.Maybe (listToMaybe)
 import           Data.Word
@@ -13,39 +14,32 @@ import           Swf.Def
 import           Swf.Util
 import           System.Environment (getArgs)
 import           Util.Misc
-import qualified Codec.Compression.Zlib as Zlib
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import qualified MonadLib as ML
 
-p :: String -> Sink a IO ()
-p = liftIO . putStrLn
+deserialize :: FilePath -> IO [Swf]
+deserialize file = runResourceT $ CB.sourceFile file $$ parse_swf
+
+deserializeBs :: BL.ByteString -> IO [Swf]
+deserializeBs lbs = runResourceT $ CB.sourceLbs lbs $$ parse_swf
 
 test :: IO ()
 test = do
-  unzipSwf
-  --let file = "swf/file.swf"
-  let file = "swf/file_uncompressed.swf"
-  
-  swfs <- runResourceT $ CB.sourceFile file $$ parse_swf
-  Prelude.mapM (putStrLn . show) swfs
-  
+  let file = "swf/file.swf"
+  swfs <- deserialize file
   return ()
-  where
-    unzipSwf :: IO ()
-    unzipSwf = do
-      bs <- BL.readFile "swf/file.swf"
-      let unzipped = Zlib.decompress$ BL.drop 8 bs
-      let newHeader = BL.append (BL.singleton 70) (BL.drop 1$ BL.take 8 bs)
-      BL.writeFile "swf/file_uncompressed.swf"$ BL.append newHeader unzipped
+
+p :: String -> Sink a IO ()
+p = liftIO . putStrLn
 
 parse_swf :: Parser [Swf]
 parse_swf = do
   (version, file_length, compressed) <- parse_header1
   if compressed
     --then ungzip =$ parse_swf2 version file_length
-    then fail "compressed"
+    then decompress (WindowBits 15) =$ parse_swf2 version file_length
     else parse_swf2 version file_length
 
 parse_swf2 :: Word8 -> Word32 -> Parser [Swf]
