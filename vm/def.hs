@@ -1,5 +1,6 @@
 module Vm.Def where
 
+import           Abc.DeepSeq
 import           Control.DeepSeq
 import           Data.Hashable
 import           Data.Int
@@ -291,22 +292,37 @@ diff Abc.MethodSignature MethodSignature
                                        deriving (Show)-}
 
 {-
-TODO need to keep mbMethod until new MethodSignature comes online
 diff Abc.MethodBody MethodBody
   - mbMethod
+  - mbTraits
+  + mbReg
 -}
 data MethodBody = MethodBody {
-                               mbMethod :: Abc.MethodSignatureIdx
-                             , mbMaxStack :: Abc.U30
+                               mbMaxStack :: Abc.U30
                              , mbLocalCount :: Abc.U30
                              , mbInitScopeDepth :: Abc.U30
                              , mbMaxScopeDepth :: Abc.U30
                              , mbCode :: [OpCode]
                              , mbExceptions :: [Abc.Exception]
-                             , mbTraits :: [Abc.TraitsInfo]
                              , mbReg :: Registers
                              }
                              deriving (Show)
+
+data TraitsInfo = TraitsInfo {
+                               tiName :: Maybe B.ByteString
+                             , tiFinal :: Bool
+                             , tiOverride :: Bool
+                             , tiType :: Abc.TraitType
+                             , tiMeta :: Maybe [Abc.MetadataIdx]
+                             }
+                             deriving (Show, Eq)
+
+instance NFData TraitsInfo where
+  rnf (TraitsInfo a b c d e) = b
+    `deepseq` c
+    `deepseq` d
+    `deepseq` e
+    `deepseq` ()
 
 data OpCode = {- 0x01 -} Breakpoint
             | {- 0x02 -} Nop
@@ -417,8 +433,8 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x69 -} SetPropertyLate
             | {- 0x6A -} DeleteProperty Abc.MultinameIdx (Maybe B.ByteString)
             | {- 0x6B -} DeletePropertyLate
-            | {- 0x6C -} GetSlot Abc.U30
-            | {- 0x6D -} SetSlot Abc.U30
+            | {- 0x6C -} GetSlot Abc.U30 TraitsInfo
+            | {- 0x6D -} SetSlot Abc.U30 TraitsInfo
             | {- 0x6E -} GetGlobalSlot Abc.U30
             | {- 0x6F -} SetGlobalSlot Abc.U30
             | {- 0x70 -} ConvertString
@@ -674,8 +690,8 @@ instance NFData OpCode where
 {- 0x69 -} {-SetPropertyLate-}
 {- 0x6A -} rnf (DeleteProperty a b) = a `deepseq` ()
 {- 0x6B -} {-DeletePropertyLate-}
-{- 0x6C -} rnf (GetSlot a) = a `deepseq` ()
-{- 0x6D -} rnf (SetSlot a) = a `deepseq` ()
+{- 0x6C -} rnf (GetSlot a b) = a `deepseq` b `deepseq` ()
+{- 0x6D -} rnf (SetSlot a b) = a `deepseq` b `deepseq` ()
 {- 0x6E -} rnf (GetGlobalSlot a) = a `deepseq` ()
 {- 0x6F -} rnf (SetGlobalSlot a) = a `deepseq` ()
 {- 0x70 -} {-ConvertString-}
@@ -936,8 +952,8 @@ toBytes {- 0x68 -} (InitProperty u30 _) = 1 + u30Bytes u30
 toBytes {- 0x69 -} (SetPropertyLate) = 1
 toBytes {- 0x6A -} (DeleteProperty u30 _) = 1 + u30Bytes u30
 toBytes {- 0x6B -} (DeletePropertyLate) = 1
-toBytes {- 0x6C -} (GetSlot u30) = 1 + u30Bytes u30
-toBytes {- 0x6D -} (SetSlot u30) = 1 + u30Bytes u30
+toBytes {- 0x6C -} (GetSlot u30 _) = 1 + u30Bytes u30
+toBytes {- 0x6D -} (SetSlot u30 _) = 1 + u30Bytes u30
 toBytes {- 0x6E -} (GetGlobalSlot u30) = 1 + u30Bytes u30
 toBytes {- 0x6F -} (SetGlobalSlot u30) = 1 + u30Bytes u30
 toBytes {- 0x70 -} (ConvertString) = 1

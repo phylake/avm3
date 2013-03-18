@@ -302,7 +302,7 @@ data TraitsInfo = TraitsInfo {
                              , tiType :: TraitType
                              , tiMeta :: Maybe [MetadataIdx]
                              }
-                             deriving (Show)
+                             deriving (Show, Eq)
 
 {-
     4.8.1
@@ -337,7 +337,7 @@ data TraitType = {- 0 -} TraitVar U30 MultinameIdx U30 (Maybe Word8)
                | {- 4 -} TraitClass U30 ClassInfoIdx
                | {- 5 -} TraitFunction U30 MethodSignatureIdx
                | {- 6 -} TraitConst U30 MultinameIdx U30 (Maybe Word8)
-               deriving (Show)
+               deriving (Show, Eq)
 
 {-
     4.9

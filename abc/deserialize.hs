@@ -32,12 +32,8 @@ import qualified Data.ByteString.Lazy.Char8 as BLC
 
 testFile = run_ (EB.enumFile "abc/Test.abc" $$ parseAbc)
 
-p :: String -> Parser ()
-p = tryIO . putStrLn
-
 parseAbc :: Parser Abc
 parseAbc = do
-  -- TODO validate these
   minor <- fromU16LE -- 16
   major <- fromU16LE -- 46
 
@@ -661,21 +657,3 @@ parseException = do
   , exType = exType
   , exVarname = exVarname
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

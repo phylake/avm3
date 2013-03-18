@@ -110,7 +110,7 @@ fromU29BRef = return . AmfByteArray . U29B_Ref
 
 fromU29BValue :: U29 -> Parser Amf
 fromU29BValue len = U.take (fromIntegral len) >>=
-                    return. BL.unpack >>= return . AmfByteArray . U29B_Value
+                    return . BL.unpack >>= return . AmfByteArray . U29B_Value
 
 {-
   AmfXml and AmfXmlDoc
@@ -241,7 +241,7 @@ instance AmfPrim UTF_8_vr where
            return . BLC.unpack >>= pushST >>= return . U29S_Value
 
 fromStringType :: Parser Amf
-fromStringType = fromAmf >>= return. AmfString
+fromStringType = fromAmf >>= return . AmfString
 
 utf8_empty :: String
 utf8_empty = ""
@@ -254,7 +254,7 @@ instance AmfPrim Double where
   fromAmf = U.take 8 >>= return . wordToDouble . toWord64 . BL.unpack
 
 fromDoubleType :: Parser Amf
-fromDoubleType = fromAmf >>= return. AmfDouble
+fromDoubleType = fromAmf >>= return . AmfDouble
 
 {-
   Int

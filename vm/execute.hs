@@ -80,12 +80,7 @@ avm_prefix = "avm3internal_"
 
 pfx_class_info_idx :: VmRtP
 pfx_class_info_idx = ClassIdx$ BC.pack$ avm_prefix ++ "class_info_idx"
-
-pfx_slot_idx :: Abc.U30 -> VmRtP
-pfx_slot_idx u30 = SlotIdx$ BC.pack$ avm_prefix ++ "slot_idx[" ++ idx ++ "]"
-  where
-    idx = show $ fromIntegral u30
-{-# INLINE pfx_slot_idx #-}
+{-# INLINE pfx_class_info_idx #-}
 
 new_object :: InstanceId -> AVM3 VmRt
 new_object iid = do
@@ -280,6 +275,10 @@ r_f {-0x28-} (dops, aops, PushNaN:bops, ss, reg, cp, iid) = do
   po dops aops$ PushNaN:bops
   r_f (VmRt_Number nan:dops, PushNaN:aops, bops, ss, reg, cp, iid)
 
+r_f {-0x29-} (a:dops, aops, Pop:bops, ss, reg, cp, iid) = do
+  po (a:dops) aops$ Pop:bops
+  r_f (dops, Pop:aops, bops, ss, reg, cp, iid)
+
 r_f {-0x2A-} (a:dops, aops, Dup:bops, ss, reg, cp, iid) = do
   po (a:dops) aops$ Dup:bops
   r_f (a:a:dops, Dup:aops, bops, ss, reg, cp, iid)
@@ -317,7 +316,7 @@ r_f {-0x30-} (VmRt_Activation v:dops, aops, PushScope:bops, ss, reg, cp, iid) = 
 
 r_f {-0x40-} (dops, aops, NewFunction idx:bops, ss, reg, cp, iid) = do
   po dops aops$ NewFunction idx:bops
-  MethodBody _ _ _ _ _ code _ _ _ <- get_methodBody cp idx
+  MethodBody _ _ _ _ code _ _ <- get_methodBody cp idx
   let function = VmRt_Function code ss iid2
   r_f (function:dops, NewFunction idx:aops, bops, ss, reg, cp, iid2)
   where
@@ -362,7 +361,7 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid
       proplist <- H.toList this
       fail$ "couldn't find " ++ BC.unpack name ++ " on " ++ show proplist
 
-  MethodBody _ _ _ _ _ code _ _ registers <- get_methodBody cp methodId
+  MethodBody _ _ _ _ code _ registers <- get_methodBody cp methodId
   p$ show code
 
   -- CallPropVoid, only need the latest instance id counter
@@ -399,7 +398,7 @@ r_f {-0x58-} (dops, aops, NewClass idx:bops, ss, reg, cp, iid) = do
   p$ "########## NewClass " ++ show idx
   Abc.ClassInfo msi traits <- get_class cp idx
 
-  MethodBody _ _ _ _ _ code _ _ registers <- get_methodBody cp msi
+  MethodBody _ _ _ _ code _ registers <- get_methodBody cp msi
   --p$ "\tops: " ++ show code
   --p$ "\tmaxReg: " ++ show maxReg
 
@@ -551,26 +550,27 @@ r_f {-0x68-} (value:VmRt_Object this iidThis:dops, aops, InitProperty idx maybeN
     otherwise -> fail$ "init_property - property [" ++ BC.unpack name ++ "] exists"
   r_f (dops, InitProperty idx maybeName:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x6C-} (VmRt_Object obj _:dops, aops, GetSlot u30:bops, ss, reg, cp, iid) = do
-  po (VmRt_Object obj 0:dops) aops$ GetSlot u30:bops
-  Just slot <- lookup obj $ pfx_slot_idx u30
-  r_f (slot:dops, GetSlot u30:aops, bops, ss, reg, cp, iid)
+r_f {-0x6C-} (VmRt_Object obj _:dops, aops, GetSlot slotIdx ti:bops, ss, reg, cp, iid) = do
+  po (VmRt_Object obj 0:dops) aops$ GetSlot slotIdx ti:bops
+  let TraitsInfo (Just p) _ _ _ _ = ti
+  Just slot <- lookup obj (Ext p)
+  r_f (slot:dops, GetSlot slotIdx ti:aops, bops, ss, reg, cp, iid)
 
--- TODO traits on method bodies
-r_f {-0x6D-} (value:VmRt_Object obj _:dops, aops, SetSlot u30:bops, ss, reg, cp, iid) = do
-  po (value:VmRt_Object obj 0:dops) aops$ SetSlot u30:bops
-  insert obj (pfx_slot_idx u30) value
-  r_f (dops, SetSlot u30:aops, bops, ss, reg, cp, iid)
+r_f {-0x6D-} (v:VmRt_Object obj _:dops, aops, SetSlot slotIdx ti:bops, ss, reg, cp, iid) = do
+  po (v:VmRt_Object obj 0:dops) aops$ SetSlot slotIdx ti:bops
+  let TraitsInfo (Just p) _ _ _ _ = ti
+  insert obj (Ext p) v
+  r_f (dops, SetSlot slotIdx ti:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x6E-} (VmRt_Object obj _:dops, aops, GetGlobalSlot u30:bops, ss, reg, cp, iid) = do
-  po (VmRt_Object obj 0:dops) aops$ GetGlobalSlot u30:bops
-  Just slot <- lookup obj $ pfx_slot_idx u30
-  r_f (slot:dops, GetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
+--r_f {-0x6E-} (VmRt_Object obj _:dops, aops, GetGlobalSlot u30:bops, ss, reg, cp, iid) = do
+--  po (VmRt_Object obj 0:dops) aops$ GetGlobalSlot u30:bops
+--  Just slot <- lookup obj $ pfx_slot_idx u30
+--  r_f (slot:dops, GetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x6F-} (value:VmRt_Object obj _:dops, aops, SetGlobalSlot u30:bops, ss, reg, cp, iid) = do
-  po (value:VmRt_Object obj 0:dops) aops$ SetGlobalSlot u30:bops
-  insert obj (pfx_slot_idx u30) value
-  r_f (dops, SetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
+--r_f {-0x6F-} (value:VmRt_Object obj _:dops, aops, SetGlobalSlot u30:bops, ss, reg, cp, iid) = do
+--  po (value:VmRt_Object obj 0:dops) aops$ SetGlobalSlot u30:bops
+--  insert obj (pfx_slot_idx u30) value
+--  r_f (dops, SetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x70-} (v:dops, aops, ConvertString:bops, ss, reg, cp, iid) = do
   r_f (convert_string v:dops, ConvertString:aops, bops, ss, reg, cp, iid)
@@ -622,11 +622,19 @@ r_f {-0xA2-} (a:b:dops, aops, Multiply:bops, ss, reg, cp, iid) = do
 r_f {-0xA3-} (a:b:dops, aops, Divide:bops, ss, reg, cp, iid) = do
   r_f (b / a:dops, Divide:aops, bops, ss, reg, cp, iid)
 
+r_f {-0xAB-} (a:b:dops, aops, Equals:bops, ss, reg, cp, iid) = do
+  po (a:b:dops) aops$ Equals:bops
+  r_f (VmRt_Boolean (b == a):dops, Equals:aops, bops, ss, reg, cp, iid)
+
+r_f {-0xAC-} (a:b:dops, aops, StrictEquals:bops, ss, reg, cp, iid) = do
+  po (a:b:dops) aops$ StrictEquals:bops
+  r_f (VmRt_Boolean (b == a):dops, StrictEquals:aops, bops, ss, reg, cp, iid)
+
 r_f {-0xC0-} (a:dops, aops, IncrementInt:bops, ss, reg, cp, iid) = do
   r_f (a + 1:dops, IncrementInt:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) = do
-  r_f ( {-# SCC "DecrementInt" #-} a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
+  r_f (a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
 
 r_f {-0xC2-} (dops, aops, IncLocalInt regIdx:bops, ss, reg, cp, iid) = do
   r_f (dops, IncLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
