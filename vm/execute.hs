@@ -6,7 +6,7 @@ import           Abc.DeepSeq
 import           Abc.Deserialize
 import           Abc.Json
 import           Abc.Json2
-import           Control.Applicative
+import           Control.Applicative ((<|>))
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.Int
@@ -72,7 +72,7 @@ insert = H.insert
 {-# INLINE insert #-}
 
 lookup :: VmObject -> VmRtP -> AVM3 (Maybe VmRt)
-lookup h k = H.lookup h k
+lookup = H.lookup
 {-# INLINE lookup #-}
 
 avm_prefix :: String
@@ -332,6 +332,39 @@ r_f {-0x41-} (dops, aops, Call args:bops, ss, reg, cp, iid) = do
     (nArgs, (this:VmRt_Function fops fss _:dopsNew)) = splitAt (fromIntegral args) dops
     registers = V.fromList$ this:nArgs
 
+r_f {-0x46-} (dops, aops, CallProperty idx args maybeName:bops, ss, reg, cp, iid) = do
+  po dops aops$ CallPropVoid idx args maybeName:bops
+  
+  maybeClassInfoIdx <- H.lookup this pfx_class_info_idx
+  Abc.TraitsInfo _ _ _ (Abc.TraitMethod _ methodId) _ <- case maybeClassInfoIdx of
+    Just (VmRtInternalInt classIdx) -> do
+      Abc.ClassInfo _ traits <- get_class cp classIdx
+      let matchingTraits = filter (\(Abc.TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits
+      p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
+      case length matchingTraits of
+        0 -> fail "CallProperty - couldn't find matchingTraits"
+        1 -> return$ head matchingTraits
+        otherwise -> fail "CallProperty - too many matching traits"
+    otherwise -> do
+      name <- case maybeName of
+        Nothing -> do
+          Abc.Multiname_QName nSInfoIdx stringIdx <- get_multiname cp idx
+          liftM2 B.append (resolve_nsinfo cp nSInfoIdx) (get_string cp stringIdx)
+        Just n -> return n
+      proplist <- H.toList this
+      fail$ "couldn't find " ++ BC.unpack name ++ " on " ++ show proplist
+
+  MethodBody _ _ _ _ code _ registers <- get_methodBody cp methodId
+
+  -- CallProperty
+  let registers2 = registers // ((0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs)
+  (either, iid2) <- r_f ([], [], code, [last ss], registers2, cp, iid)
+  case either of
+    Left err -> return (either, iid2)
+    Right ret -> r_f (ret:dopsNew, CallProperty idx args maybeName:aops, bops, ss, reg, cp, iid2)
+  where
+    (nArgs, (VmRt_Object this iidThis):dopsNew) = splitAt (fromIntegral args) dops
+
 r_f {-0x47-} (dops, aops, ReturnVoid:bops, ss, reg, cp, iid) = do
   return (Right VmRt_Undefined, iid)
 
@@ -362,7 +395,6 @@ r_f {-0x4F-} (dops, aops, CallPropVoid idx args maybeName:bops, ss, reg, cp, iid
       fail$ "couldn't find " ++ BC.unpack name ++ " on " ++ show proplist
 
   MethodBody _ _ _ _ code _ registers <- get_methodBody cp methodId
-  p$ show code
 
   -- CallPropVoid, only need the latest instance id counter
   let registers2 = registers // ((0, VmRt_Object this iidThis):zip [1..length nArgs] nArgs)
@@ -479,8 +511,7 @@ r_f {-0x65-} (dops, aops, GetScopeObject idx:bops, ss, reg, cp, iid) = do
 r_f {-0x66-} (dops, aops, GetProperty idx Nothing:bops, ss, reg, cp, iid) = do
   po dops aops$ GetProperty idx Nothing:bops
   multiname <- get_multiname cp idx
-  p$ show multiname
-  (prop, vmrt:dopsNew) <- case multiname of
+  (prop, value:dopsNew) <- case multiname of
     Abc.Multiname_QName _ stringIdx -> do
       str <- get_string cp stringIdx
       return (VmRt_String str, dops)
@@ -489,7 +520,7 @@ r_f {-0x66-} (dops, aops, GetProperty idx Nothing:bops, ss, reg, cp, iid) = do
       return (VmRt_String str, dops)
     otherwise -> return (head dops, tail dops)
 
-  d <- case vmrt of
+  d <- case value of
     VmRt_Undefined -> return VmRt_Undefined
     VmRt_Null -> return VmRt_Undefined
     VmRt_Boolean bool -> return VmRt_Undefined
@@ -512,10 +543,10 @@ r_f {-0x66-} (dops, aops, GetProperty idx Nothing:bops, ss, reg, cp, iid) = do
   
   r_f (d:dopsNew, GetProperty idx Nothing:aops, bops, ss, reg, cp, iid)
 
-r_f {-0x66-} (vmrt:dops, aops, GetProperty idx (Just prop):bops, ss, reg, cp, iid) = do
+r_f {-0x66-} (value:dops, aops, GetProperty idx (Just prop):bops, ss, reg, cp, iid) = do
   po dops aops$ GetProperty idx (Just prop):bops
 
-  d <- {-# SCC "GetProperty_idx_Just" #-} case vmrt of
+  d <- case value of
     VmRt_Undefined -> return VmRt_Undefined
     VmRt_Null -> return VmRt_Undefined
     VmRt_Boolean bool -> return VmRt_Undefined
@@ -701,44 +732,30 @@ convert_uint = VmRt_Uint . to_uint32
 new_function :: AVM3 ()
 new_function = undefined
 
-{- TODO dynamic multinames (pattern match Ops) -}
-{-
-TODO resolve against
-  1. method closures
-  2. declared traits (on the method body, instance info?, class info?)
-  3. dynamic properties
-  4. prototype chain
-  5. script traits (global object (for classes))
--}
+-- TODO dynamic multinames (pattern match Ops)
+
+-- TODO resolve against
+--   * declared traits (on the method body, instance info?, class info?)
+--   * dynamic properties
+--   * prototype chain
+--   * script traits (global object (for classes))
+
 find_property :: B.ByteString -> Abc.MultinameIdx -> ConstantPool -> ScopeStack -> AVM3 VmRt
 find_property name idx cp ss = do
-  --p$ "FindProperty [" ++ show idx ++ " " ++ name ++ "]"
-  --p$ "\tscope_stack length " ++ (show$ length ss)
-  attempt1 <- search_stack (Ext name) ss
-  case attempt1 of
-    Just obj -> do
-      --p$ "found obj in attempt1"
-      return obj
-    Nothing -> do
-      attempt2 <- traits_ref cp idx ss
-      case attempt2 of
-        Just obj -> do
-          --p$ "found obj in attempt2"
-          return obj
-        Nothing -> fail "find_property - couldn't find_property"
+  attempts <- liftM2 (<|>) at1 at2
+  case attempts of
+    Just obj -> return obj
+    Nothing -> fail "find_property - couldn't find_property"
   where
-    search_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
-    search_stack key [] = return Nothing
-    search_stack key@(Ext str) ((top, iid):stack) = do
-      if str == BC.pack "Foo"
-        then do
-          list <- H.toList top
-          p$ show list
-          p$ "key " ++ show key
-        else return ()
+    at1 = scope_stack (Ext name) ss
+    at2 = traits_ref cp idx ss
+
+    scope_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
+    scope_stack key [] = return Nothing
+    scope_stack key@(Ext str) ((top, iid):stack) = do
       maybeValue <- H.lookup top key
       case maybeValue of
-        Nothing -> search_stack key stack
+        Nothing -> scope_stack key stack
         Just value -> returnJ$ VmRt_Object top iid
 
     traits_ref :: ConstantPool -> Abc.MultinameIdx -> ScopeStack -> AVM3 (Maybe VmRt)
@@ -749,17 +766,8 @@ find_property name idx cp ss = do
         Just (VmRtInternalInt classIdx) -> do
           Abc.ClassInfo _ traits <- get_class cp classIdx
           let matchingTraits = filter (\(Abc.TraitsInfo idx2 _ _ _ _) -> idx2 == idx) traits
-          --p$ "got class info of pfx_class_info_idx" ++ show matchingTraits
           case length matchingTraits of
             0 -> return Nothing
             1 -> returnJ$ VmRt_Object top iid
             otherwise -> fail "traits_ref - too many matching traits"
         otherwise -> traits_ref cp idx stack
-
-{-
-  "The indexing of elements on the local scope stack is the reverse of the
-  indexing of elements on the local operand stack."
--}
-
-{-get_scoped_object :: ScopeStack -> U8 -> AVM3 Ops
-get_scoped_object ss idx = undefined-}
