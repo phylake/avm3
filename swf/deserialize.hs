@@ -29,6 +29,7 @@ test :: IO ()
 test = do
   let file = "swf/file.swf"
   swfs <- deserialize file
+  Prelude.mapM_ (putStrLn . show) swfs
   return ()
 
 p :: String -> Sink a IO ()
@@ -38,7 +39,6 @@ parse_swf :: Parser [Swf]
 parse_swf = do
   (version, file_length, compressed) <- parse_header1
   if compressed
-    --then ungzip =$ parse_swf2 version file_length
     then decompress (WindowBits 15) =$ parse_swf2 version file_length
     else parse_swf2 version file_length
 
@@ -156,11 +156,21 @@ parse_colorxform alpha = parse_common max_bytes $ cxform_parser alpha
       }
 
 parse_common :: Int64 -> BitParser a -> Parser a
-parse_common max_bytes parser = do
-  (bs :: BL.ByteString) <- CB.take (fromIntegral max_bytes) -- TODO don't consume stream
-  (m,(p,_)) <- liftIO$ ML.runStateT (0, BL.unpack bs) parser
-  CB.drop (ceiling$ p/8) -- ceiling for padding
-  return m
+parse_common max_bytes parser =
+  inject_double max_bytes =$ parse_common_impl max_bytes parser
+  where
+    inject_double :: Int64 -> Conduit B.ByteString (ResourceT IO) B.ByteString
+    inject_double i = do
+      bs <- CB.take $ fromIntegral i
+      CB.sourceLbs bs
+      CB.sourceLbs bs
+
+    parse_common_impl :: Int64 -> BitParser a -> Parser a
+    parse_common_impl max_bytes parser = do
+      (bs :: BL.ByteString) <- CB.take (fromIntegral max_bytes)
+      (m,(p,_)) <- liftIO$ ML.runStateT (0, BL.unpack bs) parser
+      CB.drop (ceiling$ p/8) -- ceiling for padding
+      return m
 
 parse_string :: Parser String
 parse_string = do
