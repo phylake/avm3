@@ -1,15 +1,15 @@
 module Main where
 
-import SWF.Deserialize as SWF hiding (testFile)
-import System (getArgs)
-import qualified Data.ByteString.Lazy as DBL (readFile, writeFile)
+import Swf.Deserialize as Swf
+import Swf.Def
+import System.Environment (getArgs)
+import System.FilePath (dropExtension)
+import Data.ByteString as B
 
 main = do
   (file:_) <- getArgs
-  let file' = takeWhile (\c -> c /= '.') file
-  bs <- DBL.readFile file
-  let (Swf_DoABC w32 str abc) = getDoAbc $ SWF.fromByteString bs
-  DBL.writeFile (file' ++ ".abc") abc
+  swfs <- Swf.deserialize file
+  B.writeFile (dropExtension file ++ ".abc") $ getDoAbc swfs
   where
-    getDoAbc (Right ((Swf_DoABC a b c):swfs)) = Swf_DoABC a b c
-    getDoAbc (Right (swf:swfs)) = getDoAbc $ Right swfs
+    getDoAbc ((Swf_DoABC _ _ abc):swfs) = abc
+    getDoAbc (swf:swfs) = getDoAbc swfs
