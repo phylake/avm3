@@ -6,6 +6,7 @@ import           Control.Monad.IO.Class (liftIO)
 import           Data.Bits
 import           Data.Conduit
 import           Data.Conduit.Binary as CB
+import           Data.Conduit.List as CL
 import           Data.Conduit.Zlib
 import           Data.Int (Int64)
 import           Data.Maybe (listToMaybe)
@@ -32,7 +33,7 @@ test = do
   Prelude.mapM_ (putStrLn . show) swfs
   return ()
 
-p :: String -> Sink a IO ()
+p :: String -> Parser ()
 p = liftIO . putStrLn
 
 parse_swf :: Parser [Swf]
@@ -174,17 +175,15 @@ parse_common max_bytes parser =
 
 parse_string :: Parser String
 parse_string = do
-  stringBytes <- CB.takeWhile (/= 0x00) =$ sink
+  stringBytes <- CB.takeWhile (/= 0x00) =$ CL.consume
   CB.drop 1
-  return$ BC.unpack stringBytes
-  where
-    sink = await >>= maybe (fail "parse_string") return
+  return$ BC.unpack $ Prelude.foldl B.append B.empty stringBytes
 
 parse_abc :: Parser Swf
-parse_abc = liftM3 Swf_DoABC readU32LE parse_string sink
+parse_abc = liftM3 Swf_DoABC readU32LE parse_string abc
   where
-    sink :: Parser B.ByteString
-    sink = consumeB =$ await >>= maybe (fail "parse_abc") return
+    abc :: Parser B.ByteString
+    abc = await >>= maybe (fail "parse_abc") return
 
 parse_symbol_class :: Parser Swf
 parse_symbol_class = liftM Swf_SymbolClass $ readU16LE >>= replicateM' tagNamePair
@@ -195,9 +194,8 @@ parse_symbol_class = liftM Swf_SymbolClass $ readU16LE >>= replicateM' tagNamePa
 parse_tag :: Parser Swf
 parse_tag = do
   (RecordHeader tag len) <- parse_record_header
-  --p$ "tag " ++ show tag ++ " len " ++ show len
   nextBytes <- CB.take$ fromIntegral len
-  liftIO$ runResourceT (CB.sourceLbs nextBytes $$ tagChoice tag) -- shotgun approach for now
+  liftIO$ runResourceT (CB.sourceLbs nextBytes $$ tagChoice tag)
   where
     tagChoice :: Word16 -> Parser Swf
     tagChoice tag

@@ -2,18 +2,9 @@ module Util.Misc where
 
 import           Control.Monad (replicateM)
 import           Control.Monad.State (get)
-import           Data.Conduit
 import           Data.Enumerator
 import qualified Data.ByteString as B
 import qualified MonadLib as ML
-
-await_ :: Monad m => Consumer i m i
-await_ = await >>= maybe (fail "await_") return
-
-consumeB :: Monad m => Conduit B.ByteString m B.ByteString
-consumeB = loop id >>= Data.Conduit.yield >> return ()
-  where
-    loop front = await >>= maybe (return $ front B.empty) (\x -> loop $ B.append x)
 
 instance ML.MonadT (Iteratee a) where
   lift m = Iteratee (m >>= runIteratee . return)

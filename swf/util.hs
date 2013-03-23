@@ -22,6 +22,7 @@ import           Control.Monad.Identity
 import           Data.Bits
 import           Data.Conduit
 import           Data.Conduit.Binary as CB
+import           Data.Conduit.List as CL
 import           Data.Int
 import           Data.Void
 import           Data.Word
@@ -57,12 +58,11 @@ readU32LE :: Parser Word32
 readU32LE = nWords 4 >>= return . toWord32LE
 
 readDoubleLE :: Parser Double
-readDoubleLE = nWords 8 >>= return . toDouble. Prelude.reverse
+readDoubleLE = nWords 8 >>= return . toDouble . Prelude.reverse
 
 readU32LE_vl :: Parser Word32
-readU32LE_vl = CB.takeWhile hasSignalBit =$= consumeB =$ sink
-  where
-    sink = await >>= maybe (fail "readU32LE_vl") (return . fromU32LE_vl . B.unpack)
+readU32LE_vl = CB.takeWhile hasSignalBit =$ CL.consume >>=
+  return . fromU32LE_vl . B.unpack . Prelude.foldl B.append B.empty
 
 readU30LE_vl :: Parser Word32
 readU30LE_vl = do
@@ -73,13 +73,8 @@ readS24LE :: Parser Int32
 readS24LE = CB.take 3 >>= toStrict >>= return . fromS24LE . B.unpack
 
 readS32LE_vl :: Parser Int32
-readS32LE_vl = CB.takeWhile hasSignalBit =$= consumeB =$ sink
-  where
-    f = return . fromIntegral . fromS32LE_vl .
-        Prelude.map fromIntegral . B.unpack
-    sink = await >>= maybe (fail "readS32LE_vl") f
-  {-bs <- CB.takeWhile hasSignalBit
-  return . fromIntegral . fromS32LE_vl$ Prelude.map fromIntegral$ B.unpack bs-}
+readS32LE_vl = CB.takeWhile hasSignalBit =$= CL.consume >>=
+  return . fromS32LE_vl . B.unpack . Prelude.foldl B.append B.empty
 
 unless_flag :: BitParser a -- false action
             -> BitParser a -- true action
