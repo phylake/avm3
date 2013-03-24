@@ -26,6 +26,8 @@ deserialize file = runResourceT $ CB.sourceFile file $$ parse_swf
 deserializeBs :: BL.ByteString -> IO [Swf]
 deserializeBs lbs = runResourceT $ CB.sourceLbs lbs $$ parse_swf
 
+data Compression = None | Zlib | LZMA
+
 test :: IO ()
 test = do
   let file = "swf/file.swf"
@@ -38,10 +40,11 @@ p = liftIO . putStrLn
 
 parse_swf :: Parser [Swf]
 parse_swf = do
-  (version, file_length, compressed) <- parse_header1
-  if compressed
-    then decompress (WindowBits 15) =$ parse_swf2 version file_length
-    else parse_swf2 version file_length
+  (version, file_length, compression) <- parse_header1
+  case compression of
+    None -> parse_swf2 version file_length
+    Zlib -> decompress (WindowBits 15) =$ parse_swf2 version file_length
+    LZMA -> error "LZMA unsupported"
 
 parse_swf2 :: Word8 -> Word32 -> Parser [Swf]
 parse_swf2 version file_length = do
@@ -58,13 +61,15 @@ parse_swf2 version file_length = do
           tags <- parse_tags
           return$ tag:tags
 
-parse_header1 :: Parser (Word8, Word32, Bool)
+parse_header1 :: Parser (Word8, Word32, Compression)
 parse_header1 = do
-  (cf:w:s:version:[]) <- nWords 4
+  (cf:w:s:version:[]) <- takeWords 4
   file_length <- readU32LE
-  if (cf == 67 || cf == 70) && w == 87 && s == 83
-    --version `elem` [10..14] -> return $ Left $ "parse_header - invalid version: " ++ show version
-    then return (version, file_length, cf == 67)
+  if w == 87 && s == 83
+    then case cf of
+      0x46 -> return (version, file_length, None)
+      0x43 -> return (version, file_length, Zlib)
+      0x5A -> return (version, file_length, LZMA)
     else error "parse_header - invalid header"
 
 parse_header2 :: Word8 -> Word32 -> Parser Swf
@@ -87,8 +92,7 @@ parse_rect :: Parser Rect
 parse_rect = do
   Just w <- CB.head
   let nbits = w `shiftR` (8-5)
-  let wordWidth = ceiling$ ((fromIntegral nbits)*4 + 0)/8
-  ws <- nWords wordWidth
+  ws <- takeWords $ ceiling $ ((fromIntegral nbits)*4 + 0)/8
   (rect :: Rect, _) <- liftIO$ ML.runStateT (5,w:ws) (rect_parser$ fromIntegral nbits)
   return rect
   where
