@@ -269,7 +269,7 @@ data Swf = Swf_Header Word8 Word32 Rect Float Word16
          | {- 22 -} Swf_DefineShape2
          | {- 23 -} Swf_DefineButtonCxform
          | {- 24 -} Swf_Protect
-         | {- 26 -} Swf_PlaceObject2
+         | {- 26 -} Swf_PlaceObject2 Word16 (Maybe Word16) (Maybe Matrix) (Maybe ColorXForm) (Maybe Word16) (Maybe String) (Maybe Word16) (Maybe ClipActions)
          | {- 28 -} Swf_RemoveObject2
          | {- 32 -} Swf_DefineShape3
          | {- 33 -} Swf_DefineText2

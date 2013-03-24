@@ -73,11 +73,8 @@ parse_header1 = do
     else error "parse_header - invalid header"
 
 parse_header2 :: Word8 -> Word32 -> Parser Swf
-parse_header2 version file_length = do
-  frame_size <- parse_rect
-  frame_rate <- readFixed8
-  frame_count <- readU16LE
-  return$ Swf_Header version file_length frame_size frame_rate frame_count
+parse_header2 version file_length =
+  liftM3 (Swf_Header version file_length) parse_rect readFixed8 readU16LE
 
 parse_record_header :: Parser RecordHeader
 parse_record_header = do
@@ -183,6 +180,19 @@ parse_string = do
   CB.drop 1
   return$ BC.unpack $ Prelude.foldl B.append B.empty stringBytes
 
+parse_place_object2 :: Parser Swf
+parse_place_object2 = do
+  (flags:[]) <- takeWords 1
+  depth    <- readU16LE
+  charId   <- if flags .&. 0x02 == 0x02 then liftM Just readU16LE               else return Nothing
+  matrix   <- if flags .&. 0x04 == 0x04 then liftM Just parse_matrix            else return Nothing
+  cxform   <- if flags .&. 0x08 == 0x08 then liftM Just (parse_colorxform True) else return Nothing
+  ratio    <- if flags .&. 0x10 == 0x10 then liftM Just readU16LE               else return Nothing
+  name     <- if flags .&. 0x20 == 0x20 then liftM Just parse_string            else return Nothing
+  cDepth   <- if flags .&. 0x40 == 0x40 then liftM Just readU16LE               else return Nothing
+  --cActions <- if flags .&. 0x80 == 0x80 then liftM Just parse_string else Nothing
+  return $ Swf_PlaceObject2 depth charId matrix cxform ratio name cDepth Nothing
+
 parse_abc :: Parser Swf
 parse_abc = liftM3 Swf_DoABC readU32LE parse_string abc
   where
@@ -226,7 +236,7 @@ parse_tag = do
       | tag == 22 {-                 DefineShape2 -} = return Swf_DefineShape2
       | tag == 23 {-           DefineButtonCxform -} = return Swf_DefineButtonCxform
       | tag == 24 {-                      Protect -} = return Swf_Protect
-      | tag == 26 {-                 PlaceObject2 -} = return Swf_PlaceObject2
+      | tag == 26 {-                 PlaceObject2 -} = parse_place_object2
       | tag == 28 {-                RemoveObject2 -} = return Swf_RemoveObject2
       | tag == 32 {-                 DefineShape3 -} = return Swf_DefineShape3
       | tag == 33 {-                  DefineText2 -} = return Swf_DefineText2
