@@ -188,33 +188,33 @@ xform_methodBodies fi fu fd fs fm = map toVmMethodBody where
   toVmMethodBody (Abc.MethodBody _ b c d e code g h) =
     newCode `deepseq` MethodBody b c d e newCode g registers
     where
-      newCode = concatMap (xform_opCode fi fu fd fs fm $ ft fm h) code
+      newCode = concatMap (xform_opCode fi fu fd fs fm $ xform_traits fm h) code
 
-      ft :: (Abc.MultinameIdx -> Maybe B.ByteString) -- multiname resolution
-         -> [Abc.TraitsInfo]
-         -> Abc.U30
-         -> TraitsInfo
-      ft m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitVar tid _ _ _) d):ts) u30
+      xform_traits :: (Abc.MultinameIdx -> Maybe B.ByteString) -- multiname resolution
+                   -> [Abc.TraitsInfo]
+                   -> Abc.U30
+                   -> TraitsInfo
+      xform_traits m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitVar tid _ _ _) d):ts) u30
         | tid == u30 = (TraitsInfo (m_res a) b c tt d)
-        | otherwise = ft m_res ts u30
-      ft m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitConst tid _ _ _) d):ts) u30
+        | otherwise = xform_traits m_res ts u30
+      xform_traits m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitConst tid _ _ _) d):ts) u30
         | tid == u30 = (TraitsInfo (m_res a) b c tt d)
-        | otherwise = ft m_res ts u30
-      ft m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitMethod tid _) d):ts) u30
+        | otherwise = xform_traits m_res ts u30
+      xform_traits m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitMethod tid _) d):ts) u30
         | tid == u30 = (TraitsInfo (m_res a) b c tt d)
-        | otherwise = ft m_res ts u30
-      ft m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitGetter tid _) d):ts) u30
+        | otherwise = xform_traits m_res ts u30
+      xform_traits m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitGetter tid _) d):ts) u30
         | tid == u30 = (TraitsInfo (m_res a) b c tt d)
-        | otherwise = ft m_res ts u30
-      ft m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitSetter tid _) d):ts) u30
+        | otherwise = xform_traits m_res ts u30
+      xform_traits m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitSetter tid _) d):ts) u30
         | tid == u30 = (TraitsInfo (m_res a) b c tt d)
-        | otherwise = ft m_res ts u30
-      ft m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitClass tid _) d):ts) u30
+        | otherwise = xform_traits m_res ts u30
+      xform_traits m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitClass tid _) d):ts) u30
         | tid == u30 = (TraitsInfo (m_res a) b c tt d)
-        | otherwise = ft m_res ts u30
-      ft m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitFunction tid _) d):ts) u30
+        | otherwise = xform_traits m_res ts u30
+      xform_traits m_res ((Abc.TraitsInfo a b c tt@(Abc.TraitFunction tid _) d):ts) u30
         | tid == u30 = (TraitsInfo (m_res a) b c tt d)
-        | otherwise = ft m_res ts u30
+        | otherwise = xform_traits m_res ts u30
 
       registers :: Registers
       registers = V.replicate (maxReg newCode) VmRt_Undefined
@@ -356,7 +356,7 @@ xform_opCode {- 0x88 -} i u d s m t (Abc.CoerceUInt) = [CoerceUInt]
 xform_opCode {- 0x89 -} i u d s m t (Abc.CoerceObject) = [CoerceObject]
 xform_opCode {- 0x90 -} i u d s m t (Abc.Negate) = [Negate]
 xform_opCode {- 0x91 -} i u d s m t (Abc.Increment) = [Increment]
-xform_opCode {- 0x92 -} i u d s m t (Abc.IncLocal) = [IncLocal]
+xform_opCode {- 0x92 -} i u d s m t (Abc.IncLocal u30) = [IncLocal u30]
 xform_opCode {- 0x93 -} i u d s m t (Abc.Decrement) = [Decrement]
 xform_opCode {- 0x94 -} i u d s m t (Abc.DecLocal u30) = [DecLocal u30]
 xform_opCode {- 0x95 -} i u d s m t (Abc.TypeOf) = [TypeOf]

@@ -537,7 +537,7 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0x8F -} {-negate_p-}
             | {- 0x90 -} Negate
             | {- 0x91 -} Increment
-            | {- 0x92 -} IncLocal
+            | {- 0x92 -} IncLocal U30
             | {- 0x93 -} Decrement
             | {- 0x94 -} DecLocal U30
             | {- 0x95 -} TypeOf

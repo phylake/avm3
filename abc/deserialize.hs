@@ -523,7 +523,7 @@ parseOpCodeChoice w
   {-| w == 0x8F = return negate_p-}
   | w == 0x90 = return Negate
   | w == 0x91 = return Increment
-  | w == 0x92 = return IncLocal
+  | w == 0x92 = liftM IncLocal fromU30LE_vl
   | w == 0x93 = return Decrement
   | w == 0x94 = liftM DecLocal fromU30LE_vl
   | w == 0x95 = return TypeOf

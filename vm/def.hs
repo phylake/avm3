@@ -34,9 +34,9 @@ type AVM3Exception = String -- Exception string
 type Execution = (D_Ops, A_Ops, B_Ops, ScopeStack, Registers, ConstantPool, InstanceId)
 type AVM3 = IO
 
-data VmRtP = Ext B.ByteString -- all run time, external properties
-           | ClassIdx B.ByteString -- the identity of the class
-           | SlotIdx B.ByteString
+data VmRtP = Ext {-#UNPACK#-} !B.ByteString -- all run time, external properties
+           | ClassIdx {-#UNPACK#-} !B.ByteString -- the identity of the class
+           | SlotIdx {-#UNPACK#-} !B.ByteString
            deriving (Eq, Show)
 
 instance Hashable VmRtP where
@@ -59,15 +59,15 @@ TODO
 data VmRt = VmRt_Undefined
           | VmRt_Null
           | VmRt_Boolean Bool
-          | VmRt_Int Int32
-          | VmRt_Uint Word32
-          | VmRt_Number Double
-          | VmRt_String B.ByteString
+          | VmRt_Int {-#UNPACK#-} !Int32
+          | VmRt_Uint {-#UNPACK#-} !Word32
+          | VmRt_Number {-#UNPACK#-} !Double
+          | VmRt_String {-#UNPACK#-} !B.ByteString
           | VmRt_Array [VmRt] InstanceId
           | VmRt_Activation VmObject
           | VmRt_Object VmObject InstanceId{-RefCount-} {-(Maybe ScopeStack)-}
           | VmRt_Function [OpCode] ScopeStack InstanceId
-          | VmRtInternalInt Abc.U30
+          | VmRtInternalInt {-#UNPACK#-} !Abc.U30
 
 instance Coerce VmRt where
   to_boolean VmRt_Undefined = False
@@ -261,9 +261,9 @@ instance Show VmRt where
   show (VmRtInternalInt a)   = "VmRtInternalInt " ++ show a
 
 {- close to 1:1 transformation of Abc to an ADT -}
-data VmAbc = VmAbc_Int Int32
-           | VmAbc_Uint Abc.U30
-           | VmAbc_Double Double
+data VmAbc = VmAbc_Int {-#UNPACK#-} !Int32
+           | VmAbc_Uint {-#UNPACK#-} !Abc.U30
+           | VmAbc_Double {-#UNPACK#-} !Double
            | VmAbc_String B.ByteString
            | VmAbc_NsInfo Abc.NSInfo
            | VmAbc_NsSet Abc.NSSet
@@ -298,10 +298,10 @@ diff Abc.MethodBody MethodBody
   + mbReg
 -}
 data MethodBody = MethodBody {
-                               mbMaxStack :: Abc.U30
-                             , mbLocalCount :: Abc.U30
-                             , mbInitScopeDepth :: Abc.U30
-                             , mbMaxScopeDepth :: Abc.U30
+                               mbMaxStack :: {-#UNPACK#-} !Abc.U30
+                             , mbLocalCount :: {-#UNPACK#-} !Abc.U30
+                             , mbInitScopeDepth :: {-#UNPACK#-} !Abc.U30
+                             , mbMaxScopeDepth :: {-#UNPACK#-} !Abc.U30
                              , mbCode :: [OpCode]
                              , mbExceptions :: [Abc.Exception]
                              , mbReg :: Registers
@@ -408,35 +408,35 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0x52 -} {-Sign16-}
             | {- 0x53 -} ApplyType
               {- 0x54 -}
-            | {- 0x55 -} NewObject Abc.U30
-            | {- 0x56 -} NewArray Abc.U30
+            | {- 0x55 -} NewObject {-#UNPACK#-} !Abc.U30
+            | {- 0x56 -} NewArray {-#UNPACK#-} !Abc.U30
             | {- 0x57 -} NewActivation
-            | {- 0x58 -} NewClass Abc.ClassInfoIdx
-            | {- 0x59 -} GetDescendants Abc.MultinameIdx (Maybe B.ByteString)
-            | {- 0x5A -} NewCatch Abc.ExceptionIdx
+            | {- 0x58 -} NewClass {-#UNPACK#-} !Abc.ClassInfoIdx
+            | {- 0x59 -} GetDescendants {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
+            | {- 0x5A -} NewCatch {-#UNPACK#-} !Abc.ExceptionIdx
             | {- 0x5B -} FindPropGlobalStrict
             | {- 0x5C -} FindPropGlobal
-            | {- 0x5D -} FindPropStrict Abc.MultinameIdx (Maybe B.ByteString)
-            | {- 0x5E -} FindProperty Abc.MultinameIdx (Maybe B.ByteString)
+            | {- 0x5D -} FindPropStrict {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
+            | {- 0x5E -} FindProperty {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
             | {- 0x5F -} FindDef
               {- 0x60 -} {-GetLex-} -- expanded into FindPropStrict idx + GetProperty idx
-            | {- 0x61 -} SetProperty Abc.MultinameIdx (Maybe B.ByteString)
-            | {-      -} SetProperty_ Abc.MultinameIdx B.ByteString
-            | {- 0x62 -} GetLocal Abc.U30
-            | {- 0x63 -} SetLocal Abc.U30
+            | {- 0x61 -} SetProperty {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
+            | {-      -} SetProperty_ {-#UNPACK#-} !Abc.MultinameIdx B.ByteString
+            | {- 0x62 -} GetLocal {-#UNPACK#-} !Abc.U30
+            | {- 0x63 -} SetLocal {-#UNPACK#-} !Abc.U30
             | {- 0x64 -} GetGlobalScope
-            | {- 0x65 -} GetScopeObject Abc.U8
-            | {- 0x66 -} GetProperty Abc.MultinameIdx (Maybe B.ByteString)
-            | {-      -} GetProperty_ Abc.MultinameIdx B.ByteString
+            | {- 0x65 -} GetScopeObject {-#UNPACK#-} !Abc.U8
+            | {- 0x66 -} GetProperty {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
+            | {-      -} GetProperty_ {-#UNPACK#-} !Abc.MultinameIdx B.ByteString
             | {- 0x67 -} GetPropertyLate
-            | {- 0x68 -} InitProperty Abc.MultinameIdx (Maybe B.ByteString)
+            | {- 0x68 -} InitProperty {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
             | {- 0x69 -} SetPropertyLate
-            | {- 0x6A -} DeleteProperty Abc.MultinameIdx (Maybe B.ByteString)
+            | {- 0x6A -} DeleteProperty {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
             | {- 0x6B -} DeletePropertyLate
-            | {- 0x6C -} GetSlot Abc.U30 TraitsInfo
-            | {- 0x6D -} SetSlot Abc.U30 TraitsInfo
-            | {- 0x6E -} GetGlobalSlot Abc.U30
-            | {- 0x6F -} SetGlobalSlot Abc.U30
+            | {- 0x6C -} GetSlot {-#UNPACK#-} !Abc.U30 TraitsInfo
+            | {- 0x6D -} SetSlot {-#UNPACK#-} !Abc.U30 TraitsInfo
+            | {- 0x6E -} GetGlobalSlot {-#UNPACK#-} !Abc.U30
+            | {- 0x6F -} SetGlobalSlot {-#UNPACK#-} !Abc.U30
             | {- 0x70 -} ConvertString
             | {- 0x71 -} EscXmlElem
             | {- 0x72 -} EscXmlAttr
@@ -453,13 +453,13 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0x7D -}
               {- 0x7E -}
               {- 0x7F -}
-            | {- 0x80 -} Coerce Abc.MultinameIdx (Maybe B.ByteString)
+            | {- 0x80 -} Coerce {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
             | {- 0x81 -} CoerceBoolean
             | {- 0x82 -} CoerceAny
             | {- 0x83 -} CoerceInt
             | {- 0x84 -} CoerceDouble
             | {- 0x85 -} CoerceString
-            | {- 0x86 -} AsType Abc.MultinameIdx (Maybe B.ByteString)
+            | {- 0x86 -} AsType {-#UNPACK#-} !Abc.MultinameIdx (Maybe B.ByteString)
             | {- 0x87 -} AsTypeLate
             | {- 0x88 -} CoerceUInt
             | {- 0x89 -} CoerceObject
@@ -471,9 +471,9 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0x8F -} {-negate_p-}
             | {- 0x90 -} Negate
             | {- 0x91 -} Increment
-            | {- 0x92 -} IncLocal
+            | {- 0x92 -} IncLocal {-#UNPACK#-} !Abc.U30
             | {- 0x93 -} Decrement
-            | {- 0x94 -} DecLocal Abc.U30
+            | {- 0x94 -} DecLocal {-#UNPACK#-} !Abc.U30
             | {- 0x95 -} TypeOf
             | {- 0x96 -} Not
             | {- 0x97 -} BitNot
@@ -519,8 +519,8 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0xBF -}
             | {- 0xC0 -} IncrementInt
             | {- 0xC1 -} DecrementInt
-            | {- 0xC2 -} IncLocalInt Abc.U30
-            | {- 0xC3 -} DecLocalInt Abc.U30
+            | {- 0xC2 -} IncLocalInt {-#UNPACK#-} !Abc.U30
+            | {- 0xC3 -} DecLocalInt {-#UNPACK#-} !Abc.U30
             | {- 0xC4 -} NegateInt
             | {- 0xC5 -} AddInt
             | {- 0xC6 -} SubtractInt
@@ -990,7 +990,7 @@ toBytes {- 0x89 -} (CoerceObject) = 1
 --toBytes   {- 0x8F -} {-negate_p-}
 toBytes {- 0x90 -} (Negate) = 1
 toBytes {- 0x91 -} (Increment) = 1
-toBytes {- 0x92 -} (IncLocal) = 1
+toBytes {- 0x92 -} (IncLocal u30) = 1 + u30Bytes u30
 toBytes {- 0x93 -} (Decrement) = 1
 toBytes {- 0x94 -} (DecLocal u30) = 1 + u30Bytes u30
 toBytes {- 0x95 -} (TypeOf) = 1
