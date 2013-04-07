@@ -154,6 +154,123 @@ REMEMBER the stack order here is the REVERSE of the docs
   top, mid, bottom => newvalue
 -}
 
+{-Pushshort       10000
+Setlocal2       
+Pushbyte        0
+Setlocal3       
+Jump            L1
+
+
+L2: 
+Label           
+GetLocal2       
+Decrement_i     
+SetLocal2       
+IncLocal_i      3
+
+L1: 
+GetLocal2       
+GetLocal3       
+IfGreaterThan            L2-}
+
+theops :: [OpCode]
+theops =
+  [
+    {-PushByte 1000000
+  , SetLocal2
+  , -}PushByte 0
+  , SetLocal3
+  , Jump 6
+  , Label
+  , GetLocal2
+  , DecrementInt
+  , SetLocal2
+  , IncLocalInt 3
+  , GetLocal2
+  , GetLocal3
+  , IfGreaterThan (-12)
+  , GetLocal2
+  , GetLocal3
+  , Add
+  , ReturnValue
+  ]
+
+{-
+Currently getting stack overflow when trying to use i
+Even declaring the IO monad causes exponential slowdown
+Need to figure out how to transform a stack built on mutable variables into one
+  that's not so i get out of the IO monad forever. return a list of everything
+  changed along with the return value?
+Because of the stack overflow I can't actually know if the value is being calculated
+  or if the compiler recognizes i don't use the value. VERIFY THE CODE IS BEING RUN
+-}
+
+foo :: IO ()
+foo = do
+  --(Right (VmRt_Int i), _) <- r_f2 ([], [], theops, [], V.fromList [VmRt_Undefined, VmRt_Undefined, VmRt_Int 1000000, VmRt_Undefined], V.empty, 0)
+  putStrLn $ show i
+  return ()
+  where
+    (Right (VmRt_Int i), _) = r_f2 ([], [], theops, [], V.fromList [VmRt_Undefined, VmRt_Undefined, VmRt_Int 1000000, VmRt_Undefined], V.empty, 0)
+
+--r_f2 :: (D_Ops, A_Ops, B_Ops, ScopeStack, Registers, V.Vector VmRt, InstanceId) -> AVM3 (Either AVM3Exception VmRt, InstanceId)
+r_f2 :: (D_Ops, A_Ops, B_Ops, ScopeStack, Registers, V.Vector VmRt, InstanceId) -> (Either AVM3Exception VmRt, InstanceId)
+r_f2 {-0x48-} (a:dops, aops, ReturnValue:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po (a:dops) aops$ ReturnValue:bops
+  --return (Right a, iid)
+  (Right a, iid)
+
+r_f2 {-0x24-} (dops, aops, PushByte u8:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po dops aops$ PushByte u8:bops
+  r_f2 (VmRt_Int (fromIntegral u8):dops, PushByte u8:aops, bops, ss, reg, cp, iid)
+
+r_f2 {-0xD2-} (dops, aops, GetLocal2:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po dops aops$ GetLocal2:bops
+  r_f2 (reg ! 2:dops, GetLocal2:aops, bops, ss, reg, cp, iid)
+
+r_f2 {-0xD3-} (dops, aops, GetLocal3:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po dops aops$ GetLocal3:bops
+  r_f2 (reg ! 3:dops, GetLocal3:aops, bops, ss, reg, cp, iid)
+
+r_f2 {-0xD6-} (new:dops, aops, SetLocal2:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po (new:dops) aops$ SetLocal2:bops
+  r_f2 (dops, SetLocal2:aops, bops, ss, reg // [(2, new)], cp, iid)
+
+r_f2 {-0xD7-} (new:dops, aops, SetLocal3:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po (new:dops) aops$ SetLocal3:bops
+  r_f2 (dops, SetLocal3:aops, bops, ss, reg // [(3, new)], cp, iid)
+
+r_f2 {-0x09-} (dops, aops, Label:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po dops aops$ Label:bops
+  r_f2 (dops, Label:aops, bops, ss, reg, cp, iid)
+
+r_f2 {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) = {-do-} --doo
+  r_f2 (a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
+
+r_f2 {-0xA0-} (a:b:dops, aops, Add:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po (a:b:dops) aops$ Add:bops
+  r_f2 (b + a:dops, Add:aops, bops, ss, reg, cp, iid)
+
+r_f2 {-0x17-} (a:b:dops, aops, IfGreaterThan s24:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po (a:b:dops) aops$ IfGreaterThan s24:bops
+  if b > a
+    then r_f2 (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+    else r_f2 (dops, IfGreaterThan s24:aops, bops, ss, reg, cp, iid)
+  where
+    (aopsNew, bopsNew) = jump s24 (IfGreaterThan s24:aops, bops)
+
+r_f2 {-0x10-} (dops, aops, Jump s24:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po dops aops$ Jump s24:bops
+  r_f2 (dops, aopsNew, bopsNew, ss, reg, cp, iid)
+  where
+    (aopsNew, bopsNew) = jump s24 (Jump s24:aops, bops)
+
+r_f2 {-0xC2-} (dops, aops, IncLocalInt regIdx:bops, ss, reg, cp, iid) = {-do-} --doo
+  r_f2 (dops, IncLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
+  where
+    reg2 = reg // [(iidx, (reg ! iidx) + 1)]
+    iidx = fromIntegral regIdx
+
 r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, InstanceId)
 r_f {-0x08-} (dops, aops, Kill regIdx:bops, ss, reg, cp, iid) = do
   po dops aops$ Kill regIdx:bops
@@ -288,22 +405,18 @@ r_f {-0x2B-} (a:b:dops, aops, Swap:bops, ss, reg, cp, iid) = do
 
 r_f {-0x2C-} (dops, aops, PushString idx a:bops, ss, reg, cp, iid) = do
   po dops aops$ PushString idx a:bops
-  --a <- liftM VmRt_Int$ get_string cp idx
   r_f (VmRt_String a:dops, PushString idx a:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2D-} (dops, aops, PushInt idx a:bops, ss, reg, cp, iid) = do
   po dops aops$ PushInt idx a:bops
-  --a <- liftM VmRt_Int$ get_int cp idx
   r_f (VmRt_Int a:dops, PushInt idx a:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2E-} (dops, aops, PushUInt idx a:bops, ss, reg, cp, iid) = do
   po dops aops$ PushUInt idx a:bops
-  --a <- liftM VmRt_Uint$ get_uint cp idx
   r_f (VmRt_Uint a:dops, PushUInt idx a:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x2F-} (dops, aops, PushDouble idx a:bops, ss, reg, cp, iid) = do
   po dops aops$ PushDouble idx a:bops
-  --a <- liftM VmRt_Number$ get_double cp idx
   r_f (VmRt_Number a:dops, PushDouble idx a:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x30-} (VmRt_Object v i:dops, aops, PushScope:bops, ss, reg, cp, iid) = do
@@ -472,14 +585,14 @@ r_f {-0x5E-} (dops, aops, FindProperty idx maybeName:bops, ss, reg, cp, iid) = d
 
 r_f {-0x61-} (value:dops, aops, SetProperty idx Nothing:bops, ss, reg, cp, iid) = do
   multiname <- get_multiname cp idx
-  (VmRt_String prop, (VmRt_Object this iidThis):dopsNew, rewrite) <- case multiname of
+  (VmRt_String prop, (VmRt_Object this iidThis):dopsNew) <- case multiname of
     Abc.Multiname_QName _ stringIdx -> do
       str <- get_string cp stringIdx
-      return (VmRt_String str, dops, True)
+      return (VmRt_String str, dops)
     Abc.Multiname_Multiname stringIdx _ -> do
       str <- get_string cp stringIdx
-      return (VmRt_String str, dops, True)
-    otherwise -> return (head dops, tail dops, False)
+      return (VmRt_String str, dops)
+    otherwise -> return (head dops, tail dops)
   insert this (Ext prop) value
   r_f (dopsNew, SetProperty idx Nothing:aops, bops, ss, reg, cp, iid)
 
@@ -594,14 +707,14 @@ r_f {-0x6D-} (v:VmRt_Object obj _:dops, aops, SetSlot slotIdx ti:bops, ss, reg, 
   r_f (dops, SetSlot slotIdx ti:aops, bops, ss, reg, cp, iid)
 
 --r_f {-0x6E-} (VmRt_Object obj _:dops, aops, GetGlobalSlot u30:bops, ss, reg, cp, iid) = do
---  po (VmRt_Object obj 0:dops) aops$ GetGlobalSlot u30:bops
---  Just slot <- lookup obj $ pfx_slot_idx u30
---  r_f (slot:dops, GetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
+-- po (VmRt_Object obj 0:dops) aops$ GetGlobalSlot u30:bops
+-- Just slot <- lookup obj $ pfx_slot_idx u30
+-- r_f (slot:dops, GetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
 
 --r_f {-0x6F-} (value:VmRt_Object obj _:dops, aops, SetGlobalSlot u30:bops, ss, reg, cp, iid) = do
---  po (value:VmRt_Object obj 0:dops) aops$ SetGlobalSlot u30:bops
---  insert obj (pfx_slot_idx u30) value
---  r_f (dops, SetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
+-- po (value:VmRt_Object obj 0:dops) aops$ SetGlobalSlot u30:bops
+-- insert obj (pfx_slot_idx u30) value
+-- r_f (dops, SetGlobalSlot u30:aops, bops, ss, reg, cp, iid)
 
 r_f {-0x70-} (v:dops, aops, ConvertString:bops, ss, reg, cp, iid) = do
   r_f (convert_string v:dops, ConvertString:aops, bops, ss, reg, cp, iid)
@@ -752,7 +865,7 @@ find_property name idx cp ss = do
 
     scope_stack :: VmRtP -> ScopeStack -> AVM3 (Maybe VmRt)
     scope_stack key [] = return Nothing
-    scope_stack key@(Ext str) ((top, iid):stack) = do
+    scope_stack key@(Ext _) ((top, iid):stack) = do
       maybeValue <- H.lookup top key
       case maybeValue of
         Nothing -> scope_stack key stack

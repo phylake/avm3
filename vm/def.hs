@@ -264,7 +264,7 @@ instance Show VmRt where
 data VmAbc = VmAbc_Int {-#UNPACK#-} !Int32
            | VmAbc_Uint {-#UNPACK#-} !Abc.U30
            | VmAbc_Double {-#UNPACK#-} !Double
-           | VmAbc_String B.ByteString
+           | VmAbc_String {-#UNPACK#-} !B.ByteString
            | VmAbc_NsInfo Abc.NSInfo
            | VmAbc_NsSet Abc.NSSet
            | VmAbc_Multiname Abc.Multiname
