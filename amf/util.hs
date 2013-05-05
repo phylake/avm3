@@ -1,25 +1,23 @@
-module Amf.Util (peek, head_, Amf.Util.take, Amf.Util.takeWhile) where
+module Amf.Util (Amf.Util.peek, head_, Amf.Util.take, Amf.Util.takeWhile) where
 
 import           Amf.Def
+import           Data.Conduit
+import           Data.Conduit.Binary as CB
+import           Data.Conduit.List as CL
+import           Data.Void
 import           Data.Word
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.Enumerator as E
-import qualified Data.Enumerator.Binary as EB
 import qualified MonadLib as ML
 
-peek :: (Monad m, ML.MonadT t) => t (E.Iteratee B.ByteString m) (Maybe B.ByteString)
-peek = ML.lift $ E.peek
+peek :: Parser (Maybe B.ByteString)
+peek = ML.lift $ CL.peek
 
-head_ :: (Monad m, ML.MonadT t) => t (E.Iteratee B.ByteString m) Word8
-head_ = ML.lift $ EB.head_
+head_ :: Parser Word8
+head_ = ML.lift $ do Just a <- CB.head; return a
 
-take :: (Monad m, ML.MonadT t)
-     => Integer
-     -> t (E.Iteratee B.ByteString m) BL.ByteString
-take i = ML.lift $ EB.take i
+take :: Int -> Parser BL.ByteString
+take = ML.lift . CB.take
 
-takeWhile :: (Monad m, ML.MonadT t)
-          => (Word8 -> Bool)
-          -> t (E.Iteratee B.ByteString m) BL.ByteString
-takeWhile f = ML.lift $ EB.takeWhile f
+takeWhile :: (Word8 -> Bool) -> Parser BL.ByteString
+takeWhile f = ML.lift $ CB.takeWhile f =$ CL.consume >>= return . BL.fromChunks

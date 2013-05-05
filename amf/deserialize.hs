@@ -1,21 +1,19 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Amf.Deserialize (allFromAmf) where
+module Amf.Deserialize (deserialize, deserializeBs) where
 
 import           Amf.Def
 import           Amf.Util as U
-import           Control.Monad
+import           Control.Monad (replicateM, liftM2)
+import           Control.Monad.Trans.Class (MonadTrans (lift))
 import           Data.Binary.IEEE754 (wordToDouble)
 import           Data.Bits
 import           Data.Char (digitToInt, intToDigit)
-import           Data.Enumerator as E hiding (replicateM)
-import           Data.Enumerator.Binary as EB hiding (replicateM)
-import           Data.Enumerator.List as EL hiding (replicateM)
-import           Data.Int
-import           Data.Word
+import           Data.Conduit
+import           Data.Conduit.Binary as CB
+import           Data.Word (Word8)
 import           Util.Misc
 import           Util.Words
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
 import qualified MonadLib as ML
@@ -28,7 +26,7 @@ BEGIN test code
 
 testFile :: IO ()
 testFile = do
-  (amfs :: [Amf], (string, cot, tt)) <- run_ (EB.enumFile "amf/file.amf" $$ ML.runStateT nilTable allFromAmf)
+  (amfs :: [Amf], (string, cot, tt)) <- deserialize "amf/file.amf"
   putStrLn "AMFS"
   putStrLn $ unlines $ Prelude.map show amfs
   putStrLn "TABLES"
@@ -40,8 +38,8 @@ testFile = do
   putStrLn $ unlines $ Prelude.map show tt
   return ()
 
-p :: String -> ML.StateT Tables (Iteratee B.ByteString IO) ()
-p = ML.lift . ML.lift . putStrLn
+p :: String -> Parser ()
+p = ML.lift . lift . lift . putStrLn
 
 {-
 
@@ -49,14 +47,20 @@ END test code
 
 -}
 
-allFromAmf :: Parser [Amf]
-allFromAmf = do
+deserialize :: FilePath -> IO ([Amf], Tables)
+deserialize file = runResourceT $ CB.sourceFile file $$ ML.runStateT nilTable parseAmf
+
+deserializeBs :: BL.ByteString -> IO ([Amf], Tables)
+deserializeBs lbs = runResourceT $ CB.sourceLbs lbs $$ ML.runStateT nilTable parseAmf
+
+parseAmf :: Parser [Amf]
+parseAmf = do
   w <- U.peek
   case w of
     Nothing -> return []
     otherwise -> do
       (amf :: Amf) <- fromAmf
-      rest <- allFromAmf
+      rest <- parseAmf
       return$ amf:rest
 
 instance AmfPrim Amf where
@@ -142,7 +146,7 @@ fromCommonXml f = fromAmf >>= return . f
 
 fromObjectType :: Parser Amf
 fromObjectType = fromAmf >>= u29OFunc
-  
+
 u29OFunc :: U29 -> Parser Amf
 u29OFunc u29
   | {- U29O-ref        -} u29 .&. 0x1 == 0x0 = fromU29ORef u29
@@ -152,7 +156,7 @@ u29OFunc u29
   | otherwise = fail$ "u29OFunc - unrecognized u29"
 
 fromU29ORef :: U29 -> Parser Amf
-fromU29ORef u29 = return . AmfObject . U29O_Ref$ u29 `shiftR` 1
+fromU29ORef = return . AmfObject . U29O_Ref . (`shiftR` 1)
 
 fromU29OTraitsRef :: U29 -> Parser Amf
 fromU29OTraitsRef u29 = do
@@ -166,8 +170,8 @@ fromU29OTraits :: U29 -> Parser Amf
 fromU29OTraits u29 = do
   (utf8vr :: UTF_8_vr) <- fromAmf
   (props :: [UTF_8_vr]) <- replicateM (u29 `shiftR` 4) fromUtf8Loop
-  let traits = (utf8vr, props, u29 .&. 0x8 == 0x8)
-  pushTT traits >>= commonU29O >>= return . AmfObject . U29O_Traits
+  pushTT (utf8vr, props, u29 .&. 0x8 == 0x8)
+    >>= commonU29O >>= return . AmfObject . U29O_Traits
   where
     fromUtf8Loop :: Parser UTF_8_vr
     fromUtf8Loop = do

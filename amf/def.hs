@@ -1,16 +1,15 @@
 module Amf.Def where
 
 import           Control.DeepSeq
-import           Data.Enumerator as E
-import           Data.Enumerator.Binary as EB
-import           Data.Enumerator.List as EL
+import           Data.Conduit
 import           Data.Int
+import           Data.Void
 import           Data.Word
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified MonadLib as ML
 
-type Parser = ML.StateT Tables (Iteratee B.ByteString IO)
+type Parser = ML.StateT Tables (ConduitM B.ByteString Void (ResourceT IO))
 
 type U8 = Word8
 type U30 = Word32
