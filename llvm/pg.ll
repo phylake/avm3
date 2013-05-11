@@ -1,5 +1,3 @@
-;llvm-link hc.ll pg.ll | opt -std-compile-opts -print-before-all -o test.o
-
 ; Declare the string constant as a global constant.
 @.str = private unnamed_addr constant [13 x i8] c"hello world\0A\00"
 @.percentD = private unnamed_addr constant [4 x i8] c"%d\0A\00"
@@ -8,7 +6,9 @@
 @.ui0 = constant i32 0
 @.test = constant {i32, [2 x i32]} {i32 42, [2 x i32] [i32 43, i32 84]}
 
-define {i32, i8 * (i8 *, ...) *} * @baseClass () {
+define
+{i32, i8 * (i8 *, ...) *} *
+@baseClass () {
 entry:
   %class = alloca {i32, i8 * (i8 *, ...) *}
   ret {i32, i8 * (i8 *, ...) *} * %class
@@ -71,29 +71,29 @@ define i32 @main() {
 
 define i32 @global.Test.main() {
 entry:
-  %0 = alloca i32
-  %1 = alloca i32
-  %2 = alloca i32
-  store i32 1000000, i32* %2
-  %3 = alloca i32
-  store i32 0, i32* %3
+  %reg_0 = alloca i32
+  %reg_1 = alloca i32
+  %reg_2 = alloca i32
+  store i32 1000000, i32* %reg_2
+  %reg_3 = alloca i32
+  store i32 0, i32* %reg_3
   br label %L1
 L2:
-  %T21 = load i32* %2
+  %T21 = load i32* %reg_2
   %T22 = sub i32 %T21, 1
-  store i32 %T22, i32* %2
+  store i32 %T22, i32* %reg_2
 
-  %T31 = load i32* %3
+  %T31 = load i32* %reg_3
   %T32 = add i32 %T31, 1
-  store i32 %T32, i32* %3
+  store i32 %T32, i32* %reg_3
   br label %L1
 L1:
-  %b1 = load i32* %2
-  %b2 = load i32* %3
+  %b1 = load i32* %reg_2
+  %b2 = load i32* %reg_3
   %cond = icmp ugt i32 %b1, %b2
   br i1 %cond, label %L2, label %L3
 L3:
-  %fin = load i32* %2
+  %fin = load i32* %reg_2
   %d = getelementptr [4 x i8]* @.percentD, i64 0, i64 0
   call i32 @printf(i8* %d, i32 %fin)
 

@@ -1,4 +1,4 @@
-module LLVM.Def where
+module LLVM.Lang where
 
 import           Abc.DeepSeq
 import           Control.DeepSeq
@@ -14,6 +14,7 @@ import qualified Data.ByteString.Char8 as BC
 
 data R = R D String      -- semantically meaningful register. don't name mangle
        | RN D Int        -- numbered
+       | RAS3 D Int      -- maps to GetLocal and SetLocal
        | RT D String Int -- temporary (not sure if String will be needed)
 
 instance Show R where
@@ -103,8 +104,21 @@ instance Show Visibility where
   show Hidden = "hidden"
   show Protected = "protected"
 
-data FunctionDef = FunctionDef Linkage Visibility CallingConvention D String [D]
-data FunctionDec = FunctionDec Linkage Visibility CallingConvention D String [D]
+data FunctionDef = FunctionDef
+                     Linkage
+                     Visibility
+                     CallingConvention
+                     D        -- return value
+                     String   -- name
+                     [D]      -- parameters
+                     [LLVMOp] -- function body
+data FunctionDec = FunctionDec
+                     Linkage
+                     Visibility
+                     CallingConvention
+                     D
+                     String
+                     [D]
 
 data ParameterAttr = Zeroext
                    | Signext

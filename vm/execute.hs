@@ -2,6 +2,8 @@
 {-# LANGUAGE BangPatterns #-}
 module Vm.Execute where
 
+import           Control.Monad.Identity
+
 import           Abc.DeepSeq
 import           Abc.Deserialize
 import           Abc.Json
@@ -180,45 +182,33 @@ theops =
   , SetLocal2
   , -}PushByte 0
   , SetLocal3
-  , Jump 6
+  , Jump 5
   , Label
-  , GetLocal2
-  , DecrementInt
-  , SetLocal2
+  , DecLocalInt 2
   , IncLocalInt 3
   , GetLocal2
   , GetLocal3
-  , IfGreaterThan (-12)
+  , IfGreaterThan (-11)
   , GetLocal2
   , GetLocal3
   , Add
   , ReturnValue
   ]
 
-{-
-Currently getting stack overflow when trying to use i
-Even declaring the IO monad causes exponential slowdown
-Need to figure out how to transform a stack built on mutable variables into one
-  that's not so i get out of the IO monad forever. return a list of everything
-  changed along with the return value?
-Because of the stack overflow I can't actually know if the value is being calculated
-  or if the compiler recognizes i don't use the value. VERIFY THE CODE IS BEING RUN
--}
-
 foo :: IO ()
 foo = do
-  --(Right (VmRt_Int i), _) <- r_f2 ([], [], theops, [], V.fromList [VmRt_Undefined, VmRt_Undefined, VmRt_Int 1000000, VmRt_Undefined], V.empty, 0)
+  (Right (VmRt_Int i), _) <- r_f2 ([], [], theops, [], V.fromList [VmRt_Undefined, VmRt_Undefined, VmRt_Int 1000000, VmRt_Undefined], V.empty, 0)
   putStrLn $ show i
   return ()
-  where
-    (Right (VmRt_Int i), _) = r_f2 ([], [], theops, [], V.fromList [VmRt_Undefined, VmRt_Undefined, VmRt_Int 1000000, VmRt_Undefined], V.empty, 0)
+  --where
+  --  (Right (VmRt_Int i), _) = r_f2 ([], [], theops, [], V.fromList [VmRt_Undefined, VmRt_Undefined, VmRt_Int 1000000, VmRt_Undefined], V.empty, 0)
 
---r_f2 :: (D_Ops, A_Ops, B_Ops, ScopeStack, Registers, V.Vector VmRt, InstanceId) -> AVM3 (Either AVM3Exception VmRt, InstanceId)
-r_f2 :: (D_Ops, A_Ops, B_Ops, ScopeStack, Registers, V.Vector VmRt, InstanceId) -> (Either AVM3Exception VmRt, InstanceId)
+r_f2 :: (D_Ops, A_Ops, B_Ops, ScopeStack, Registers, V.Vector VmRt, InstanceId) -> IO (Either AVM3Exception VmRt, InstanceId)
+--r_f2 :: (D_Ops, A_Ops, B_Ops, ScopeStack, Registers, V.Vector VmRt, InstanceId) -> (Either AVM3Exception VmRt, InstanceId)
 r_f2 {-0x48-} (a:dops, aops, ReturnValue:bops, ss, reg, cp, iid) = {-do-} --doo
   --po (a:dops) aops$ ReturnValue:bops
-  --return (Right a, iid)
-  (Right a, iid)
+  return (Right a, iid)
+  --(Right a, iid)
 
 r_f2 {-0x24-} (dops, aops, PushByte u8:bops, ss, reg, cp, iid) = {-do-} --doo
   --po dops aops$ PushByte u8:bops
@@ -244,9 +234,6 @@ r_f2 {-0x09-} (dops, aops, Label:bops, ss, reg, cp, iid) = {-do-} --doo
   --po dops aops$ Label:bops
   r_f2 (dops, Label:aops, bops, ss, reg, cp, iid)
 
-r_f2 {-0xC1-} (a:dops, aops, DecrementInt:bops, ss, reg, cp, iid) = {-do-} --doo
-  r_f2 (a - 1:dops, DecrementInt:aops, bops, ss, reg, cp, iid)
-
 r_f2 {-0xA0-} (a:b:dops, aops, Add:bops, ss, reg, cp, iid) = {-do-} --doo
   --po (a:b:dops) aops$ Add:bops
   r_f2 (b + a:dops, Add:aops, bops, ss, reg, cp, iid)
@@ -266,9 +253,17 @@ r_f2 {-0x10-} (dops, aops, Jump s24:bops, ss, reg, cp, iid) = {-do-} --doo
     (aopsNew, bopsNew) = jump s24 (Jump s24:aops, bops)
 
 r_f2 {-0xC2-} (dops, aops, IncLocalInt regIdx:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po dops aops$ IncLocalInt regIdx:bops
   r_f2 (dops, IncLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
   where
     reg2 = reg // [(iidx, (reg ! iidx) + 1)]
+    iidx = fromIntegral regIdx
+
+r_f2 {-0xC2-} (dops, aops, DecLocalInt regIdx:bops, ss, reg, cp, iid) = {-do-} --doo
+  --po dops aops$ DecLocalInt regIdx:bops
+  r_f2 (dops, DecLocalInt regIdx:aops, bops, ss, reg2, cp, iid)
+  where
+    reg2 = reg // [(iidx, (reg ! iidx) - 1)]
     iidx = fromIntegral regIdx
 
 r_f :: Execution -> AVM3 (Either AVM3Exception VmRt, InstanceId)

@@ -14,7 +14,7 @@ import           Data.Time.Clock
 import           Data.Vector ((//), (!))
 import           Data.Word
 import           Ecma.Prims
-import           LLVM.Def
+import           LLVM.Lang
 import           Prelude hiding (lookup)
 import           Text.JSON
 import           Util.Misc
@@ -37,6 +37,109 @@ writeMethodBody = undefined
 -- passes to alter entire methods
 alterMethodBody :: [(OpCode, LLVMOp) -> (OpCode, LLVMOp)] -> [OpCode] -> [LLVMOp]
 alterMethodBody = undefined
+{-
+  define i32 @global.Test.main() {
+  entry:
+    %as_2 = alloca i32
+    store i32 1000000, i32* %as_2
+    %as_3 = alloca i32
+    store i32 0, i32* %as_3
+    br label %L1
+  L2:
+    %T21 = load i32* %as_2
+    %T22 = sub i32 %T21, 1
+    store i32 %T22, i32* %as_2
+
+    %T31 = load i32* %as_3
+    %T32 = add i32 %T31, 1
+    store i32 %T32, i32* %as_3
+    br label %L1
+  L1:
+    %b1 = load i32* %as_2
+    %b2 = load i32* %as_3
+    %cond = icmp ugt i32 %b1, %b2
+    br i1 %cond, label %L2, label %L3
+  L3:
+    %fin = load i32* %as_2
+    %d = getelementptr [4 x i8]* @.percentD, i64 0, i64 0
+    call i32 @printf(i8* %d, i32 %fin)
+
+    ret i32 0
+  }
+-}
+
+{-
+TODO passes in order
+  - insert entry: Label
+  - insert Label after branching ops
+  - tag Labels
+  - detect local register types and alloca them
+  - look ahead for unary ops like Push* since they resolve to a single llvm op
+  - i think binary ops only need the last 2 temp registers which are already
+    captured in the StateT
+  - detect types being added to know whether to call a function or just add
+    and possibly insert arbitary new codes to keep transform to LLVMOp simple
+-}
+
+fs :: [OpCode] -> [[String]]
+--fs = undefined
+
+-- assuming %local_* are already allocaed
+fs (PushInt i:SetLocal2:ops) = ["store i32 " ++ show i ++ ", i32 * %local_2"] : fs ops
+
+-- assuming %local_* are already allocaed
+fs (PushByte i:SetLocal3:ops) = ["store i32 " ++ show i ++ ", i32 * %local_3"] : fs ops
+fs (Jump i:ops) = ["br label %L1"] : fs ops
+fs (Label:ops) = ["L1:"] : fs ops
+
+fs (GetLocal2:ops) = ["%T21 = load i32* %local_2"] : fs ops
+fs (DecrementInt:ops) = ["%T22 = add i32 -1, %T21"] : fs ops
+fs (SetLocal2:ops) = ["store i32 %T22, i32 * %local_2"] : fs ops
+
+-- translate IncLocalInt 3 to GetLocal3 IncrementInt SetLocal3 POST Label insertion
+fs (GetLocal3:ops) = ["%T31 = load i32* %local_3"] : fs ops
+fs (IncrementInt:ops) = ["%T32 = add i32 1, %T31"] : fs ops
+fs (SetLocal3:ops) = ["store i32 %T32, i32 * %local_3"] : fs ops
+
+fs (GetLocal2:ops) = ["%T23 = load i32* %local_2"] : fs ops
+fs (GetLocal3:ops) = ["%T33 = load i32* %local_3"] : fs ops
+
+-- need to insert Label after IfGreaterThan
+fs (IfGreaterThan i:ops) = ["%gt0 = icmp ugt i32 %T23, %T33", "br i1 %gt0, label %L1, label %L2", "L2:"] : fs ops
+
+-- for every register i need (1) the temporary register count and (2) the data type
+fs (GetLocal2:ops) = ["%T24 = load i32* %local_2"] : fs ops
+fs (GetLocal3:ops) = ["%T34 = load i32* %local_3"] : fs ops
+-- will need to know the data types of the two things i'm adding as this will either be
+-- a simple add or a call to an object's add function
+fs (Add:ops) = ["%add0 = add i32 %T24, %T34"] : fs ops
+fs (ReturnValue:ops) = ["ret i32 %add0"] : fs ops
+fs _ = []
+
+theops :: [OpCode]
+theops =
+  [
+    PushInt 1000000
+  , SetLocal2
+  , PushByte 0
+  , SetLocal3
+  , Jump 6
+  , Label
+  , GetLocal2
+  , DecrementInt
+  , SetLocal2
+  --, IncLocalInt 3
+  , GetLocal3
+  , IncrementInt
+  , SetLocal3
+  , GetLocal2
+  , GetLocal3
+  , IfGreaterThan (-12)
+  , GetLocal2
+  , GetLocal3
+  , Add
+  , ReturnValue
+  ]
 
 main :: IO ()
 main = do
@@ -49,7 +152,11 @@ main = do
   --mapM (\(i, a) -> put_nsInfo cp idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
   --mapM (\(i, a) -> put_nsSet cp idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
   llvm_multinames <- mapM (\(i, a) -> return $ "@.mn_" ++ show i ++ " = constant [" ++ show (length (mres i) + 1) ++ " x i8] c\"" ++ mres i ++ "\\00\"") $ zip (map fromIntegral [0..length multinames]) multinames
-  writeFile "llvm/test.ll" $
+  
+  --let llvm_function_definitions = map show $ concat $ fs theops
+  let llvm_function_definitions = concat $ fs theops
+
+  writeFile "llvm/compiled.ll" $
        unlines llvm_ints
     ++ unlines llvm_uints
     ++ unlines llvm_doubles
@@ -57,6 +164,7 @@ main = do
     ++ unlines llvm_multinames
     -- ++ unlines (map show $ xform_methodBodies abc)
     ++ "\n"
+    ++ unlines llvm_function_definitions
 
   --mapM (\(i, a) -> put_methodSig cp idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
   --mapM (\(i, a) -> put_metadata cp idx a) $ zip (map fromIntegral [0..length metadata]) metadata
