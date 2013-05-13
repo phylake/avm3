@@ -9,7 +9,6 @@ import Data.Enumerator.Binary as EB
 import Data.Enumerator.List as EL
 import Data.Int (Int32)
 import Data.Word
-import TFish
 import Util.Misc (allBytes, replicateM')
 import Util.Words hiding
   (

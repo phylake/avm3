@@ -19,7 +19,6 @@ import           Data.Word
 import           Ecma.Prims
 import           Prelude hiding (lookup)
 import           Text.JSON
-import           TFish
 import           Util.Misc
 import           Util.Words
 import           Vm.Def
