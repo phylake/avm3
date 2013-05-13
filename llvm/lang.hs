@@ -12,14 +12,14 @@ import qualified Data.ByteString.Char8 as BC
 
 -- TODO constants on R or D
 
-data R = R D String      -- semantically meaningful register. don't name mangle
-       | RN D Int        -- numbered
-       | RAS3 D Int      -- maps to GetLocal and SetLocal
-       | RT D String Int -- temporary (not sure if String will be needed)
+data R = R D String -- semantically meaningful register. don't name mangle
+       | RN D Int   -- numbered
+       | RAS3 D Int -- maps to GetLocal and SetLocal
+       | RT D Int   -- temporary (not sure if String will be needed)
 
 instance Show R where
   show (R d n) = show d ++ " %" ++ n
-  show (RT d n i) = show d ++ " %" ++ n ++ show i
+  show (RT d i) = show d ++ " %" ++ show i
   show (RN d i) = show d ++ " %" ++ show i
 
 data LLVMOp = Load R R
@@ -40,6 +40,7 @@ data D = Bool
        | Struct [D]
        | Func D [D]
        | P D
+       deriving (Eq)
 instance Show D where
   show (Bool) = "i1"
   show (I8) = "i8"

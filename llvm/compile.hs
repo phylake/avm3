@@ -14,7 +14,10 @@ import           Data.Time.Clock
 import           Data.Vector ((//), (!))
 import           Data.Word
 import           Ecma.Prims
+import           LLVM.Def2 as AbcT
 import           LLVM.Lang
+import           LLVM.Util
+import           MonadLib
 import           Prelude hiding (lookup)
 import           Text.JSON
 import           Util.Misc
@@ -30,13 +33,6 @@ import qualified Data.Vector as V
 scopeStack :: D
 scopeStack = P $ Struct [scopeStack, P I32]
 
--- 1:1 AVM opcode to LLMV opcode
-writeMethodBody :: [OpCode -> LLVMOp] -> [OpCode] -> [LLVMOp]
-writeMethodBody = undefined
-
--- passes to alter entire methods
-alterMethodBody :: [(OpCode, LLVMOp) -> (OpCode, LLVMOp)] -> [OpCode] -> [LLVMOp]
-alterMethodBody = undefined
 {-
   define i32 @global.Test.main() {
   entry:
@@ -68,6 +64,62 @@ alterMethodBody = undefined
   }
 -}
 
+op2String :: [Abc.OpCode] -> [[String]]
+
+-- assuming %local_* are already allocaed
+op2String (Abc.PushInt i:Abc.SetLocal2:ops) = ["store i32 " ++ show i ++ ", i32 * %local_2"] : op2String ops
+
+-- assuming %local_* are already allocaed
+op2String (Abc.PushByte i:Abc.SetLocal3:ops) = ["store i32 " ++ show i ++ ", i32 * %local_3"] : op2String ops
+op2String (Abc.Jump i:ops) = ["br label %L1"] : op2String ops
+op2String (Abc.Label:ops) = ["L1:"] : op2String ops
+
+op2String (Abc.GetLocal2:ops) = ["%T21 = load i32* %local_2"] : op2String ops
+op2String (Abc.DecrementInt:ops) = ["%T22 = add i32 -1, %T21"] : op2String ops
+op2String (Abc.SetLocal2:ops) = ["store i32 %T22, i32 * %local_2"] : op2String ops
+
+-- translate IncLocalInt 3 to GetLocal3 IncrementInt SetLocal3 POST Label insertion
+op2String (Abc.GetLocal3:ops) = ["%T31 = load i32* %local_3"] : op2String ops
+op2String (Abc.IncrementInt:ops) = ["%T32 = add i32 1, %T31"] : op2String ops
+op2String (Abc.SetLocal3:ops) = ["store i32 %T32, i32 * %local_3"] : op2String ops
+
+op2String (Abc.GetLocal2:ops) = ["%T23 = load i32* %local_2"] : op2String ops
+op2String (Abc.GetLocal3:ops) = ["%T33 = load i32* %local_3"] : op2String ops
+
+-- need to insert Label after IfGreaterThan
+op2String (Abc.IfGreaterThan i:ops) = ["%gt0 = icmp ugt i32 %T23, %T33", "br i1 %gt0, label %L1, label %L2", "L2:"] : op2String ops
+
+-- for every register i need (1) the temporary register count and (2) the data type
+op2String (Abc.GetLocal2:ops) = ["%T24 = load i32* %local_2"] : op2String ops
+op2String (Abc.GetLocal3:ops) = ["%T34 = load i32* %local_3"] : op2String ops
+-- will need to know the data types of the two things i'm adding as this will either be
+-- a simple add or a call to an object's add function
+op2String (Abc.Add:ops) = ["%add0 = add i32 %T24, %T34"] : op2String ops
+op2String (Abc.ReturnValue:ops) = ["ret i32 %add0"] : op2String ops
+op2String _ = []
+
+theops :: [Abc.OpCode]
+theops =
+  [
+    Abc.PushInt 1000000     -- 
+  , Abc.SetLocal2           -- store i32 1000000, i32* %reg_2
+  , Abc.PushByte 0          -- 
+  , Abc.SetLocal3           -- store i32 0, i32* %reg_3
+  , Abc.Jump 6              -- br label %L1; L2:
+  , Abc.GetLocal2           -- %T21 = load i32* %reg_2
+  , Abc.DecrementInt        -- %T22 = sub i32 %T21, 1
+  , Abc.SetLocal2           -- store i32 %T22, i32* %reg_2
+  , Abc.IncLocalInt 3       -- %T31 = load i32* %reg_3; %T32 = add i32 %T31, 1; store i32 %T32, i32* %reg_3
+  , Abc.Label               -- L1:
+  , Abc.GetLocal2           -- %T41 = load i32* %reg_2
+  , Abc.GetLocal3           -- %T42 = load i32* %reg_3
+  , Abc.IfGreaterThan (-12) -- %cond = icmp ugt i32 %T41, %T42; br i1 %cond, label %L2, label %L3; L3:
+  , Abc.GetLocal2           -- %T51 = load i32* %reg_2
+  , Abc.GetLocal3           -- %T52 = load i32* %reg_3
+  , Abc.Add                 -- %T53 = add i32 %T51, %T52
+  , Abc.ReturnValue         -- ret i32 %T53
+  ]
+
 {-
 TODO passes in order
   - insert entry: Label
@@ -81,65 +133,47 @@ TODO passes in order
     and possibly insert arbitary new codes to keep transform to LLVMOp simple
 -}
 
-fs :: [OpCode] -> [[String]]
---fs = undefined
+locals :: Abc.OpCode -> Abc.OpCode
+locals Abc.GetLocal0 = Abc.GetLocal 0
+locals Abc.GetLocal1 = Abc.GetLocal 1
+locals Abc.GetLocal2 = Abc.GetLocal 2
+locals Abc.GetLocal3 = Abc.GetLocal 3
+locals Abc.SetLocal0 = Abc.SetLocal 0
+locals Abc.SetLocal1 = Abc.SetLocal 1
+locals Abc.SetLocal2 = Abc.SetLocal 2
+locals Abc.SetLocal3 = Abc.SetLocal 3
+locals op = op
 
--- assuming %local_* are already allocaed
-fs (PushInt i:SetLocal2:ops) = ["store i32 " ++ show i ++ ", i32 * %local_2"] : fs ops
+{-
+can only alter code in place. modifying length will result in incorrect branches
+once branches are resolved consider grouping code by branch before doing expansions like
+IncLocalInt 3 -> [GetLocal3, IncrementInt, SetLocal3]
+-}
+simplify :: [Abc.OpCode] -> [Abc.OpCode]
+simplify = map locals
 
--- assuming %local_* are already allocaed
-fs (PushByte i:SetLocal3:ops) = ["store i32 " ++ show i ++ ", i32 * %local_3"] : fs ops
-fs (Jump i:ops) = ["br label %L1"] : fs ops
-fs (Label:ops) = ["L1:"] : fs ops
+type OpT1 = [(Abc.OpCode, [AbcT.OpCode])]
+type OpT2 = [([AbcT.OpCode], [LLVMOp])]
 
-fs (GetLocal2:ops) = ["%T21 = load i32* %local_2"] : fs ops
-fs (DecrementInt:ops) = ["%T22 = add i32 -1, %T21"] : fs ops
-fs (SetLocal2:ops) = ["store i32 %T22, i32 * %local_2"] : fs ops
+type StateOpT1 = StateT [R] IO
 
--- translate IncLocalInt 3 to GetLocal3 IncrementInt SetLocal3 POST Label insertion
-fs (GetLocal3:ops) = ["%T31 = load i32* %local_3"] : fs ops
-fs (IncrementInt:ops) = ["%T32 = add i32 1, %T31"] : fs ops
-fs (SetLocal3:ops) = ["store i32 %T32, i32 * %local_3"] : fs ops
+entry :: OpT1 -> StateOpT1 OpT1
+entry ops = return $ (Abc.Label, []) : ops
 
-fs (GetLocal2:ops) = ["%T23 = load i32* %local_2"] : fs ops
-fs (GetLocal3:ops) = ["%T33 = load i32* %local_3"] : fs ops
+unaryOp :: OpT1 -> StateOpT1 OpT1
+unaryOp ops = undefined
 
--- need to insert Label after IfGreaterThan
-fs (IfGreaterThan i:ops) = ["%gt0 = icmp ugt i32 %T23, %T33", "br i1 %gt0, label %L1, label %L2", "L2:"] : fs ops
+labels :: OpT1 -> StateOpT1 OpT1
+labels ops = return $ map (addLabels ops) ops
+  where
+    addLabels :: [(Abc.OpCode, [AbcT.OpCode])] -> (Abc.OpCode, [AbcT.OpCode]) -> (Abc.OpCode, [AbcT.OpCode])
+    addLabels ops (Abc.Label, abcts) = undefined
 
--- for every register i need (1) the temporary register count and (2) the data type
-fs (GetLocal2:ops) = ["%T24 = load i32* %local_2"] : fs ops
-fs (GetLocal3:ops) = ["%T34 = load i32* %local_3"] : fs ops
--- will need to know the data types of the two things i'm adding as this will either be
--- a simple add or a call to an object's add function
-fs (Add:ops) = ["%add0 = add i32 %T24, %T34"] : fs ops
-fs (ReturnValue:ops) = ["ret i32 %add0"] : fs ops
-fs _ = []
+binaryOp :: OpT1 -> StateOpT1 OpT1
+binaryOp ops = undefined
 
-theops :: [OpCode]
-theops =
-  [
-    PushInt 1000000
-  , SetLocal2
-  , PushByte 0
-  , SetLocal3
-  , Jump 6
-  , Label
-  , GetLocal2
-  , DecrementInt
-  , SetLocal2
-  --, IncLocalInt 3
-  , GetLocal3
-  , IncrementInt
-  , SetLocal3
-  , GetLocal2
-  , GetLocal3
-  , IfGreaterThan (-12)
-  , GetLocal2
-  , GetLocal3
-  , Add
-  , ReturnValue
-  ]
+runner :: OpT1 -> StateOpT1 OpT1
+runner ops = entry ops >>= labels >>= binaryOp >>= unaryOp
 
 main :: IO ()
 main = do
@@ -153,8 +187,9 @@ main = do
   --mapM (\(i, a) -> put_nsSet cp idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
   llvm_multinames <- mapM (\(i, a) -> return $ "@.mn_" ++ show i ++ " = constant [" ++ show (length (mres i) + 1) ++ " x i8] c\"" ++ mres i ++ "\\00\"") $ zip (map fromIntegral [0..length multinames]) multinames
   
-  --let llvm_function_definitions = map show $ concat $ fs theops
-  let llvm_function_definitions = concat $ fs theops
+  (llvm_function_definitions :: OpT1, _) <- runStateT [RN I32 0] $ runner [(a,[]) | a <- theops]
+  --let llvm_function_definitions :: [AbcT.OpCode] = []
+  mapM_ (putStrLn . show) llvm_function_definitions
 
   writeFile "llvm/compiled.ll" $
        unlines llvm_ints
@@ -164,7 +199,7 @@ main = do
     ++ unlines llvm_multinames
     -- ++ unlines (map show $ xform_methodBodies abc)
     ++ "\n"
-    ++ unlines llvm_function_definitions
+    ++ unlines (map show llvm_function_definitions)
 
   --mapM (\(i, a) -> put_methodSig cp idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
   --mapM (\(i, a) -> put_metadata cp idx a) $ zip (map fromIntegral [0..length metadata]) metadata
@@ -228,12 +263,12 @@ xform_methodBodies (Abc ints uints doubles strings nsInfo nsSet multinames metho
                              , mbLocalCount :: U30
                              , mbInitScopeDepth :: U30
                              , mbMaxScopeDepth :: U30
-                             , mbCode :: [OpCode]
+                             , mbCode :: [Abc.OpCode]
                              , mbExceptions :: [Exception]
                              , mbTraits :: [TraitsInfo]
                              }
                              deriving (Show)-}
-    extractOpCode :: MethodBody -> [OpCode]
+    extractOpCode :: MethodBody -> [Abc.OpCode]
     extractOpCode (MethodBody _ _ _ _ _ code _ _) = code
 
 
@@ -290,11 +325,11 @@ nsinfo_impl string_res NSInfo_Any                    = "*"
                     -> (Abc.MultinameIdx -> Maybe B.ByteString) -- multiname resolution
                     -> [Abc.MethodBody]
                     -> [MethodBody]
-xform_methodBodies2 fi fu fd fs fm = map toVmMethodBody where
+xform_methodBodies2 fi fu fd op2String fm = map toVmMethodBody where
   toVmMethodBody (Abc.MethodBody _ b c d e code g h) =
     newCode `deepseq` MethodBody b c d e newCode g registers
     where
-      newCode = concatMap (xform_opCode fi fu fd fs fm $ xform_traits fm h) code
+      newCode = concatMap (xform_opCode fi fu fd op2String fm $ xform_traits fm h) code
 
       xform_traits :: (Abc.MultinameIdx -> Maybe B.ByteString) -- multiname resolution
                    -> [Abc.TraitsInfo]
@@ -325,7 +360,7 @@ xform_methodBodies2 fi fu fd fs fm = map toVmMethodBody where
       registers :: Registers
       registers = V.replicate (maxReg newCode) VmRt_Undefined
 
-      maxReg :: [OpCode] -> Int
+      maxReg :: [Abc.OpCode] -> Int
       maxReg [] = 0
       maxReg (GetLocal0:ops) = max 1 $ maxReg ops
       maxReg (GetLocal1:ops) = max 2 $ maxReg ops

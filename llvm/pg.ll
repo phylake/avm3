@@ -74,8 +74,8 @@ entry:
   %reg_0 = alloca i32
   %reg_1 = alloca i32
   %reg_2 = alloca i32
-  store i32 1000000, i32* %reg_2
   %reg_3 = alloca i32
+  store i32 1000000, i32* %reg_2
   store i32 0, i32* %reg_3
   br label %L1
 L2:

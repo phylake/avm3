@@ -8,5 +8,5 @@ int somec()
 
 struct class
 {
-	unsigned int size;
+  unsigned int size;
 };
