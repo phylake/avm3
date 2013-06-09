@@ -1,6 +1,7 @@
 module Abc.Util (
   returnJ
 , toStrict
+, toBytes
 , fromU8
 , fromU16
 , fromU16LE

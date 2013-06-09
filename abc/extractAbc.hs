@@ -1,15 +1,26 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import Swf.Deserialize as Swf
-import Swf.Def
-import System.Environment (getArgs)
-import System.FilePath (dropExtension)
-import Data.ByteString as B
+import           Abc.Deserialize (parseAbc)
+import           Abc.Json2
+import           Swf.Def
+import           Swf.Deserialize as Swf
+import           System.Environment (getArgs)
+import           System.FilePath (dropExtension)
+import           Text.JSON
+import qualified Abc.Def as Abc
+import qualified Data.ByteString as B
+import qualified Data.Enumerator as E
+import qualified Data.Enumerator.Binary as EB
 
+main :: IO ()
 main = do
   (file:_) <- getArgs
-  swfs <- Swf.deserialize file
-  B.writeFile (dropExtension file ++ ".abc") $ getDoAbc swfs
+  abcBytes <- Swf.deserialize file >>= return . getDoAbc
+  B.writeFile (dropExtension file ++ ".abc") abcBytes
+  
+  (abc :: Abc.Abc) <- E.run_ (EB.enumFile (dropExtension file ++ ".abc") E.$$ parseAbc)
+  writeFile (dropExtension file ++ ".abc.json") $ encode $ abcToJson abc
   where
     getDoAbc ((Swf_DoABC _ _ abc):swfs) = abc
     getDoAbc (swf:swfs) = getDoAbc swfs
