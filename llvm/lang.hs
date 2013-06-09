@@ -12,6 +12,17 @@ import qualified Data.ByteString.Char8 as BC
 
 -- TODO constants on R or D
 
+-- organizing into blocks might make things easier
+data Block = Block Label [LLVMOp]
+
+data Label = L String Int deriving (Eq)
+
+data BrType = UnConditional Label | Conditional R Label Label
+
+instance Show Label where
+  show (L "" i) = "L" ++ show i ++ ":"
+  show (L s i) = s ++ show i ++ ":"
+
 data R = R D String -- semantically meaningful register. don't name mangle
        | RN D Int   -- numbered
        | RAS3 D Int -- maps to GetLocal and SetLocal
@@ -26,6 +37,7 @@ data LLVMOp = Load R R
             | Store R R
             | Alloca R R
             | GetElementPtr R R [Int]
+            | Br BrType
 instance Show LLVMOp where
   show (Load (R _ a) (R bd b)) = "%" ++ a ++ " = load " ++ show bd ++ " %" ++ b
   show (Store a b) = "store " ++ show a ++ ", " ++ show b
@@ -112,14 +124,14 @@ data FunctionDef = FunctionDef
                      D        -- return value
                      String   -- name
                      [D]      -- parameters
-                     [LLVMOp] -- function body
+                     [Block]  -- function body
 data FunctionDec = FunctionDec
                      Linkage
                      Visibility
                      CallingConvention
-                     D
-                     String
-                     [D]
+                     D        -- return value
+                     String   -- name
+                     [D]      -- parameters
 
 data ParameterAttr = Zeroext
                    | Signext

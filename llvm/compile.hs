@@ -5,6 +5,7 @@ import           Abc.Def as Abc
 import           Abc.Deserialize
 import           Abc.Json
 import           Abc.Json2
+import           Abc.Util (toBytes)
 import           Control.Applicative ((<|>))
 import           Control.DeepSeq
 import           Control.Monad
@@ -14,10 +15,10 @@ import           Data.Time.Clock
 import           Data.Vector ((//), (!))
 import           Data.Word
 import           Ecma.Prims
-import           LLVM.Def2 as AbcT
+import           LLVM.AbcOps as AbcT
 import           LLVM.Lang
+import           LLVM.Passes.Branch
 import           LLVM.Util
-import           MonadLib
 import           Prelude hiding (lookup)
 import           Text.JSON
 import           Util.Misc
@@ -29,6 +30,7 @@ import qualified Data.Enumerator.Binary as EB
 import qualified Data.Enumerator.List as EL
 import qualified Data.Map as M
 import qualified Data.Vector as V
+import qualified MonadLib as ML
 
 scopeStack :: D
 scopeStack = P $ Struct [scopeStack, P I32]
@@ -152,28 +154,24 @@ IncLocalInt 3 -> [GetLocal3, IncrementInt, SetLocal3]
 simplify :: [Abc.OpCode] -> [Abc.OpCode]
 simplify = map locals
 
+{-
+many to many
+push + any instruction == 1 AbcT.OpCode
+inclocalint == 3 AbcT.OpCodes
+-}
 type OpT1 = [(Abc.OpCode, [AbcT.OpCode])]
 type OpT2 = [([AbcT.OpCode], [LLVMOp])]
 
-type StateOpT1 = StateT [R] IO
-
-entry :: OpT1 -> StateOpT1 OpT1
-entry ops = return $ (Abc.Label, []) : ops
+type StateOpT1 = ML.StateT [R] IO
 
 unaryOp :: OpT1 -> StateOpT1 OpT1
 unaryOp ops = undefined
-
-labels :: OpT1 -> StateOpT1 OpT1
-labels ops = return $ map (addLabels ops) ops
-  where
-    addLabels :: [(Abc.OpCode, [AbcT.OpCode])] -> (Abc.OpCode, [AbcT.OpCode]) -> (Abc.OpCode, [AbcT.OpCode])
-    addLabels ops (Abc.Label, abcts) = undefined
 
 binaryOp :: OpT1 -> StateOpT1 OpT1
 binaryOp ops = undefined
 
 runner :: OpT1 -> StateOpT1 OpT1
-runner ops = entry ops >>= labels >>= binaryOp >>= unaryOp
+runner ops = binaryOp ops >>= unaryOp
 
 main :: IO ()
 main = do
@@ -187,7 +185,7 @@ main = do
   --mapM (\(i, a) -> put_nsSet cp idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
   llvm_multinames <- mapM (\(i, a) -> return $ "@.mn_" ++ show i ++ " = constant [" ++ show (length (mres i) + 1) ++ " x i8] c\"" ++ mres i ++ "\\00\"") $ zip (map fromIntegral [0..length multinames]) multinames
   
-  (llvm_function_definitions :: OpT1, _) <- runStateT [RN I32 0] $ runner [(a,[]) | a <- theops]
+  (llvm_function_definitions :: OpT1, _) <- ML.runStateT [RN I32 0] $ runner [(a,[]) | a <- simplify theops]
   --let llvm_function_definitions :: [AbcT.OpCode] = []
   mapM_ (putStrLn . show) llvm_function_definitions
 
