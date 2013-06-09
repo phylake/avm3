@@ -1,4 +1,4 @@
-module Abc.DeepSeq where
+module Abc.DeepSeq () where
 
 import Control.DeepSeq
 import Abc.Def

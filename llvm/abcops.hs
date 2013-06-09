@@ -1,16 +1,9 @@
-module LLVM.AbcOps where
+module LLVM.AbcOps (OpCode(..)) where
 
 import           Data.Word
 import           LLVM.Lang
 import qualified Abc.Def as Abc
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
 
-data OpCodeBranch = BranchIdx Abc.S24 | BranchLabel Label
-
-{-
-A superset of Abc.OpCode
--}
 data OpCode = {- 0x01 -} Breakpoint
             | {- 0x02 -} Nop
             | {- 0x03 -} Throw
@@ -22,22 +15,22 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x09 -} Label
               {- 0x0A -}
               {- 0x0B -}
-            | {- 0x0C -} IfNotLessThan Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x0D -} IfNotLessEqual Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x0E -} IfNotGreaterThan Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x0F -} IfNotGreaterEqual Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x10 -} Jump Abc.S24 (Maybe Label)
-            | {- 0x11 -} IfTrue Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x12 -} IfFalse Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x13 -} IfEqual Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x14 -} IfNotEqual Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x15 -} IfLessThan Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x16 -} IfLessEqual Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x17 -} IfGreaterThan Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x18 -} IfGreaterEqual Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x19 -} IfStrictEqual Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x1A -} IfStrictNotEqual Abc.S24 (Maybe Label) (Maybe Label)
-            | {- 0x1B -} LookupSwitch Abc.S24 (Maybe Label) [Abc.S24] [Maybe Label] {- default offset, case offsets -}
+            | {- 0x0C -} IfNotLessThan Label Label
+            | {- 0x0D -} IfNotLessEqual Label Label
+            | {- 0x0E -} IfNotGreaterThan Label Label
+            | {- 0x0F -} IfNotGreaterEqual Label Label
+            | {- 0x10 -} Jump Label
+            | {- 0x11 -} IfTrue Label Label
+            | {- 0x12 -} IfFalse Label Label
+            | {- 0x13 -} IfEqual Label Label
+            | {- 0x14 -} IfNotEqual Label Label
+            | {- 0x15 -} IfLessThan Label Label
+            | {- 0x16 -} IfLessEqual Label Label
+            | {- 0x17 -} IfGreaterThan Label Label
+            | {- 0x18 -} IfGreaterEqual Label Label
+            | {- 0x19 -} IfStrictEqual Label Label
+            | {- 0x1A -} IfStrictNotEqual Label Label
+            | {- 0x1B -} LookupSwitch Label [Label] {- default offset, case offsets -}
             | {- 0x1C -} PushWith
             | {- 0x1D -} PopScope
             | {- 0x1E -} NextName
@@ -54,10 +47,10 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x29 -} Pop
             | {- 0x2A -} Dup
             | {- 0x2B -} Swap
-            | {- 0x2C -} PushString Abc.StringIdx String
-            | {- 0x2D -} PushInt Abc.IntIdx Abc.S32
-            | {- 0x2E -} PushUInt Abc.UintIdx Abc.U32
-            | {- 0x2F -} PushDouble Abc.DoubleIdx Double
+            | {- 0x2C -} PushString String
+            | {- 0x2D -} PushInt Abc.S32
+            | {- 0x2E -} PushUInt Abc.U32
+            | {- 0x2F -} PushDouble Double
             | {- 0x30 -} PushScope
             | {- 0x31 -} PushNamespace Abc.NSInfoIdx
             | {- 0x32 -} HasNext2 Word32 Word32
@@ -204,8 +197,8 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0xBF -}
             | {- 0xC0 -} IncrementInt
             | {- 0xC1 -} DecrementInt
-            | {- 0xC2 -} IncLocalInt Abc.U30
-            | {- 0xC3 -} DecLocalInt Abc.U30
+              {- 0xC2 -} {-IncLocalInt Abc.U30-}
+              {- 0xC3 -} {-DecLocalInt Abc.U30-}
             | {- 0xC4 -} NegateInt
             | {- 0xC5 -} AddInt
             | {- 0xC6 -} SubtractInt
@@ -267,177 +260,3 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0xFE -} {-verifyop-}
               {- 0xFF -} {-decode-}
             deriving (Show, Eq)
-
-abcToLLVM :: (Abc.IntIdx -> Abc.S32)            -- int resolution
-          -> (Abc.UintIdx -> Abc.U32)           -- uint resolution
-          -> (Abc.DoubleIdx -> Double)          -- double resolution
-          -> (Abc.StringIdx -> String)          -- string resolution
-          -> (Abc.MultinameIdx -> Maybe String) -- multiname resolution
-          -> (Abc.U30 -> Abc.TraitsInfo)        -- trait slot resolution
-          -> Abc.OpCode
-          -> [OpCode]
-abcToLLVM {- 0x01 -} i u d s m t (Abc.Breakpoint) = [Breakpoint]
-abcToLLVM {- 0x02 -} i u d s m t (Abc.Nop) = [Nop]
-abcToLLVM {- 0x03 -} i u d s m t (Abc.Throw) = [Throw]
-abcToLLVM {- 0x04 -} i u d s m t (Abc.GetSuper u30) = [GetSuper u30 $ m u30]
-abcToLLVM {- 0x05 -} i u d s m t (Abc.SetSuper u30) = [SetSuper u30 $ m u30]
-abcToLLVM {- 0x06 -} i u d s m t (Abc.DefaultXmlNamespace u30) = [DefaultXmlNamespace u30]
-abcToLLVM {- 0x07 -} i u d s m t (Abc.DefaultXmlNamespaceL) = [DefaultXmlNamespaceL]
-abcToLLVM {- 0x08 -} i u d s m t (Abc.Kill u30) = [Kill u30]
-abcToLLVM {- 0x09 -} i u d s m t (Abc.Label) = [Label]
-abcToLLVM {- 0x0C -} i u d s m t (Abc.IfNotLessThan s24) = [IfNotLessThan s24 Nothing Nothing]
-abcToLLVM {- 0x0D -} i u d s m t (Abc.IfNotLessEqual s24) = [IfNotLessEqual s24 Nothing Nothing]
-abcToLLVM {- 0x0E -} i u d s m t (Abc.IfNotGreaterThan s24) = [IfNotGreaterThan s24 Nothing Nothing]
-abcToLLVM {- 0x0F -} i u d s m t (Abc.IfNotGreaterEqual s24) = [IfNotGreaterEqual s24 Nothing Nothing]
-abcToLLVM {- 0x10 -} i u d s m t (Abc.Jump s24) = [Jump s24 Nothing]
-abcToLLVM {- 0x11 -} i u d s m t (Abc.IfTrue s24) = [IfTrue s24 Nothing Nothing]
-abcToLLVM {- 0x12 -} i u d s m t (Abc.IfFalse s24) = [IfFalse s24 Nothing Nothing]
-abcToLLVM {- 0x13 -} i u d s m t (Abc.IfEqual s24) = [IfEqual s24 Nothing Nothing]
-abcToLLVM {- 0x14 -} i u d s m t (Abc.IfNotEqual s24) = [IfNotEqual s24 Nothing Nothing]
-abcToLLVM {- 0x15 -} i u d s m t (Abc.IfLessThan s24) = [IfLessThan s24 Nothing Nothing]
-abcToLLVM {- 0x16 -} i u d s m t (Abc.IfLessEqual s24) = [IfLessEqual s24 Nothing Nothing]
-abcToLLVM {- 0x17 -} i u d s m t (Abc.IfGreaterThan s24) = [IfGreaterThan s24 Nothing Nothing]
-abcToLLVM {- 0x18 -} i u d s m t (Abc.IfGreaterEqual s24) = [IfGreaterEqual s24 Nothing Nothing]
-abcToLLVM {- 0x19 -} i u d s m t (Abc.IfStrictEqual s24) = [IfStrictEqual s24 Nothing Nothing]
-abcToLLVM {- 0x1A -} i u d s m t (Abc.IfStrictNotEqual s24) = [IfStrictNotEqual s24 Nothing Nothing]
-abcToLLVM {- 0x1B -} i u d s m t (Abc.LookupSwitch s24 s24s) = [LookupSwitch s24 Nothing s24s []]
-abcToLLVM {- 0x1C -} i u d s m t (Abc.PushWith) = [PushWith]
-abcToLLVM {- 0x1D -} i u d s m t (Abc.PopScope) = [PopScope]
-abcToLLVM {- 0x1E -} i u d s m t (Abc.NextName) = [NextName]
-abcToLLVM {- 0x1F -} i u d s m t (Abc.HasNext) = [HasNext]
-abcToLLVM {- 0x20 -} i u d s m t (Abc.PushNull) = [PushNull]
-abcToLLVM {- 0x21 -} i u d s m t (Abc.PushUndefined) = [PushUndefined]
-abcToLLVM {- 0x22 -} i u d s m t (Abc.PushConstant) = [PushConstant]
-abcToLLVM {- 0x23 -} i u d s m t (Abc.NextValue) = [NextValue]
-abcToLLVM {- 0x24 -} i u d s m t (Abc.PushByte u8) = [PushByte u8]
-abcToLLVM {- 0x25 -} i u d s m t (Abc.PushShort u30) = [PushShort u30]
-abcToLLVM {- 0x26 -} i u d s m t (Abc.PushTrue) = [PushTrue]
-abcToLLVM {- 0x27 -} i u d s m t (Abc.PushFalse) = [PushFalse]
-abcToLLVM {- 0x28 -} i u d s m t (Abc.PushNaN) = [PushNaN]
-abcToLLVM {- 0x29 -} i u d s m t (Abc.Pop) = [Pop]
-abcToLLVM {- 0x2A -} i u d s m t (Abc.Dup) = [Dup]
-abcToLLVM {- 0x2B -} i u d s m t (Abc.Swap) = [Swap]
-abcToLLVM {- 0x2C -} i u d s m t (Abc.PushString u30) = [PushString u30 $ s u30]
-abcToLLVM {- 0x2D -} i u d s m t (Abc.PushInt u30) = [PushInt u30 $ i u30]
-abcToLLVM {- 0x2E -} i u d s m t (Abc.PushUInt u30) = [PushUInt u30 $ u u30]
-abcToLLVM {- 0x2F -} i u d s m t (Abc.PushDouble u30) = [PushDouble u30 $ d u30]
-abcToLLVM {- 0x30 -} i u d s m t (Abc.PushScope) = [PushScope]
-abcToLLVM {- 0x31 -} i u d s m t (Abc.PushNamespace u30) = [PushNamespace u30]
-abcToLLVM {- 0x32 -} i u d s m t (Abc.HasNext2 w32 w32_2) = [HasNext2 w32 w32_2]
-abcToLLVM {- 0x33 -} i u d s m t (Abc.PushDecimal) = [PushDecimal]
-abcToLLVM {- 0x34 -} i u d s m t (Abc.PushDNaN) = [PushDNaN]
-abcToLLVM {- 0x40 -} i u d s m t (Abc.NewFunction u30) = [NewFunction u30]
-abcToLLVM {- 0x41 -} i u d s m t (Abc.Call u30) = [Call u30]
-abcToLLVM {- 0x42 -} i u d s m t (Abc.Construct u30) = [Construct u30]
-abcToLLVM {- 0x43 -} i u d s m t (Abc.CallMethod u30_1 u30_2) = [CallMethod u30_1 u30_2 $ m u30_1]
-abcToLLVM {- 0x44 -} i u d s m t (Abc.CallStatic u30_1 u30_2) = [CallStatic u30_1 u30_2 $ m u30_1]
-abcToLLVM {- 0x45 -} i u d s m t (Abc.CallSuper u30_1 u30_2) = [CallSuper u30_1 u30_2 $ m u30_1]
-abcToLLVM {- 0x46 -} i u d s m t (Abc.CallProperty u30_1 u30_2) = [CallProperty u30_1 u30_2 $ m u30_1]
-abcToLLVM {- 0x47 -} i u d s m t (Abc.ReturnVoid) = [ReturnVoid]
-abcToLLVM {- 0x48 -} i u d s m t (Abc.ReturnValue) = [ReturnValue]
-abcToLLVM {- 0x49 -} i u d s m t (Abc.ConstructSuper u30) = [ConstructSuper u30]
-abcToLLVM {- 0x4A -} i u d s m t (Abc.ConstructProp u30_1 u30_2) = [ConstructProp u30_1 u30_2 $ m u30_1]
-abcToLLVM {- 0x4B -} i u d s m t (Abc.CallSuperId) = [CallSuperId]
-abcToLLVM {- 0x4C -} i u d s m t (Abc.CallPropLex u30_1 u30_2) = [CallPropLex u30_1 u30_2 $ m u30_1]
-abcToLLVM {- 0x4D -} i u d s m t (Abc.CallInterface) = [CallInterface]
-abcToLLVM {- 0x4E -} i u d s m t (Abc.CallSuperVoid u30_1 u30_2) = [CallSuperVoid u30_1 u30_2 $ m u30_1]
-abcToLLVM {- 0x4F -} i u d s m t (Abc.CallPropVoid u30_1 u30_2) = [CallPropVoid u30_1 u30_2 $ m u30_1]
-abcToLLVM {- 0x53 -} i u d s m t (Abc.ApplyType) = [ApplyType]
-abcToLLVM {- 0x55 -} i u d s m t (Abc.NewObject u30) = [NewObject u30]
-abcToLLVM {- 0x56 -} i u d s m t (Abc.NewArray u30) = [NewArray u30]
-abcToLLVM {- 0x57 -} i u d s m t (Abc.NewActivation) = [NewActivation]
-abcToLLVM {- 0x58 -} i u d s m t (Abc.NewClass u30) = [NewClass u30]
-abcToLLVM {- 0x59 -} i u d s m t (Abc.GetDescendants u30) = [GetDescendants u30 $ m u30]
-abcToLLVM {- 0x5A -} i u d s m t (Abc.NewCatch u30) = [NewCatch u30]
-abcToLLVM {- 0x5B -} i u d s m t (Abc.FindPropGlobalStrict) = [FindPropGlobalStrict]
-abcToLLVM {- 0x5C -} i u d s m t (Abc.FindPropGlobal) = [FindPropGlobal]
-abcToLLVM {- 0x5D -} i u d s m t (Abc.FindPropStrict u30) = [FindPropStrict u30 $ m u30]
-abcToLLVM {- 0x5E -} i u d s m t (Abc.FindProperty u30) = [FindProperty u30 $ m u30]
-abcToLLVM {- 0x5F -} i u d s m t (Abc.FindDef) = [FindDef]
-abcToLLVM {- 0x60 -} i u d s m t (Abc.GetLex idx) = [FindPropStrict idx$ m idx, GetProperty idx$ m idx]
-abcToLLVM {- 0x61 -} i u d s m t (Abc.SetProperty u30) = [SetProperty u30 $ m u30]
-abcToLLVM {- 0x62 -} i u d s m t (Abc.GetLocal u30) = [GetLocal u30]
-abcToLLVM {- 0x63 -} i u d s m t (Abc.SetLocal u30) = [SetLocal u30]
-abcToLLVM {- 0x64 -} i u d s m t (Abc.GetGlobalScope) = [GetGlobalScope]
-abcToLLVM {- 0x65 -} i u d s m t (Abc.GetScopeObject u8) = [GetScopeObject u8]
-abcToLLVM {- 0x66 -} i u d s m t (Abc.GetProperty u30) = [GetProperty u30 $ m u30]
-abcToLLVM {- 0x67 -} i u d s m t (Abc.GetPropertyLate) = [GetPropertyLate]
-abcToLLVM {- 0x68 -} i u d s m t (Abc.InitProperty u30) = [InitProperty u30 $ m u30]
-abcToLLVM {- 0x69 -} i u d s m t (Abc.SetPropertyLate) = [SetPropertyLate]
-abcToLLVM {- 0x6A -} i u d s m t (Abc.DeleteProperty u30) = [DeleteProperty u30 $ m u30]
-abcToLLVM {- 0x6B -} i u d s m t (Abc.DeletePropertyLate) = [DeletePropertyLate]
-abcToLLVM {- 0x6C -} i u d s m t (Abc.GetSlot u30) = [GetSlot u30{- $ t u30-}]
-abcToLLVM {- 0x6D -} i u d s m t (Abc.SetSlot u30) = [SetSlot u30{- $ t u30-}]
-abcToLLVM {- 0x6E -} i u d s m t (Abc.GetGlobalSlot u30) = [GetGlobalSlot u30]
-abcToLLVM {- 0x6F -} i u d s m t (Abc.SetGlobalSlot u30) = [SetGlobalSlot u30]
-abcToLLVM {- 0x70 -} i u d s m t (Abc.ConvertString) = [ConvertString]
-abcToLLVM {- 0x71 -} i u d s m t (Abc.EscXmlElem) = [EscXmlElem]
-abcToLLVM {- 0x72 -} i u d s m t (Abc.EscXmlAttr) = [EscXmlAttr]
-abcToLLVM {- 0x73 -} i u d s m t (Abc.ConvertInt) = [ConvertInt]
-abcToLLVM {- 0x74 -} i u d s m t (Abc.ConvertUInt) = [ConvertUInt]
-abcToLLVM {- 0x75 -} i u d s m t (Abc.ConvertDouble) = [ConvertDouble]
-abcToLLVM {- 0x76 -} i u d s m t (Abc.ConvertBoolean) = [ConvertBoolean]
-abcToLLVM {- 0x77 -} i u d s m t (Abc.ConvertObject) = [ConvertObject]
-abcToLLVM {- 0x78 -} i u d s m t (Abc.CheckFilter) = [CheckFilter]
-abcToLLVM {- 0x80 -} i u d s m t (Abc.Coerce u30) = [Coerce u30 $ m u30]
-abcToLLVM {- 0x81 -} i u d s m t (Abc.CoerceBoolean) = [CoerceBoolean]
-abcToLLVM {- 0x82 -} i u d s m t (Abc.CoerceAny) = [CoerceAny]
-abcToLLVM {- 0x83 -} i u d s m t (Abc.CoerceInt) = [CoerceInt]
-abcToLLVM {- 0x84 -} i u d s m t (Abc.CoerceDouble) = [CoerceDouble]
-abcToLLVM {- 0x85 -} i u d s m t (Abc.CoerceString) = [CoerceString]
-abcToLLVM {- 0x86 -} i u d s m t (Abc.AsType u30) = [AsType u30 $ m u30]
-abcToLLVM {- 0x87 -} i u d s m t (Abc.AsTypeLate) = [AsTypeLate]
-abcToLLVM {- 0x88 -} i u d s m t (Abc.CoerceUInt) = [CoerceUInt]
-abcToLLVM {- 0x89 -} i u d s m t (Abc.CoerceObject) = [CoerceObject]
-abcToLLVM {- 0x90 -} i u d s m t (Abc.Negate) = [Negate]
-abcToLLVM {- 0x91 -} i u d s m t (Abc.Increment) = [Increment]
-abcToLLVM {- 0x92 -} i u d s m t (Abc.IncLocal u30) = [IncLocal u30]
-abcToLLVM {- 0x93 -} i u d s m t (Abc.Decrement) = [Decrement]
-abcToLLVM {- 0x94 -} i u d s m t (Abc.DecLocal u30) = [DecLocal u30]
-abcToLLVM {- 0x95 -} i u d s m t (Abc.TypeOf) = [TypeOf]
-abcToLLVM {- 0x96 -} i u d s m t (Abc.Not) = [Not]
-abcToLLVM {- 0x97 -} i u d s m t (Abc.BitNot) = [BitNot]
-abcToLLVM {- 0x9A -} i u d s m t (Abc.Concat) = [Concat]
-abcToLLVM {- 0x9B -} i u d s m t (Abc.AddDouble) = [AddDouble]
-abcToLLVM {- 0xA0 -} i u d s m t (Abc.Add) = [Add]
-abcToLLVM {- 0xA1 -} i u d s m t (Abc.Subtract) = [Subtract]
-abcToLLVM {- 0xA2 -} i u d s m t (Abc.Multiply) = [Multiply]
-abcToLLVM {- 0xA3 -} i u d s m t (Abc.Divide) = [Divide]
-abcToLLVM {- 0xA4 -} i u d s m t (Abc.Modulo) = [Modulo]
-abcToLLVM {- 0xA5 -} i u d s m t (Abc.ShiftLeft) = [ShiftLeft]
-abcToLLVM {- 0xA6 -} i u d s m t (Abc.ShiftRight) = [ShiftRight]
-abcToLLVM {- 0xA7 -} i u d s m t (Abc.ShiftRightUnsigned) = [ShiftRightUnsigned]
-abcToLLVM {- 0xA8 -} i u d s m t (Abc.BitAnd) = [BitAnd]
-abcToLLVM {- 0xA9 -} i u d s m t (Abc.BitOr) = [BitOr]
-abcToLLVM {- 0xAA -} i u d s m t (Abc.BitXor) = [BitXor]
-abcToLLVM {- 0xAB -} i u d s m t (Abc.Equals) = [Equals]
-abcToLLVM {- 0xAC -} i u d s m t (Abc.StrictEquals) = [StrictEquals]
-abcToLLVM {- 0xAD -} i u d s m t (Abc.LessThan) = [LessThan]
-abcToLLVM {- 0xAE -} i u d s m t (Abc.LessEquals) = [LessEquals]
-abcToLLVM {- 0xAF -} i u d s m t (Abc.GreaterThan) = [GreaterThan]
-abcToLLVM {- 0xB0 -} i u d s m t (Abc.GreaterEquals) = [GreaterEquals]
-abcToLLVM {- 0xB1 -} i u d s m t (Abc.InstanceOf) = [InstanceOf]
-abcToLLVM {- 0xB2 -} i u d s m t (Abc.IsType u30) = [IsType u30 $ m u30]
-abcToLLVM {- 0xB3 -} i u d s m t (Abc.IsTypeLate) = [IsTypeLate]
-abcToLLVM {- 0xB4 -} i u d s m t (Abc.In) = [In]
-abcToLLVM {- 0xC0 -} i u d s m t (Abc.IncrementInt) = [IncrementInt]
-abcToLLVM {- 0xC1 -} i u d s m t (Abc.DecrementInt) = [DecrementInt]
-abcToLLVM {- 0xC2 -} i u d s m t (Abc.IncLocalInt u30) = [IncLocalInt u30]
-abcToLLVM {- 0xC3 -} i u d s m t (Abc.DecLocalInt u30) = [DecLocalInt u30]
-abcToLLVM {- 0xC4 -} i u d s m t (Abc.NegateInt) = [NegateInt]
-abcToLLVM {- 0xC5 -} i u d s m t (Abc.AddInt) = [AddInt]
-abcToLLVM {- 0xC6 -} i u d s m t (Abc.SubtractInt) = [SubtractInt]
-abcToLLVM {- 0xC7 -} i u d s m t (Abc.MultiplyInt) = [MultiplyInt]
-abcToLLVM {- 0xD0 -} i u d s m t (Abc.GetLocal0) = [GetLocal 0]
-abcToLLVM {- 0xD1 -} i u d s m t (Abc.GetLocal1) = [GetLocal 1]
-abcToLLVM {- 0xD2 -} i u d s m t (Abc.GetLocal2) = [GetLocal 2]
-abcToLLVM {- 0xD3 -} i u d s m t (Abc.GetLocal3) = [GetLocal 3]
-abcToLLVM {- 0xD4 -} i u d s m t (Abc.SetLocal0) = [SetLocal 0]
-abcToLLVM {- 0xD5 -} i u d s m t (Abc.SetLocal1) = [SetLocal 1]
-abcToLLVM {- 0xD6 -} i u d s m t (Abc.SetLocal2) = [SetLocal 2]
-abcToLLVM {- 0xD7 -} i u d s m t (Abc.SetLocal3) = [SetLocal 3]
-abcToLLVM {- 0xEF -} i u d s m t (Abc.Debug u8_1 u30_1 u8_2 u30_2) = [Debug u8_1 u30_1 u8_2 u30_2]
-abcToLLVM {- 0xF0 -} i u d s m t (Abc.DebugLine u30) = [DebugLine u30]
-abcToLLVM {- 0xF1 -} i u d s m t (Abc.DebugFile u30) = [DebugFile u30]
-abcToLLVM {- 0xF2 -} i u d s m t (Abc.BreakpointLine) = [BreakpointLine]
-abcToLLVM            i u d s m t _ = []

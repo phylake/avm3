@@ -17,6 +17,8 @@ import           Data.Word
 import           Ecma.Prims
 import           LLVM.AbcOps as AbcT
 import           LLVM.Lang
+import           LLVM.NameRes
+import           LLVM.Passes.AbcOps
 import           LLVM.Passes.Branch
 import           LLVM.Util
 import           Prelude hiding (lookup)
@@ -103,7 +105,7 @@ op2String _ = []
 theops :: [Abc.OpCode]
 theops =
   [
-    Abc.PushInt 1000000     -- 
+    Abc.PushInt 2     -- 
   , Abc.SetLocal2           -- store i32 1000000, i32* %reg_2
   , Abc.PushByte 0          -- 
   , Abc.SetLocal3           -- store i32 0, i32* %reg_3
@@ -124,9 +126,6 @@ theops =
 
 {-
 TODO passes in order
-  - insert entry: Label
-  - insert Label after branching ops
-  - tag Labels
   - detect local register types and alloca them
   - look ahead for unary ops like Push* since they resolve to a single llvm op
   - i think binary ops only need the last 2 temp registers which are already
@@ -135,32 +134,12 @@ TODO passes in order
     and possibly insert arbitary new codes to keep transform to LLVMOp simple
 -}
 
-locals :: Abc.OpCode -> Abc.OpCode
-locals Abc.GetLocal0 = Abc.GetLocal 0
-locals Abc.GetLocal1 = Abc.GetLocal 1
-locals Abc.GetLocal2 = Abc.GetLocal 2
-locals Abc.GetLocal3 = Abc.GetLocal 3
-locals Abc.SetLocal0 = Abc.SetLocal 0
-locals Abc.SetLocal1 = Abc.SetLocal 1
-locals Abc.SetLocal2 = Abc.SetLocal 2
-locals Abc.SetLocal3 = Abc.SetLocal 3
-locals op = op
-
-{-
-can only alter code in place. modifying length will result in incorrect branches
-once branches are resolved consider grouping code by branch before doing expansions like
-IncLocalInt 3 -> [GetLocal3, IncrementInt, SetLocal3]
--}
-simplify :: [Abc.OpCode] -> [Abc.OpCode]
-simplify = map locals
-
 {-
 many to many
 push + any instruction == 1 AbcT.OpCode
 inclocalint == 3 AbcT.OpCodes
 -}
-type OpT1 = [(Abc.OpCode, [AbcT.OpCode])]
-type OpT2 = [([AbcT.OpCode], [LLVMOp])]
+type OpT1 = [([AbcT.OpCode], [LLVMOp])]
 
 type StateOpT1 = ML.StateT [R] IO
 
@@ -176,17 +155,18 @@ runner ops = binaryOp ops >>= unaryOp
 main :: IO ()
 main = do
   abc@(Abc ints uints doubles strings nsInfo nsSet multinames methodSigs metadata instances classes scripts methodBodies) <- E.run_ (EB.enumFile "abc/Test.abc" E.$$ parseAbc)
-  let (_, _, _, _, mres) = getResolutionMethods abc
-  llvm_ints <- mapM (\(i, a) -> return $ "@.int_" ++ show i ++ " = constant i32 " ++ show a) $ zip (map fromIntegral [0..length ints]) ints
+  let (ires, ures, dres, sres, mres) = getResolutionMethods abc
+  
+  testInsertLabels theops  
+  print $ abcT ires ures dres sres mres $ insertLabels theops
+  
+  {-llvm_ints <- mapM (\(i, a) -> return $ "@.int_" ++ show i ++ " = constant i32 " ++ show a) $ zip (map fromIntegral [0..length ints]) ints
   llvm_uints <- mapM (\(i, a) -> return $ "@.uint_" ++ show i ++ " = constant i32 " ++ show a) $ zip (map fromIntegral [0..length uints]) uints
   llvm_doubles <- mapM (\(i, a) -> return $ "@.double_" ++ show i ++ " = constant double " ++ show a) $ zip (map fromIntegral [0..length doubles]) doubles
   llvm_strings <- mapM (\(i, a) -> return $ "@.string_" ++ show i ++ " = constant [" ++ show (length a + 1) ++ " x i8] c\"" ++ a ++ "\\00\"") $ zip (map fromIntegral [0..length strings]) strings
-  --mapM (\(i, a) -> put_nsInfo cp idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
-  --mapM (\(i, a) -> put_nsSet cp idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
   llvm_multinames <- mapM (\(i, a) -> return $ "@.mn_" ++ show i ++ " = constant [" ++ show (length (mres i) + 1) ++ " x i8] c\"" ++ mres i ++ "\\00\"") $ zip (map fromIntegral [0..length multinames]) multinames
   
   (llvm_function_definitions :: OpT1, _) <- ML.runStateT [RN I32 0] $ runner [(a,[]) | a <- simplify theops]
-  --let llvm_function_definitions :: [AbcT.OpCode] = []
   mapM_ (putStrLn . show) llvm_function_definitions
 
   writeFile "llvm/compiled.ll" $
@@ -197,49 +177,19 @@ main = do
     ++ unlines llvm_multinames
     -- ++ unlines (map show $ xform_methodBodies abc)
     ++ "\n"
-    ++ unlines (map show llvm_function_definitions)
+    ++ unlines (map show llvm_function_definitions)-}
 
+  --mapM (\(i, a) -> put_nsInfo cp idx a) $ zip (map fromIntegral [0..length nsInfo]) nsInfo
+  --mapM (\(i, a) -> put_nsSet cp idx a) $ zip (map fromIntegral [0..length nsSet]) nsSet
   --mapM (\(i, a) -> put_methodSig cp idx a) $ zip (map fromIntegral [0..length methodSigs]) methodSigs
   --mapM (\(i, a) -> put_metadata cp idx a) $ zip (map fromIntegral [0..length metadata]) metadata
   --mapM (\(i, a) -> put_instance cp idx a) $ zip (map fromIntegral [0..length instances]) instances
   --mapM (\(i, a) -> put_class cp idx a) $ zip (map fromIntegral [0..length classes]) classes
   --mapM (\(i, a) -> put_script cp idx a) $ zip (map fromIntegral [0..length scripts]) scripts
   --mapM (\(i, a) -> put_methodBody cp idx a) $ zip (map mbMethod methodBodies) methodBodiesNew
+
+  --mapM (\(i, a) -> put_methodBody cp idx a) $ zip (map mbMethod methodBodies) methodBodiesNew
   return ()
-
-getResolutionMethods :: Abc -> (
-                                 U30 -> S32    -- int
-                               , U30 -> U30    -- uint
-                               , U30 -> Double -- double
-                               , U30 -> String -- string
-                               , U30 -> String -- multiname
-                               )
-getResolutionMethods (Abc ints uints doubles strings nsInfo nsSet multinames methodSigs metadata instances classes scripts methodBodies) =
-    (
-      int_res
-    , uint_res
-    , double_res
-    , string_res
-    , multiname_res
-    )
-  where
-    int_res :: U30 -> S32
-    int_res i = ints !! fromIntegral i
-
-    uint_res :: U30 -> U30
-    uint_res i = uints !! fromIntegral i
-
-    double_res :: U30 -> Double
-    double_res i = doubles !! fromIntegral i
-
-    string_res :: U30 -> String
-    string_res i = strings !! fromIntegral i
-
-    multiname_res :: U30 -> String
-    multiname_res i = multiname_impl string_res nsinfo_res $ multinames !! fromIntegral i
-
-    nsinfo_res :: U30 -> String
-    nsinfo_res i = nsinfo_impl string_res$ nsInfo !! fromIntegral i
 
 xform_methodBodies :: Abc -> M.Map Int [LLVMOp]
 xform_methodBodies (Abc ints uints doubles strings nsInfo nsSet multinames methodSigs metadata instances classes scripts methodBodies) =
@@ -269,52 +219,6 @@ xform_methodBodies (Abc ints uints doubles strings nsInfo nsSet multinames metho
     extractOpCode :: MethodBody -> [Abc.OpCode]
     extractOpCode (MethodBody _ _ _ _ _ code _ _) = code
 
-
-multiname_impl :: (U30 -> String) -- string resolution
-               -> (U30 -> String) -- nsinfo resolution
-               -> Multiname
-               -> String
-multiname_impl string_res nsinfo_res (Multiname_QName ns str)
-  | nsinfo == "" = string
-  | otherwise = nsinfo ++ "::" ++ string
-  where
-    nsinfo = nsinfo_res ns
-    string = string_res str
-multiname_impl string_res nsinfo_res (Multiname_QNameA ns str)
-  | nsinfo == "" = string
-  | otherwise = nsinfo ++ "::" ++ string
-  where
-    nsinfo = nsinfo_res ns
-    string = string_res str
-multiname_impl string_res nsinfo_res (Multiname_Multiname str ns)
-  | nsinfo == "" = string
-  | otherwise = nsinfo ++ "::" ++ string
-  where
-    nsinfo = nsinfo_res ns
-    string = string_res str
-multiname_impl string_res nsinfo_res (Multiname_MultinameA str ns)
-  | nsinfo == "" = string
-  | otherwise = nsinfo ++ "::" ++ string
-  where
-    nsinfo = nsinfo_res ns
-    string = string_res str
-multiname_impl _ _ (Multiname_RTQName a) = "Multiname_RTQName"
-multiname_impl _ _ (Multiname_RTQNameA a) = "Multiname_RTQNameA"
-multiname_impl _ _ (Multiname_MultinameL a) = "Multiname_MultinameL"
-multiname_impl _ _ (Multiname_MultinameLA a) = "Multiname_MultinameLA"
-multiname_impl _ _ Multiname_Any = "*"
-
-nsinfo_impl :: (U30 -> String) -- string resolution
-            -> NSInfo
-            -> String
-nsinfo_impl string_res (NSInfo_Namespace a)          = string_res a
-nsinfo_impl string_res (NSInfo_PackageNamespace a)   = string_res a
-nsinfo_impl string_res (NSInfo_PackageInternalNs a)  = string_res a
-nsinfo_impl string_res (NSInfo_ProtectedNamespace a) = string_res a
-nsinfo_impl string_res (NSInfo_ExplicitNamespace a)  = string_res a
-nsinfo_impl string_res (NSInfo_StaticProtectedNs a)  = string_res a
-nsinfo_impl string_res (NSInfo_PrivateNs a)          = string_res a
-nsinfo_impl string_res NSInfo_Any                    = "*"
 
 {-xform_methodBodies2 :: (Abc.IntIdx -> Abc.S32)                  -- int resolution
                     -> (Abc.UintIdx -> Abc.U32)                 -- uint resolution

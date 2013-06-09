@@ -1,4 +1,8 @@
-module LLVM.Passes.Branch (insertLabels, testInsertLabels) where
+module LLVM.Passes.Branch (
+  insertLabels
+, testInsertLabels
+, BranchPrim2(..)
+) where
 
 import Abc.Def as Abc
 import Abc.Util (toBytes)
@@ -17,12 +21,12 @@ type BranchTags2 = [(BranchPrim2, Abc.OpCode)]
 
 testInsertLabels :: [Abc.OpCode] -> IO ()
 testInsertLabels ops = do
-  mapM_ f $ insertLabels ops
+  mapM_ p $ insertLabels ops
   where
-    f (DestP2 l, op) = putStrLn $ show l ++ "\n\t" ++ show op
-    f (ConditionalP2 t f, op) = putStrLn $ "\t" ++ show op ++ "    " ++ show t ++ " " ++ show f
-    f (JumpP2 l, op) = putStrLn $ "\t" ++ show op ++ "    " ++ show l
-    f (_, op) = putStrLn $ "\t" ++ show op
+    p (DestP2 l, op) = putStrLn $ show l ++ "\n\t" ++ show op
+    p (ConditionalP2 t f, op) = putStrLn $ "\t" ++ show op ++ "    " ++ show t ++ " " ++ show f
+    p (JumpP2 l, op) = putStrLn $ "\t" ++ show op ++ "    " ++ show l
+    p (_, op) = putStrLn $ "\t" ++ show op
 
 insertLabels :: [Abc.OpCode] -> BranchTags2
 insertLabels = falseBranch . prependEntry . intLabelsToString . insertMarkers
@@ -31,13 +35,6 @@ falseBranch :: BranchTags2 -> BranchTags2
 falseBranch (c@(ConditionalP2 t f, _):(_, op):ts) = [c, (DestP2 f, op)] ++ falseBranch ts
 falseBranch (c@(_, _):ts) = [c] ++ falseBranch ts
 falseBranch [] = []
-
-maxLabel :: BranchTags2 -> Int
-maxLabel ((ConditionalP2 (L _ t) (L _ f),_):ts) = max t $ max f $ maxLabel ts
-maxLabel ((JumpP2 (L _ t),_):ts) = max t $ maxLabel ts
-maxLabel ((DestP2 (L _ t),_):ts) = max t $ maxLabel ts
-maxLabel ((NoPrim2,_):ts) = maxLabel ts
-maxLabel [] = 0
 
 prependEntry :: BranchTags2 -> BranchTags2
 prependEntry ((NoPrim2, op):ts) = (DestP2 $ L "entry" 0, op):ts
