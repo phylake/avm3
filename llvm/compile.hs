@@ -2,36 +2,17 @@
 module LLVM.Compile where
 
 import           Abc.Def as Abc
-import           Abc.Deserialize
-import           Abc.Json
-import           Abc.Json2
+import           Abc.Deserialize (parseAbc)
 import           Abc.Util (toBytes)
-import           Control.Applicative ((<|>))
-import           Control.DeepSeq
-import           Control.Monad
-import           Data.Int
-import           Data.Maybe (listToMaybe)
-import           Data.Time.Clock
-import           Data.Vector ((//), (!))
-import           Data.Word
-import           Ecma.Prims
 import           LLVM.AbcOps as AbcT
 import           LLVM.Lang
 import           LLVM.NameRes
-import           LLVM.Passes.AbcOps
+import           LLVM.Passes.AbcT
+import           LLVM.Passes.LLVMT
 import           LLVM.Passes.Branch
-import           LLVM.Util
-import           Prelude hiding (lookup)
-import           Text.JSON
-import           Util.Misc
-import           Util.Words
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
 import qualified Data.Enumerator as E
 import qualified Data.Enumerator.Binary as EB
-import qualified Data.Enumerator.List as EL
 import qualified Data.Map as M
-import qualified Data.Vector as V
 import qualified MonadLib as ML
 
 scopeStack :: D
@@ -139,26 +120,16 @@ many to many
 push + any instruction == 1 AbcT.OpCode
 inclocalint == 3 AbcT.OpCodes
 -}
-type OpT1 = [([AbcT.OpCode], [LLVMOp])]
-
-type StateOpT1 = ML.StateT [R] IO
-
-unaryOp :: OpT1 -> StateOpT1 OpT1
-unaryOp ops = undefined
-
-binaryOp :: OpT1 -> StateOpT1 OpT1
-binaryOp ops = undefined
-
-runner :: OpT1 -> StateOpT1 OpT1
-runner ops = binaryOp ops >>= unaryOp
 
 main :: IO ()
 main = do
   abc@(Abc ints uints doubles strings nsInfo nsSet multinames methodSigs metadata instances classes scripts methodBodies) <- E.run_ (EB.enumFile "abc/Test.abc" E.$$ parseAbc)
   let (ires, ures, dres, sres, mres) = getResolutionMethods abc
   
-  testInsertLabels theops  
-  print $ abcT ires ures dres sres mres $ insertLabels theops
+  testInsertLabels theops
+  putStrLn "--------------"
+  (blocks :: [Block], _) <- ML.runStateT [RN I32 0] $ emitLLVM $ abcT ires ures dres sres mres $ insertLabels theops
+  mapM_ (putStrLn . show) blocks
   
   {-llvm_ints <- mapM (\(i, a) -> return $ "@.int_" ++ show i ++ " = constant i32 " ++ show a) $ zip (map fromIntegral [0..length ints]) ints
   llvm_uints <- mapM (\(i, a) -> return $ "@.uint_" ++ show i ++ " = constant i32 " ++ show a) $ zip (map fromIntegral [0..length uints]) uints

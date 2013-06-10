@@ -1,4 +1,4 @@
-module LLVM.Passes.AbcOps (abcT) where
+module LLVM.Passes.AbcT (abcT) where
 
 import           Data.Word
 import           LLVM.AbcOps
@@ -6,11 +6,11 @@ import           LLVM.Lang (Label)
 import           LLVM.Passes.Branch
 import qualified Abc.Def as Abc
 
-abcT :: (Abc.IntIdx -> Abc.S32)            -- int resolution
-     -> (Abc.UintIdx -> Abc.U32)           -- uint resolution
-     -> (Abc.DoubleIdx -> Double)          -- double resolution
-     -> (Abc.StringIdx -> String)          -- string resolution
-     -> (Abc.MultinameIdx -> Maybe String) -- multiname resolution
+abcT :: (Abc.IntIdx -> Abc.S32)
+     -> (Abc.UintIdx -> Abc.U32)
+     -> (Abc.DoubleIdx -> Double)
+     -> (Abc.StringIdx -> String)
+     -> (Abc.MultinameIdx -> Maybe String)
      -> [(BranchPrim2, Abc.OpCode)]
      -> [(Label, [OpCode])]
 abcT i u d s m = abcT2 . map (abcT1 i u d s m)
@@ -31,6 +31,8 @@ labelOps ((NoPrim2, op):ops) = op ++ labelOps ops
 labelOps ((DestP2 _, op):ops) = []
 labelOps [] = []
 
+-- 1. move branches into ops
+-- 2. resolve constants
 abcT1 :: (Abc.IntIdx -> Abc.S32)            -- int resolution
       -> (Abc.UintIdx -> Abc.U32)           -- uint resolution
       -> (Abc.DoubleIdx -> Double)          -- double resolution
@@ -202,4 +204,4 @@ abcT1 {- 0xEF -} i u d s m (br, Abc.Debug u8_1 u30_1 u8_2 u30_2) = (br, [Debug u
 abcT1 {- 0xF0 -} i u d s m (br, Abc.DebugLine u30) = (br, [DebugLine u30])
 abcT1 {- 0xF1 -} i u d s m (br, Abc.DebugFile u30) = (br, [DebugFile u30])
 abcT1 {- 0xF2 -} i u d s m (br, Abc.BreakpointLine) = (br, [BreakpointLine])
-abcT1            i u d s m (br, _) = (br, [])
+abcT1 {- 1    -} i u d s m (br, _) = (br, [])
