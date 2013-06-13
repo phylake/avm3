@@ -87,6 +87,7 @@ data D = Bool
        | Void
        | I8
        | I32
+       | U32
        | IN Int
        | VarArg
        | Struct [D]
@@ -111,6 +112,11 @@ data TopStmt = Global_ Global
              | FunctionDec_ FunctionDec
              | FunctionDef_ FunctionDef
              | Constant String D
+{-instance Show TopStmt where
+  show (Global_ a) = show a
+  show (FunctionDec_ a) = show a
+  show (FunctionDef_ a) = show a
+  show (Constant a b) = show a ++ show b-}
 
 data Linkage = Private
              | LinkerPrivate

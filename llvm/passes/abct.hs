@@ -6,14 +6,14 @@ import           LLVM.Lang (Label)
 import           LLVM.Passes.Branch
 import qualified Abc.Def as Abc
 
-abcT :: (Abc.IntIdx -> Abc.S32)
-     -> (Abc.UintIdx -> Abc.U32)
-     -> (Abc.DoubleIdx -> Double)
-     -> (Abc.StringIdx -> String)
-     -> (Abc.MultinameIdx -> Maybe String)
+abcT :: ( (Abc.IntIdx -> Abc.S32)
+        , (Abc.UintIdx -> Abc.U32)
+        , (Abc.DoubleIdx -> Double)
+        , (Abc.StringIdx -> String)
+        , (Abc.MultinameIdx -> Maybe String) )
      -> [(BranchPrim2, Abc.OpCode)]
      -> [(Label, [OpCode])]
-abcT i u d s m = abcT2 . map (abcT1 i u d s m)
+abcT (i, u, d, s, m) = abcT2 . map (abcT1 i u d s m)
 
 abcT2 :: [(BranchPrim2, [OpCode])]
       -> [(Label, [OpCode])]
