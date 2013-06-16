@@ -111,8 +111,8 @@ toAbcTMethod (i, u, d, s, m) c (sig, body) =
     underscore '/' = '_'
     underscore a = a
 
-nextR :: D -> State R
-nextR d = do
+nextT :: D -> State R
+nextT d = do
   rs <- ML.get
   let next = maxT rs
   ML.set $ next:rs
@@ -121,13 +121,12 @@ nextR d = do
     maxT :: [R] -> R
     maxT [] = RT d 1
     maxT rs = case maximum rs of
-      R _ _ -> RT d 1
       RN _ i -> RT d (i+1)
       RAS3 _ i -> RT d (i+1)
       RT _ i -> RT d (i+1)
 
-lastR :: State R
-lastR = do
+lastT :: State R
+lastT = do
   (r:_) <- ML.get
   return r
 
@@ -135,6 +134,7 @@ functionEmitter :: AbcTMethod -> State FunctionDef
 functionEmitter (AbcTMethod code _ _ ret params name _) = toBlocks code >>=
   return . FunctionDef Nothing Nothing Nothing ret name params
 
+-- TODO pre-alloca
 toBlocks :: [(Label, [OpCode])] -> State [Block]
 toBlocks = mapM toBlock
 
@@ -143,13 +143,24 @@ toBlock (l, ops) = toLLVMOps ops >>= return . Block l
 
 toLLVMOps :: [OpCode] -> State [LLVMOp]
 toLLVMOps (PushInt a:SetLocal n:ops) = do
-  r <- nextR I32
   rest <- toLLVMOps ops
-  return $ StoreC I32 (fromIntegral a) r:rest
+  return $ StoreC I32 (fromIntegral a) (RAS3 (P I32) n):rest
 toLLVMOps (PushByte a:SetLocal n:ops) = do
-  r <- nextR I32
   rest <- toLLVMOps ops
-  return $ StoreC I32 (fromIntegral a) r:rest
+  return $ StoreC I32 (fromIntegral a) (RAS3 (P I32) n):rest
+toLLVMOps (Jump l:ops) = do
+  rest <- toLLVMOps ops
+  return $ Br (UnConditional l) : rest
+-- TODO need to know what data type this is
+toLLVMOps (GetLocal i:ops) = do
+  t <- nextT $ P I32
+  rest <- toLLVMOps ops
+  return $ Load t (RAS3 (P I32) i) : rest
+toLLVMOps (DecrementInt:ops) = do
+  t <- lastT
+  n <- nextT I32
+  rest <- toLLVMOps ops
+  return $ Sub n t 1 : rest
 toLLVMOps _ = return []
 
 --topStatement :: [(Label, [OpCode])] -> State [TopStmt]

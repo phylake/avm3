@@ -101,8 +101,8 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x5F -} FindDef        {-NOT HANDLED-}
             | {- 0x60 -} GetLex Abc.MultinameIdx (Maybe String)
             | {- 0x61 -} SetProperty Abc.MultinameIdx (Maybe String)
-            | {- 0x62 -} GetLocal Abc.U30
-            | {- 0x63 -} SetLocal Abc.U30
+            | {- 0x62 -} GetLocal Int
+            | {- 0x63 -} SetLocal Int
             | {- 0x64 -} GetGlobalScope
             | {- 0x65 -} GetScopeObject Abc.U8
             | {- 0x66 -} GetProperty Abc.MultinameIdx (Maybe String)

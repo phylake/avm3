@@ -6,7 +6,34 @@ int somec()
 	return 0;
 }
 
-struct class
+/*
+
+PDFS
+marmot
+programming c 3rd ed
+
+
+public class Foo
 {
-  unsigned int size;
+	// 2 fixed properties and a baz();
+
+	public var a:int; // multiname 79
+	public var b:String; // multiname 103
+	public function baz(a:int):void {} // multiname 40
+}
+
+public class Bar extends Foo
+{
+	public var c:int; // multiname 308
+}
+*/
+
+struct FooClass
+{
+  
+};
+
+struct Foo
+{
+  struct FooClass * class;
 };
