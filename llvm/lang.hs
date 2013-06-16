@@ -5,6 +5,7 @@ import           Control.DeepSeq
 import           Data.Int
 import           Data.List
 import           Data.Word
+import           Prelude hiding (EQ)
 import           Util.Words (u30Bytes)
 import qualified Abc.Def as Abc
 import qualified Data.ByteString as B
@@ -22,28 +23,25 @@ data BrType = UnConditional Label | Conditional R Label Label
 
 data Block = Block Label [LLVMOp]
 instance Show Block where
-  show (Block l ops) = unlines $ (show l):map ((++)"  " . show) ops
+  show (Block l ops) = unlines $ (show l ++ ":"):map ((++)"  " . show) ops
 
 data Label = L String Int deriving (Eq)
 instance Show Label where
-  show (L "" i) = "L" ++ show i ++ ":"
-  show (L s i) = s ++ show i ++ ":"
+  show (L "" i) = "L" ++ show i
+  show (L s i) = s ++ show i
 
 data R = RN D Int   -- numbered
        | RAS3 D Int -- maps to GetLocal and SetLocal
        | RT D Int   -- temporary (not sure if String will be needed)
-{-instance Show R where
-  show (RT d i) = show d ++ " %T" ++ show i
-  show (RN d i) = show d ++ " %" ++ show i
-  show (RAS3 d i) = show d ++ " %as_" ++ show i-}
 instance RHS R where
-  rhs (RT d i) = show d ++ " %T" ++ show i
+  rhs (RT d i) = show d ++ " %T_" ++ show i
   rhs (RN d i) = show d ++ " %" ++ show i
-  rhs (RAS3 d i) = show d ++ " %as_" ++ show i
+  rhs (RAS3 d i) = show d ++ " %REG_" ++ show i
+-- The left-hand side of = and typically the second operand in a bin op
 instance LHS R where
-  lhs (RT _ i) = "%T" ++ show i
+  lhs (RT _ i) = "%T_" ++ show i
   lhs (RN _ i) = "%" ++ show i
-  lhs (RAS3 _ i) = "%as_" ++ show i
+  lhs (RAS3 _ i) = "%REG_" ++ show i
 instance Eq R where
   (RN _ a) == (RN _ b) = a == b
   (RN _ a) == (RAS3 _ b) = a == b
@@ -69,21 +67,64 @@ instance Ord R where
   compare (RT _ a) (RAS3 _ b) = compare a b
   compare (RT _ a) (RT _ b) = compare a b
 
-data LLVMOp = Load R R
+data Cond = EQ  -- equal
+          | NE  -- not equal
+          | UGT -- unsigned greater than
+          | UGE -- unsigned greater or equal
+          | ULT -- unsigned less than
+          | ULE -- unsigned less or equal
+          | SGT -- signed greater than
+          | SGE -- signed greater or equal
+          | SLT -- signed less than
+          | SLE -- signed less or equal
+instance Show Cond where
+  show EQ = "eq"
+  show NE = "ne"
+  show UGT = "ugt"
+  show UGE = "uge"
+  show ULT = "ult"
+  show ULE = "ule"
+  show SGT = "sgt"
+  show SGE = "sge"
+  show SLT = "slt"
+  show SLE = "sle"
+
+data LLVMOp = Add R R R
+            | AddC R Int R
+            | Alloca R
+            | Br BrType
+            | Comment String
+            | GetElementPtr R R [Int]
+            | Icmp R Cond R R
+            | Load R R
+            | Ret R
             | StoreC D Int R
             | StoreR R R
-            | Alloca R R
-            | GetElementPtr R R [Int]
-            | Br BrType
-            | Ret R
             | Sub R R Int
 instance Show LLVMOp where
+  show (Add a b c) = lhs a ++ " = add " ++ rhs b ++ ", " ++ lhs c
+  -- TODO clean up baked i32
+  show (AddC a b c) = lhs a ++ " = add i32 " ++ show b ++ ", " ++ lhs c
+  
+  -- alloca always yields a pointer to data
+  -- examples:
+  --   %ptr = alloca i32      ; yields {i32*}:ptr
+  --   store i32 3, i32* %ptr ; yields {void}
+  --   %val = load i32* %ptr  ; yields {i32}:val = i32 3
+  show (Alloca a@(RN (P d) _)) = lhs a ++ " = alloca " ++ show d
+  show (Alloca a@(RAS3 (P d) _)) = lhs a ++ " = alloca " ++ show d
+  show (Alloca a@(RT (P d) _)) = lhs a ++ " = alloca " ++ show d
+  
+  show (Br (UnConditional l)) = "br label %" ++ show l
+  show (Br (Conditional i1 t f)) = "br " ++ rhs i1 ++ ", label %" ++ show t ++ ", label %" ++ show f
+  show (Comment a) = "; " ++ a
+  show (Icmp t cond a b) = lhs t ++ " = icmp " ++ show cond ++ " " ++ rhs a ++ ", " ++ lhs b
   show (Load a b) = lhs a ++ " = load " ++ rhs b
-  show (StoreR a b) = "store " ++ lhs a ++ ", " ++ rhs b
   show (StoreC a i b) = "store " ++ show a ++ " " ++ show i ++ ", " ++ rhs b
-  show (Br (UnConditional (L s i))) = "br label %" ++ s ++ show i
+  show (StoreR a b) = "store " ++ rhs a ++ ", " ++ rhs b
   show (Sub a b c) = lhs a ++ " = sub " ++ rhs b ++ ", " ++ show c
-  -- TODO constant: store i32 0, i32* %3
+  show (Ret a) = "ret " ++ rhs a
+  
 
 data D = Bool
        | Void
@@ -104,6 +145,12 @@ instance Show D where
   show (VarArg) = "..."
   show (Struct ds) = "{" ++ csv ds ++ "}"
   show (Func d ds) = show d ++ " (" ++ csv ds ++ ")"
+  show (P Bool) = show Bool ++ "*"
+  show (P I8) = show I8 ++ "*"
+  show (P I32) = show I32 ++ "*"
+  show (P U32) = show U32 ++ "*"
+  show (P i@(IN _)) = show i ++ "*"
+  show (P d@(P _)) = show d ++ "*"
   show (P d) = show d ++ " *"
 
 csv :: [D] -> String
@@ -175,6 +222,7 @@ data FunctionDef = FunctionDef
                      [Block]  -- function body
 instance Show FunctionDef where
   show (FunctionDef l v cc ret name params body) =
+    "define " ++
     maybe "" (\a -> show a ++ " ") l ++
     maybe "" (\a -> show a ++ " ") v ++
     maybe "" (\a -> show a ++ "\n") cc ++

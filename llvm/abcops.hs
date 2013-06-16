@@ -54,18 +54,18 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x30 -} PushScope
             | {- 0x31 -} PushNamespace Abc.NSInfoIdx
             | {- 0x32 -} HasNext2 Word32 Word32
-            | {- 0x33 -} PushDecimal    {-NEW: PushDecimal according to FlexSDK, lix8 according to Tamarin-}
-            | {- 0x34 -} PushDNaN       {-NEW: PushDNaN according to Flex SDK, lix16 according to Tamarin-}
-              {- 0x35 -} {-GetByte-}   {- Alchemy -}
-              {- 0x36 -} {-GetShort-}  {- Alchemy -}
-              {- 0x37 -} {-GetInt-}    {- Alchemy -}
-              {- 0x38 -} {-GetFloat-}  {- Alchemy -}
-              {- 0x39 -} {-GetDouble-} {- Alchemy -}
-              {- 0x3A -} {-SetByte-}   {- Alchemy -}
-              {- 0x3B -} {-SetShort-}  {- Alchemy -}
-              {- 0x3C -} {-SetInt-}    {- Alchemy -}
-              {- 0x3D -} {-SetFloat-}  {- Alchemy -}
-              {- 0x3E -} {-SetDouble-} {- Alchemy -}
+            | {- 0x33 -} PushDecimal
+            | {- 0x34 -} PushDNaN
+              {- 0x35 -}
+              {- 0x36 -}
+              {- 0x37 -}
+              {- 0x38 -}
+              {- 0x39 -}
+              {- 0x3A -}
+              {- 0x3B -}
+              {- 0x3C -}
+              {- 0x3D -}
+              {- 0x3E -}
               {- 0x3F -}
             | {- 0x40 -} NewFunction Abc.U30
             | {- 0x41 -} Call Abc.U30
@@ -78,14 +78,14 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x48 -} ReturnValue
             | {- 0x49 -} ConstructSuper Abc.U30
             | {- 0x4A -} ConstructProp Abc.MultinameIdx Abc.U30 (Maybe String)
-            | {- 0x4B -} CallSuperId    {-NOT HANDLED-}
+            | {- 0x4B -} CallSuperId
             | {- 0x4C -} CallPropLex Abc.MultinameIdx Abc.U30 (Maybe String)
-            | {- 0x4D -} CallInterface  {-NOT HANDLED-}
+            | {- 0x4D -} CallInterface
             | {- 0x4E -} CallSuperVoid Abc.MultinameIdx Abc.U30 (Maybe String)
             | {- 0x4F -} CallPropVoid Abc.MultinameIdx Abc.U30 (Maybe String)
-              {- 0x50 -} {-Sign1-}  {- Alchemy -}
-              {- 0x51 -} {-Sign8-}  {- Alchemy -}
-              {- 0x52 -} {-Sign16-} {- Alchemy -}
+              {- 0x50 -}
+              {- 0x51 -}
+              {- 0x52 -}
             | {- 0x53 -} ApplyType
               {- 0x53 -}
             | {- 0x55 -} NewObject Abc.U30
@@ -94,11 +94,11 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x58 -} NewClass Abc.ClassInfoIdx
             | {- 0x59 -} GetDescendants Abc.MultinameIdx (Maybe String)
             | {- 0x5A -} NewCatch Abc.ExceptionIdx
-            | {- 0x5B -} FindPropGlobalStrict   {-NEW from Tamarin (internal)-}
-            | {- 0x5C -} FindPropGlobal         {-NEW from Tamarin (internal)-}
+            | {- 0x5B -} FindPropGlobalStrict
+            | {- 0x5C -} FindPropGlobal
             | {- 0x5D -} FindPropStrict Abc.MultinameIdx (Maybe String)
             | {- 0x5E -} FindProperty Abc.MultinameIdx (Maybe String)
-            | {- 0x5F -} FindDef        {-NOT HANDLED-}
+            | {- 0x5F -} FindDef
             | {- 0x60 -} GetLex Abc.MultinameIdx (Maybe String)
             | {- 0x61 -} SetProperty Abc.MultinameIdx (Maybe String)
             | {- 0x62 -} GetLocal Int
@@ -124,8 +124,8 @@ data OpCode = {- 0x01 -} Breakpoint
             | {- 0x76 -} ConvertBoolean
             | {- 0x77 -} ConvertObject
             | {- 0x78 -} CheckFilter
-              {- 0x79 -} {-convert_m-}
-              {- 0x7A -} {-convert_m_p-}
+              {- 0x79 -}
+              {- 0x7A -}
               {- 0x7B -}
               {- 0x7C -}
               {- 0x7D -}
@@ -146,7 +146,7 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0x8C -}
               {- 0x8D -}
               {- 0x8E -}
-              {- 0x8F -} {-negate_p-}
+              {- 0x8F -}
             | {- 0x90 -} Negate
             | {- 0x91 -} Increment
             | {- 0x92 -} IncLocal Abc.U30
@@ -159,10 +159,10 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0x99 -}
             | {- 0x9A -} Concat
             | {- 0x9B -} AddDouble
-              {- 0x9C -} {-increment_p-}
-              {- 0x9D -} {-inclocal_p-}
-              {- 0x9E -} {-decrement_p-}
-              {- 0x9F -} {-declocal_p-}
+              {- 0x9C -}
+              {- 0x9D -}
+              {- 0x9E -}
+              {- 0x9F -}
             | {- 0xA0 -} Add
             | {- 0xA1 -} Subtract
             | {- 0xA2 -} Multiply
@@ -197,8 +197,8 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0xBF -}
             | {- 0xC0 -} IncrementInt
             | {- 0xC1 -} DecrementInt
-              {- 0xC2 -} {-IncLocalInt Abc.U30-}
-              {- 0xC3 -} {-DecLocalInt Abc.U30-}
+              {- 0xC2 -}
+              {- 0xC3 -}
             | {- 0xC4 -} NegateInt
             | {- 0xC5 -} AddInt
             | {- 0xC6 -} SubtractInt
@@ -211,14 +211,14 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0xCD -}
               {- 0xCE -}
               {- 0xCF -}
-              {- 0xD0 -} {-GetLocal0-}
-              {- 0xD1 -} {-GetLocal1-}
-              {- 0xD2 -} {-GetLocal2-}
-              {- 0xD3 -} {-GetLocal3-}
-              {- 0xD4 -} {-SetLocal0-}
-              {- 0xD5 -} {-SetLocal1-}
-              {- 0xD6 -} {-SetLocal2-}
-              {- 0xD7 -} {-SetLocal3-}
+              {- 0xD0 -}
+              {- 0xD1 -}
+              {- 0xD2 -}
+              {- 0xD3 -}
+              {- 0xD4 -}
+              {- 0xD5 -}
+              {- 0xD6 -}
+              {- 0xD7 -}
               {- 0xD8 -}
               {- 0xD9 -}
               {- 0xDA -}

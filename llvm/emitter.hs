@@ -111,8 +111,8 @@ toAbcTMethod (i, u, d, s, m) c (sig, body) =
     underscore '/' = '_'
     underscore a = a
 
-nextT :: D -> State R
-nextT d = do
+nextR :: D -> State R
+nextR d = do
   rs <- ML.get
   let next = maxT rs
   ML.set $ next:rs
@@ -125,42 +125,140 @@ nextT d = do
       RAS3 _ i -> RT d (i+1)
       RT _ i -> RT d (i+1)
 
-lastT :: State R
-lastT = do
-  (r:_) <- ML.get
-  return r
+lastR :: State R
+lastR = lastRs 1 >>= return . head
+
+lastRs :: Int -> State [R]
+lastRs a = ML.get >>= return . take a
 
 functionEmitter :: AbcTMethod -> State FunctionDef
 functionEmitter (AbcTMethod code _ _ ret params name _) = toBlocks code >>=
   return . FunctionDef Nothing Nothing Nothing ret name params
 
--- TODO pre-alloca
 toBlocks :: [(Label, [OpCode])] -> State [Block]
-toBlocks = mapM toBlock
+--toBlocks = mapM toBlock
+toBlocks ls = mapM toBlock ls >>= return . ensureTrailingBranch
+  where
+    ensureTrailingBranch :: [Block] -> [Block]
+    ensureTrailingBranch ret@(_:[]) = ret
+    ensureTrailingBranch (b1@(Block l ops):b2@(Block l2 _):bs) = case last ops of
+      Br _ -> b1 : ensureTrailingBranch (b2:bs)
+      otherwise -> Block l (ops ++ [Br $ UnConditional l2]) : ensureTrailingBranch (b2:bs)
+
+    preAlloca :: [Block] -> [Block]
+    preAlloca all@(Block l entryOps:bs) = Block l (preAllocaOps ++ entryOps):bs
+      where
+        ops :: [LLVMOp]
+        ops = concatMap (\(Block _ ops) -> ops) all
+
+        preAllocaOps :: [LLVMOp]
+        preAllocaOps = undefined
 
 toBlock :: (Label, [OpCode]) -> State Block
 toBlock (l, ops) = toLLVMOps ops >>= return . Block l
 
+returnR :: [OpCode] -> [LLVMOp] -> State [LLVMOp]
+returnR abc llvm = do
+  rest <- toLLVMOps abc
+  return $ llvm ++ rest
+
+-- the current goal is to preserve simple rules at the expense of efficiency
+-- knowing that many of the inefficiencies will be handled by opt. The
+-- "Combine redundant instructions" pass, for example, is taking care of
+-- useless load/store operations for the Push* line of abc ops
 toLLVMOps :: [OpCode] -> State [LLVMOp]
-toLLVMOps (PushInt a:SetLocal n:ops) = do
-  rest <- toLLVMOps ops
-  return $ StoreC I32 (fromIntegral a) (RAS3 (P I32) n):rest
-toLLVMOps (PushByte a:SetLocal n:ops) = do
-  rest <- toLLVMOps ops
-  return $ StoreC I32 (fromIntegral a) (RAS3 (P I32) n):rest
-toLLVMOps (Jump l:ops) = do
-  rest <- toLLVMOps ops
-  return $ Br (UnConditional l) : rest
+toLLVMOps (SetLocal a:ops) = do
+  lt@(RT d _) <- lastR
+  returnR ops
+    [
+      Comment $ "SetLocal" ++ show a
+    , StoreR lt (RAS3 (P d) a)
+    ]
+
 -- TODO need to know what data type this is
-toLLVMOps (GetLocal i:ops) = do
-  t <- nextT $ P I32
-  rest <- toLLVMOps ops
-  return $ Load t (RAS3 (P I32) i) : rest
+toLLVMOps (GetLocal a:ops) = do
+  t <- nextR I32
+  returnR ops
+    [
+      Comment $ "GetLocal" ++ show a
+    , Load t (RAS3 (P I32) a)
+    ]
+
+toLLVMOps (IfGreaterThan t f:ops) = do
+  (t1:t2:[]) <- lastRs 2
+  i1 <- nextR Bool
+  returnR ops
+    [
+      Comment $ "IfGreaterThan " ++ show t ++ " " ++ show f
+      -- TODO sign
+    , Icmp i1 UGT t1 t2
+    , Br $ Conditional i1 t f
+    ]
+
+toLLVMOps (PushInt a:ops) = do
+  t1 <- nextR $ P I32
+  t2 <- nextR I32
+  returnR ops
+    [
+      Comment "PushInt"
+    , Alloca t1
+    , StoreC I32 (fromIntegral a) t1
+    , Load t2 t1 -- the next instruction is expecting a value
+    ]
+
+toLLVMOps (PushByte a:ops) = do
+  t1 <- nextR $ P I32
+  t2 <- nextR I32
+  returnR ops
+    [
+      Comment "PushByte"
+    , Alloca t1
+    , StoreC I32 (fromIntegral a) t1
+    , Load t2 t1 -- the next instruction is expecting a value
+    ]
+
+toLLVMOps (Jump l:ops) = do
+  returnR ops
+    [
+      Comment $ "Jump " ++ show l
+    , Br (UnConditional l)
+    ]
+
+toLLVMOps (IncrementInt:ops) = do
+  lt <- lastR
+  t <- nextR I32
+  returnR ops
+    [
+      Comment "IncrementInt"
+    , LLVM.Lang.AddC t 1 lt
+    ]
+
 toLLVMOps (DecrementInt:ops) = do
-  t <- lastT
-  n <- nextT I32
-  rest <- toLLVMOps ops
-  return $ Sub n t 1 : rest
+  lt <- lastR
+  t <- nextR I32
+  returnR ops
+    [
+      Comment "DecrementInt"
+    , Sub t lt 1
+    ]
+
+toLLVMOps (LLVM.AbcOps.Add:ops) = do
+  (t1:t2:[]) <- lastRs 2
+  t <- nextR I32
+  returnR ops
+    [
+      Comment "Add"
+    , LLVM.Lang.Add t t1 t2
+    ]
+
+toLLVMOps (ReturnValue:ops) = do
+  lt <- lastR
+  returnR ops
+    [
+      Comment "ReturnValue"
+    , Ret lt
+    ]
+
 toLLVMOps _ = return []
 
 --topStatement :: [(Label, [OpCode])] -> State [TopStmt]
@@ -174,3 +272,32 @@ emitLLVM abc@(Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodS
   where
     rms@(ires, ures, dres, sres, mres) = getResolutionMethods abc
     (llvms :: [AbcTMethod]) = map (toAbcTMethod rms (abcT rms . insertLabels)) $ zip methodSigs methodBodies
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

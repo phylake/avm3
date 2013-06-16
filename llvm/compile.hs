@@ -1,5 +1,7 @@
 module LLVM.Compile where
 
+import LLVM.Passes.Branch
+
 import           Abc.Def as Abc
 import           Abc.Deserialize
 import           LLVM.Emitter
@@ -13,9 +15,14 @@ main = do
   emitLLVM abc >>= mapM_ (putStrLn . show)
   return ()
 
+-- opt -std-compile-opts llvm/compiled.ll -o llvm/compiled.o && time ./llvm/compiled.o
+-- opt -std-compile-opts -print-before-all llvm/compiled.ll &> llvm/compile.opt.ll
 test :: IO ()
 test = do
+  testInsertLabels theops
+  putStrLn "------------"
   emitLLVM abc >>= mapM (putStrLn . show)
+  emitLLVM abc >>= mapM (return . show) >>= return . unlines >>= writeFile "llvm/compiled.ll"
   return ()
   where
     abc = Abc {
@@ -40,7 +47,7 @@ test = do
       ]
     , abcNsSet = []
     , abcMultinames = [
-        Abc.Multiname_QName 1 4 -- return type "Boolean"
+        Abc.Multiname_QName 1 5 -- return type "int"
       ]
     , abcMethodSigs = [
         Abc.MethodSignature {
@@ -74,10 +81,41 @@ test = do
       ]
     }
 
+{-i1
+@Test_foo ()
+{
+entry0:
+  %T1 = alloca i32
+  store i32 1000000, i32* %T1
+  store %T1, i32* %as_2
+  %T2 = alloca i32
+  store i32 0, i32* %T2
+  store %T2, i32* %as_3
+  br label %L1
+
+L2:
+  %T3 = load i32* %as_2
+  %T4 = sub i32 %T3, 1
+  store %T4, i32 %as_2
+  %T5 = load i32* %as_3
+  %T6 = add i32 %T5, 1
+  store %T6, i32 %as_3
+
+L1:
+  %T7 = load i32* %as_2
+  %T8 = load i32* %as_3
+
+L3:
+  %T9 = load i32* %as_2
+  %T10 = load i32* %as_3
+
+}
+-}
+
 theops :: [Abc.OpCode]
 theops =
   [
-    Abc.PushInt 2     -- 
+    Abc.PushInt 2           --
   , Abc.SetLocal2           -- store i32 1000000, i32* %reg_2
   , Abc.PushByte 0          -- 
   , Abc.SetLocal3           -- store i32 0, i32* %reg_3
