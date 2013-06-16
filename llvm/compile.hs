@@ -10,42 +10,91 @@ import qualified MonadLib as ML
 main :: IO ()
 main = do
   abc <- E.run_ (EB.enumFile "abc/Test.abc" E.$$ parseAbc)
-  --mapM_ (putStrLn . show) $ emitLLVM abc
+  emitLLVM abc >>= mapM_ (putStrLn . show)
   return ()
 
-op2String :: [Abc.OpCode] -> [[String]]
+test :: IO ()
+test = do
+  emitLLVM abc >>= mapM (putStrLn . show)
+  return ()
+  where
+    abc = Abc {
+      abcInts = [0, 1, 1000000, 123456789]
+    , abcUints = [0]
+    , abcDoubles = [0, 1.209178234]
+    , abcStrings = [
+        "",
+        "String",
+        "Object",
+        "void",
+        "Boolean",
+        "int",
+        "Function",
+        "Test",
+        "foo",
+        "Test/foo"
+      ]
+    , abcNsInfo = [
+        Abc.NSInfo_Namespace 7 -- "Test"
+      , Abc.NSInfo_Namespace 0 -- ""
+      ]
+    , abcNsSet = []
+    , abcMultinames = [
+        Abc.Multiname_QName 1 4 -- return type "Boolean"
+      ]
+    , abcMethodSigs = [
+        Abc.MethodSignature {
+          msReturnType = 0
+        , msParamTypes = []
+        , msMethodName = 9
+        , msFlags = 0
+        , msOptionInfo = Nothing
+        , msParamNames = Nothing
+        }
+      ]
+    , abcMetadata = [
+      ]
+    , abcInstances = [
+      ]
+    , abcClasses = [
+      ]
+    , abcScripts = [
+      ]
+    , abcMethodBodies = [
+        MethodBody {
+          mbMethod = 0
+        , mbMaxStack = 0
+        , mbLocalCount = 0
+        , mbInitScopeDepth = 0
+        , mbMaxScopeDepth = 0
+        , mbCode = theops
+        , mbExceptions = []
+        , mbTraits = []
+        }
+      ]
+    }
 
--- assuming %local_* are already allocaed
-op2String (Abc.PushInt i:Abc.SetLocal2:ops) = ["store i32 " ++ show i ++ ", i32 * %local_2"] : op2String ops
-
--- assuming %local_* are already allocaed
-op2String (Abc.PushByte i:Abc.SetLocal3:ops) = ["store i32 " ++ show i ++ ", i32 * %local_3"] : op2String ops
-op2String (Abc.Jump i:ops) = ["br label %L1"] : op2String ops
-op2String (Abc.Label:ops) = ["L1:"] : op2String ops
-
-op2String (Abc.GetLocal2:ops) = ["%T21 = load i32* %local_2"] : op2String ops
-op2String (Abc.DecrementInt:ops) = ["%T22 = add i32 -1, %T21"] : op2String ops
-op2String (Abc.SetLocal2:ops) = ["store i32 %T22, i32 * %local_2"] : op2String ops
-
--- translate IncLocalInt 3 to GetLocal3 IncrementInt SetLocal3 POST Label insertion
-op2String (Abc.GetLocal3:ops) = ["%T31 = load i32* %local_3"] : op2String ops
-op2String (Abc.IncrementInt:ops) = ["%T32 = add i32 1, %T31"] : op2String ops
-op2String (Abc.SetLocal3:ops) = ["store i32 %T32, i32 * %local_3"] : op2String ops
-
-op2String (Abc.GetLocal2:ops) = ["%T23 = load i32* %local_2"] : op2String ops
-op2String (Abc.GetLocal3:ops) = ["%T33 = load i32* %local_3"] : op2String ops
-
--- need to insert Label after IfGreaterThan
-op2String (Abc.IfGreaterThan i:ops) = ["%gt0 = icmp ugt i32 %T23, %T33", "br i1 %gt0, label %L1, label %L2", "L2:"] : op2String ops
-
--- for every register i need (1) the temporary register count and (2) the data type
-op2String (Abc.GetLocal2:ops) = ["%T24 = load i32* %local_2"] : op2String ops
-op2String (Abc.GetLocal3:ops) = ["%T34 = load i32* %local_3"] : op2String ops
--- will need to know the data types of the two things i'm adding as this will either be
--- a simple add or a call to an object's add function
-op2String (Abc.Add:ops) = ["%add0 = add i32 %T24, %T34"] : op2String ops
-op2String (Abc.ReturnValue:ops) = ["ret i32 %add0"] : op2String ops
-op2String _ = []
+theops :: [Abc.OpCode]
+theops =
+  [
+    Abc.PushInt 2     -- 
+  , Abc.SetLocal2           -- store i32 1000000, i32* %reg_2
+  , Abc.PushByte 0          -- 
+  , Abc.SetLocal3           -- store i32 0, i32* %reg_3
+  , Abc.Jump 6              -- br label %L1; L2:
+  , Abc.GetLocal2           -- %T21 = load i32* %reg_2
+  , Abc.DecrementInt        -- %T22 = sub i32 %T21, 1
+  , Abc.SetLocal2           -- store i32 %T22, i32* %reg_2
+  , Abc.IncLocalInt 3       -- %T31 = load i32* %reg_3; %T32 = add i32 %T31, 1; store i32 %T32, i32* %reg_3
+  , Abc.Label               -- L1:
+  , Abc.GetLocal2           -- %T41 = load i32* %reg_2
+  , Abc.GetLocal3           -- %T42 = load i32* %reg_3
+  , Abc.IfGreaterThan (-12) -- %cond = icmp ugt i32 %T41, %T42; br i1 %cond, label %L2, label %L3; L3:
+  , Abc.GetLocal2           -- %T51 = load i32* %reg_2
+  , Abc.GetLocal3           -- %T52 = load i32* %reg_3
+  , Abc.Add                 -- %T53 = add i32 %T51, %T52
+  , Abc.ReturnValue         -- ret i32 %T53
+  ]
 
 {-
 TODO passes in order

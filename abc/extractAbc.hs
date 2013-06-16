@@ -20,7 +20,8 @@ main = do
   B.writeFile (dropExtension file ++ ".abc") abcBytes
   
   (abc :: Abc.Abc) <- E.run_ (EB.enumFile (dropExtension file ++ ".abc") E.$$ parseAbc)
-  writeFile (dropExtension file ++ ".abc.json") $ encode $ abcToJson abc
+  writeFile (dropExtension file ++ ".abc.a.json") $ encode $ abcToJson abc
+  writeFile (dropExtension file ++ ".abc.b.json") $ encode $ showJSON abc
   where
     getDoAbc ((Swf_DoABC _ _ abc):swfs) = abc
     getDoAbc (swf:swfs) = getDoAbc swfs

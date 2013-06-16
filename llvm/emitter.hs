@@ -45,29 +45,7 @@ scopeStack = P $ Struct [scopeStack, P I32]-}
   }
 -}
 
-theops :: [Abc.OpCode]
-theops =
-  [
-    Abc.PushInt 2     -- 
-  , Abc.SetLocal2           -- store i32 1000000, i32* %reg_2
-  , Abc.PushByte 0          -- 
-  , Abc.SetLocal3           -- store i32 0, i32* %reg_3
-  , Abc.Jump 6              -- br label %L1; L2:
-  , Abc.GetLocal2           -- %T21 = load i32* %reg_2
-  , Abc.DecrementInt        -- %T22 = sub i32 %T21, 1
-  , Abc.SetLocal2           -- store i32 %T22, i32* %reg_2
-  , Abc.IncLocalInt 3       -- %T31 = load i32* %reg_3; %T32 = add i32 %T31, 1; store i32 %T32, i32* %reg_3
-  , Abc.Label               -- L1:
-  , Abc.GetLocal2           -- %T41 = load i32* %reg_2
-  , Abc.GetLocal3           -- %T42 = load i32* %reg_3
-  , Abc.IfGreaterThan (-12) -- %cond = icmp ugt i32 %T41, %T42; br i1 %cond, label %L2, label %L3; L3:
-  , Abc.GetLocal2           -- %T51 = load i32* %reg_2
-  , Abc.GetLocal3           -- %T52 = load i32* %reg_3
-  , Abc.Add                 -- %T53 = add i32 %T51, %T52
-  , Abc.ReturnValue         -- ret i32 %T53
-  ]
-
-type State = ML.StateT (AbcTMethod, [R]) IO
+type State = ML.StateT [R] IO
 
 data AbcTMethod = AbcTMethod {
                                abctCode :: [(Label, [OpCode])]
@@ -123,18 +101,21 @@ toAbcTMethod (i, u, d, s, m) c (sig, body) =
   , abctTraits = tr
   , abctReturnType = maybe (P I8) abcTypeToLLVMType $ m rt
   , abctParamTypes = map (maybe (P I8) abcTypeToLLVMType . m) pts
-  , abctMethodName = s name
+  , abctMethodName = map underscore $ s name
   , abctFlags = flags
   }
   where
     (Abc.MethodSignature rt pts name flags opt pns) = sig
     (Abc.MethodBody _ _ _ _ _ code ex tr) = body
+    underscore :: Char -> Char
+    underscore '/' = '_'
+    underscore a = a
 
 nextR :: D -> State R
 nextR d = do
-  (m, rs) <- ML.get
+  rs <- ML.get
   let next = maxT rs
-  ML.set $ (m, next:rs)
+  ML.set $ next:rs
   return next
   where
     maxT :: [R] -> R
@@ -147,24 +128,38 @@ nextR d = do
 
 lastR :: State R
 lastR = do
-  (_, r:_) <- ML.get
+  (r:_) <- ML.get
   return r
 
-functionEmitter :: [(Label, [OpCode])] -> State FunctionDef
-functionEmitter = undefined
+functionEmitter :: AbcTMethod -> State FunctionDef
+functionEmitter (AbcTMethod code _ _ ret params name _) = toBlocks code >>=
+  return . FunctionDef Nothing Nothing Nothing ret name params
+
+toBlocks :: [(Label, [OpCode])] -> State [Block]
+toBlocks = mapM toBlock
+
+toBlock :: (Label, [OpCode]) -> State Block
+toBlock (l, ops) = toLLVMOps ops >>= return . Block l
+
+toLLVMOps :: [OpCode] -> State [LLVMOp]
+toLLVMOps (PushInt a:SetLocal n:ops) = do
+  r <- nextR I32
+  rest <- toLLVMOps ops
+  return $ StoreC I32 (fromIntegral a) r:rest
+toLLVMOps (PushByte a:SetLocal n:ops) = do
+  r <- nextR I32
+  rest <- toLLVMOps ops
+  return $ StoreC I32 (fromIntegral a) r:rest
+toLLVMOps _ = return []
 
 --topStatement :: [(Label, [OpCode])] -> State [TopStmt]
 --topStatement = undefined
 --topStatement ((l, ops):ts) = return [Block l [Load (R Bool "A") (R Bool "B")]]
 
-emitLLVM :: Abc.Abc -> [TopStmt]
---emitLLVM = undefined
+emitLLVM :: Abc.Abc -> IO [TopStmt]
 emitLLVM abc@(Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs metadata instances classes scripts methodBodies) = do
-  let rms@(ires, ures, dres, sres, mres) = getResolutionMethods abc
-  
-  ML.lift $ testInsertLabels theops
-  ML.lift . putStrLn $ "--------------"
-  let llvms :: [AbcTMethod] = map (toAbcTMethod rms (abcT rms . insertLabels)) $ zip methodSigs methodBodies
-  (blocks :: [Block], _) <- ML.runStateT ([RN I32 0]) $ emitLLVM $ abcT ires ures dres sres mres $ insertLabels theops
-  return []
-
+  (fs :: [(FunctionDef, [R])]) <- mapM (\abctM -> ML.runStateT [RN I32 0] $ functionEmitter abctM) llvms
+  return $ map (\(f, _) -> FunctionDef_ f) fs
+  where
+    rms@(ires, ures, dres, sres, mres) = getResolutionMethods abc
+    (llvms :: [AbcTMethod]) = map (toAbcTMethod rms (abcT rms . insertLabels)) $ zip methodSigs methodBodies

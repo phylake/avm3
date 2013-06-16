@@ -42,25 +42,25 @@ multiname_impl :: (U30 -> String) -- string resolution
                -> Maybe String
 multiname_impl string_res nsinfo_res (Multiname_QName ns str)
   | nsinfo == "" = Just string
-  | otherwise = Just $ nsinfo ++ "::" ++ string
+  | otherwise = Just $ nsinfo ++ "_" ++ string
   where
     nsinfo = nsinfo_res ns
     string = string_res str
 multiname_impl string_res nsinfo_res (Multiname_QNameA ns str)
   | nsinfo == "" = Just string
-  | otherwise = Just $ nsinfo ++ "::" ++ string
+  | otherwise = Just $ nsinfo ++ "_" ++ string
   where
     nsinfo = nsinfo_res ns
     string = string_res str
 multiname_impl string_res nsinfo_res (Multiname_Multiname str ns)
   | nsinfo == "" = Just string
-  | otherwise = Just $ nsinfo ++ "::" ++ string
+  | otherwise = Just $ nsinfo ++ "_" ++ string
   where
     nsinfo = nsinfo_res ns
     string = string_res str
 multiname_impl string_res nsinfo_res (Multiname_MultinameA str ns)
   | nsinfo == "" = Just string
-  | otherwise = Just $ nsinfo ++ "::" ++ string
+  | otherwise = Just $ nsinfo ++ "_" ++ string
   where
     nsinfo = nsinfo_res ns
     string = string_res str

@@ -48,7 +48,9 @@ abcT1 {- 0x05 -} i u d s m (br, Abc.SetSuper u30) = (br, [SetSuper u30 $ m u30])
 abcT1 {- 0x06 -} i u d s m (br, Abc.DefaultXmlNamespace u30) = (br, [DefaultXmlNamespace u30])
 abcT1 {- 0x07 -} i u d s m (br, Abc.DefaultXmlNamespaceL) = (br, [DefaultXmlNamespaceL])
 abcT1 {- 0x08 -} i u d s m (br, Abc.Kill u30) = (br, [Kill u30])
-abcT1 {- 0x09 -} i u d s m (br, Abc.Label) =(br,  [])
+abcT1 {- 0x09 -} i u d s m (br, Abc.Label) = (br,  [])
+      {- 0x0A -}
+      {- 0x0B -}
 abcT1 {- 0x0C -} i u d s m (br@(ConditionalP2 t f), Abc.IfNotLessThan _) = (br, [IfNotLessThan t f])
 abcT1 {- 0x0D -} i u d s m (br@(ConditionalP2 t f), Abc.IfNotLessEqual _) = (br, [IfNotLessEqual t f])
 abcT1 {- 0x0E -} i u d s m (br@(ConditionalP2 t f), Abc.IfNotGreaterThan _) = (br, [IfNotGreaterThan t f])
@@ -64,7 +66,7 @@ abcT1 {- 0x17 -} i u d s m (br@(ConditionalP2 t f), Abc.IfGreaterThan _) = (br, 
 abcT1 {- 0x18 -} i u d s m (br@(ConditionalP2 t f), Abc.IfGreaterEqual _) = (br, [IfGreaterEqual t f])
 abcT1 {- 0x19 -} i u d s m (br@(ConditionalP2 t f), Abc.IfStrictEqual _) = (br, [IfStrictEqual t f])
 abcT1 {- 0x1A -} i u d s m (br@(ConditionalP2 t f), Abc.IfStrictNotEqual _) = (br, [IfStrictNotEqual t f])
-abcT1 {- 0x1B -} i u d s m (br, Abc.LookupSwitch _ _) =(br,  [])
+abcT1 {- 0x1B -} i u d s m (br, Abc.LookupSwitch _ _) = (br,  [])
 abcT1 {- 0x1C -} i u d s m (br, Abc.PushWith) = (br, [PushWith])
 abcT1 {- 0x1D -} i u d s m (br, Abc.PopScope) = (br, [PopScope])
 abcT1 {- 0x1E -} i u d s m (br, Abc.NextName) = (br, [NextName])
@@ -90,6 +92,17 @@ abcT1 {- 0x31 -} i u d s m (br, Abc.PushNamespace u30) = (br, [PushNamespace u30
 abcT1 {- 0x32 -} i u d s m (br, Abc.HasNext2 w32 w32_2) = (br, [HasNext2 w32 w32_2])
 abcT1 {- 0x33 -} i u d s m (br, Abc.PushDecimal) = (br, [PushDecimal])
 abcT1 {- 0x34 -} i u d s m (br, Abc.PushDNaN) = (br, [PushDNaN])
+      {- 0x35 -}
+      {- 0x36 -}
+      {- 0x37 -}
+      {- 0x38 -}
+      {- 0x39 -}
+      {- 0x3A -}
+      {- 0x3B -}
+      {- 0x3C -}
+      {- 0x3D -}
+      {- 0x3E -}
+      {- 0x3F -}
 abcT1 {- 0x40 -} i u d s m (br, Abc.NewFunction u30) = (br, [NewFunction u30])
 abcT1 {- 0x41 -} i u d s m (br, Abc.Call u30) = (br, [Call u30])
 abcT1 {- 0x42 -} i u d s m (br, Abc.Construct u30) = (br, [Construct u30])
@@ -106,7 +119,11 @@ abcT1 {- 0x4C -} i u d s m (br, Abc.CallPropLex u30_1 u30_2) = (br, [CallPropLex
 abcT1 {- 0x4D -} i u d s m (br, Abc.CallInterface) = (br, [CallInterface])
 abcT1 {- 0x4E -} i u d s m (br, Abc.CallSuperVoid u30_1 u30_2) = (br, [CallSuperVoid u30_1 u30_2 $ m u30_1])
 abcT1 {- 0x4F -} i u d s m (br, Abc.CallPropVoid u30_1 u30_2) = (br, [CallPropVoid u30_1 u30_2 $ m u30_1])
+      {- 0x50 -}
+      {- 0x51 -}
+      {- 0x52 -}
 abcT1 {- 0x53 -} i u d s m (br, Abc.ApplyType) = (br, [ApplyType])
+      {- 0x54 -}
 abcT1 {- 0x55 -} i u d s m (br, Abc.NewObject u30) = (br, [NewObject u30])
 abcT1 {- 0x56 -} i u d s m (br, Abc.NewArray u30) = (br, [NewArray u30])
 abcT1 {- 0x57 -} i u d s m (br, Abc.NewActivation) = (br, [NewActivation])
@@ -143,6 +160,13 @@ abcT1 {- 0x75 -} i u d s m (br, Abc.ConvertDouble) = (br, [ConvertDouble])
 abcT1 {- 0x76 -} i u d s m (br, Abc.ConvertBoolean) = (br, [ConvertBoolean])
 abcT1 {- 0x77 -} i u d s m (br, Abc.ConvertObject) = (br, [ConvertObject])
 abcT1 {- 0x78 -} i u d s m (br, Abc.CheckFilter) = (br, [CheckFilter])
+      {- 0x79 -}
+      {- 0x7A -}
+      {- 0x7B -}
+      {- 0x7C -}
+      {- 0x7D -}
+      {- 0x7E -}
+      {- 0x7F -}
 abcT1 {- 0x80 -} i u d s m (br, Abc.Coerce u30) = (br, [Coerce u30 $ m u30])
 abcT1 {- 0x81 -} i u d s m (br, Abc.CoerceBoolean) = (br, [CoerceBoolean])
 abcT1 {- 0x82 -} i u d s m (br, Abc.CoerceAny) = (br, [CoerceAny])
@@ -153,6 +177,12 @@ abcT1 {- 0x86 -} i u d s m (br, Abc.AsType u30) = (br, [AsType u30 $ m u30])
 abcT1 {- 0x87 -} i u d s m (br, Abc.AsTypeLate) = (br, [AsTypeLate])
 abcT1 {- 0x88 -} i u d s m (br, Abc.CoerceUInt) = (br, [CoerceUInt])
 abcT1 {- 0x89 -} i u d s m (br, Abc.CoerceObject) = (br, [CoerceObject])
+      {- 0x8A -}
+      {- 0x8B -}
+      {- 0x8C -}
+      {- 0x8D -}
+      {- 0x8E -}
+      {- 0x8F -}
 abcT1 {- 0x90 -} i u d s m (br, Abc.Negate) = (br, [Negate])
 abcT1 {- 0x91 -} i u d s m (br, Abc.Increment) = (br, [Increment])
 abcT1 {- 0x92 -} i u d s m (br, Abc.IncLocal u30) = (br, [IncLocal u30])
@@ -161,8 +191,14 @@ abcT1 {- 0x94 -} i u d s m (br, Abc.DecLocal u30) = (br, [DecLocal u30])
 abcT1 {- 0x95 -} i u d s m (br, Abc.TypeOf) = (br, [TypeOf])
 abcT1 {- 0x96 -} i u d s m (br, Abc.Not) = (br, [Not])
 abcT1 {- 0x97 -} i u d s m (br, Abc.BitNot) = (br, [BitNot])
+      {- 0x98 -}
+      {- 0x99 -}
 abcT1 {- 0x9A -} i u d s m (br, Abc.Concat) = (br, [Concat])
 abcT1 {- 0x9B -} i u d s m (br, Abc.AddDouble) = (br, [AddDouble])
+      {- 0x9C -}
+      {- 0x9D -}
+      {- 0x9E -}
+      {- 0x9F -}
 abcT1 {- 0xA0 -} i u d s m (br, Abc.Add) = (br, [Add])
 abcT1 {- 0xA1 -} i u d s m (br, Abc.Subtract) = (br, [Subtract])
 abcT1 {- 0xA2 -} i u d s m (br, Abc.Multiply) = (br, [Multiply])
@@ -184,6 +220,17 @@ abcT1 {- 0xB1 -} i u d s m (br, Abc.InstanceOf) = (br, [InstanceOf])
 abcT1 {- 0xB2 -} i u d s m (br, Abc.IsType u30) = (br, [IsType u30 $ m u30])
 abcT1 {- 0xB3 -} i u d s m (br, Abc.IsTypeLate) = (br, [IsTypeLate])
 abcT1 {- 0xB4 -} i u d s m (br, Abc.In) = (br, [In])
+      {- 0xB5 -}
+      {- 0xB6 -}
+      {- 0xB7 -}
+      {- 0xB8 -}
+      {- 0xB9 -}
+      {- 0xBA -}
+      {- 0xBB -}
+      {- 0xBC -}
+      {- 0xBD -}
+      {- 0xBE -}
+      {- 0xBF -}
 abcT1 {- 0xC0 -} i u d s m (br, Abc.IncrementInt) = (br, [IncrementInt])
 abcT1 {- 0xC1 -} i u d s m (br, Abc.DecrementInt) = (br, [DecrementInt])
 abcT1 {- 0xC2 -} i u d s m (br, Abc.IncLocalInt u30) = (br, [GetLocal u30, IncrementInt, SetLocal u30])
@@ -192,6 +239,14 @@ abcT1 {- 0xC4 -} i u d s m (br, Abc.NegateInt) = (br, [NegateInt])
 abcT1 {- 0xC5 -} i u d s m (br, Abc.AddInt) = (br, [AddInt])
 abcT1 {- 0xC6 -} i u d s m (br, Abc.SubtractInt) = (br, [SubtractInt])
 abcT1 {- 0xC7 -} i u d s m (br, Abc.MultiplyInt) = (br, [MultiplyInt])
+      {- 0xC8 -}
+      {- 0xC9 -}
+      {- 0xCA -}
+      {- 0xCB -}
+      {- 0xCC -}
+      {- 0xCD -}
+      {- 0xCE -}
+      {- 0xCF -}
 abcT1 {- 0xD0 -} i u d s m (br, Abc.GetLocal0) = (br, [GetLocal 0])
 abcT1 {- 0xD1 -} i u d s m (br, Abc.GetLocal1) = (br, [GetLocal 1])
 abcT1 {- 0xD2 -} i u d s m (br, Abc.GetLocal2) = (br, [GetLocal 2])
@@ -200,8 +255,44 @@ abcT1 {- 0xD4 -} i u d s m (br, Abc.SetLocal0) = (br, [SetLocal 0])
 abcT1 {- 0xD5 -} i u d s m (br, Abc.SetLocal1) = (br, [SetLocal 1])
 abcT1 {- 0xD6 -} i u d s m (br, Abc.SetLocal2) = (br, [SetLocal 2])
 abcT1 {- 0xD7 -} i u d s m (br, Abc.SetLocal3) = (br, [SetLocal 3])
-abcT1 {- 0xEF -} i u d s m (br, Abc.Debug u8_1 u30_1 u8_2 u30_2) = (br, [Debug u8_1 u30_1 u8_2 u30_2])
-abcT1 {- 0xF0 -} i u d s m (br, Abc.DebugLine u30) = (br, [DebugLine u30])
-abcT1 {- 0xF1 -} i u d s m (br, Abc.DebugFile u30) = (br, [DebugFile u30])
-abcT1 {- 0xF2 -} i u d s m (br, Abc.BreakpointLine) = (br, [BreakpointLine])
+      {- 0xD8 -}
+      {- 0xD9 -}
+      {- 0xDA -}
+      {- 0xDB -}
+      {- 0xDC -}
+      {- 0xDD -}
+      {- 0xDE -}
+      {- 0xDF -}
+      {- 0xE0 -}
+      {- 0xE1 -}
+      {- 0xE2 -}
+      {- 0xE3 -}
+      {- 0xE4 -}
+      {- 0xE5 -}
+      {- 0xE6 -}
+      {- 0xE7 -}
+      {- 0xE8 -}
+      {- 0xE9 -}
+      {- 0xEA -}
+      {- 0xEB -}
+      {- 0xEC -}
+      {- 0xED -}
+      {- 0xEE -}
+abcT1 {- 0xEF -} i u d s m (br, Abc.Debug u8_1 u30_1 u8_2 u30_2) = (br, [])
+abcT1 {- 0xF0 -} i u d s m (br, Abc.DebugLine u30) = (br, [])
+abcT1 {- 0xF1 -} i u d s m (br, Abc.DebugFile u30) = (br, [])
+abcT1 {- 0xF2 -} i u d s m (br, Abc.BreakpointLine) = (br, [])
+      {- 0xF3 -}
+      {- 0xF4 -}
+      {- 0xF5 -}
+      {- 0xF6 -}
+      {- 0xF7 -}
+      {- 0xF8 -}
+      {- 0xF9 -}
+      {- 0xFA -}
+      {- 0xFB -}
+      {- 0xFC -}
+      {- 0xFD -}
+      {- 0xFE -}
+      {- 0xFF -}
 abcT1 {- 1    -} i u d s m (br, _) = (br, [])

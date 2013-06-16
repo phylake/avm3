@@ -16,7 +16,7 @@ data BrType = UnConditional Label | Conditional R Label Label
 
 data Block = Block Label [LLVMOp]
 instance Show Block where
-  show (Block l ops) = unlines $ (show l):map ((++)"\t" . show) ops
+  show (Block l ops) = unlines $ (show l):map ((++)"  " . show) ops
 
 data Label = L String Int deriving (Eq)
 instance Show Label where
@@ -74,13 +74,16 @@ instance Ord R where
   compare (RT _ a) (RT _ b) = compare a b
 
 data LLVMOp = Load R R
-            | Store R R
+            | StoreC D Int R
+            | StoreR R R
             | Alloca R R
             | GetElementPtr R R [Int]
             | Br BrType
+            | Ret R
 instance Show LLVMOp where
   show (Load (R _ a) (R bd b)) = "%" ++ a ++ " = load " ++ show bd ++ " %" ++ b
-  show (Store a b) = "store " ++ show a ++ ", " ++ show b
+  show (StoreR a b) = "store " ++ show a ++ ", " ++ show b
+  show (StoreC a i b) = "store " ++ show a ++ " " ++ show i ++ ", " ++ show b
   -- TODO constant: store i32 0, i32* %3
 
 data D = Bool
@@ -112,11 +115,11 @@ data TopStmt = Global_ Global
              | FunctionDec_ FunctionDec
              | FunctionDef_ FunctionDef
              | Constant String D
-{-instance Show TopStmt where
-  show (Global_ a) = show a
-  show (FunctionDec_ a) = show a
+instance Show TopStmt where
+  --show (Global_ a) = show a
+  --show (FunctionDec_ a) = show a
   show (FunctionDef_ a) = show a
-  show (Constant a b) = show a ++ show b-}
+  --show (Constant a b) = show a ++ show b
 
 data Linkage = Private
              | LinkerPrivate
@@ -164,13 +167,23 @@ instance Show Visibility where
   show Protected = "protected"
 
 data FunctionDef = FunctionDef
-                     Linkage
-                     Visibility
-                     CallingConvention
+                     (Maybe Linkage)
+                     (Maybe Visibility)
+                     (Maybe CallingConvention)
                      D        -- return value
                      String   -- name
                      [D]      -- parameters
                      [Block]  -- function body
+instance Show FunctionDef where
+  show (FunctionDef l v cc ret name params body) =
+    maybe "" (\a -> show a ++ " ") l ++
+    maybe "" (\a -> show a ++ " ") v ++
+    maybe "" (\a -> show a ++ "\n") cc ++
+    show ret ++ "\n" ++
+    "@" ++ name ++
+    " (" ++ csv params ++ ")\n{\n" ++
+    unlines (map show body) ++ "}"
+
 data FunctionDec = FunctionDec
                      Linkage
                      Visibility
