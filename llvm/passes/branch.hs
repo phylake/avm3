@@ -1,51 +1,36 @@
 module LLVM.Passes.Branch (
   insertLabels
 , testInsertLabels
-, BranchPrim2(..)
+, BranchPrim(..)
 ) where
 
-import Abc.Def as Abc
-import Abc.Util (toBytes)
-import LLVM.Lang
+import           Abc.Util (toBytes)
+import qualified Abc.Def as Abc
 
-{-
-  TT   true target
-  FT   false target
-  Dest destination
--}
 data BranchPrim  = ConditionalP Int Int | JumpP Int | DestP Int | NoPrim
-data BranchPrim2 = ConditionalP2 Label Label | JumpP2 Label | DestP2 Label | NoPrim2
-
 type BranchTags = [(BranchPrim, Abc.OpCode)]
-type BranchTags2 = [(BranchPrim2, Abc.OpCode)]
 
 testInsertLabels :: [Abc.OpCode] -> IO ()
 testInsertLabels ops = do
   mapM_ p $ insertLabels ops
   where
-    p (DestP2 l, op) = putStrLn $ show l ++ "\n\t" ++ show op
-    p (ConditionalP2 t f, op) = putStrLn $ "\t" ++ show op ++ "    " ++ show t ++ " " ++ show f
-    p (JumpP2 l, op) = putStrLn $ "\t" ++ show op ++ "    " ++ show l
+    p (DestP l, op) = putStrLn $ show l ++ "\n\t" ++ show op
+    p (ConditionalP t f, op) = putStrLn $ "\t" ++ show op ++ "    " ++ show t ++ " " ++ show f
+    p (JumpP l, op) = putStrLn $ "\t" ++ show op ++ "    " ++ show l
     p (_, op) = putStrLn $ "\t" ++ show op
 
-insertLabels :: [Abc.OpCode] -> BranchTags2
-insertLabels = falseBranch . prependEntry . intLabelsToString . insertMarkers
+insertLabels :: [Abc.OpCode] -> BranchTags
+insertLabels = falseBranch . prependEntry . insertMarkers
 
-falseBranch :: BranchTags2 -> BranchTags2
-falseBranch (c@(ConditionalP2 t f, _):(_, op):ts) = [c, (DestP2 f, op)] ++ falseBranch ts
+-- insert label for false branch targets
+falseBranch :: BranchTags -> BranchTags
+falseBranch (c@(ConditionalP t f, _):(_, op):ts) = [c, (DestP f, op)] ++ falseBranch ts
 falseBranch (c@(_, _):ts) = [c] ++ falseBranch ts
 falseBranch [] = []
 
-prependEntry :: BranchTags2 -> BranchTags2
-prependEntry ((NoPrim2, op):ts) = (DestP2 $ L "entry" 0, op):ts
-
-intLabelsToString :: BranchTags -> BranchTags2
-intLabelsToString = map toLabel
-  where
-    toLabel (NoPrim, op) = (NoPrim2, op)
-    toLabel (ConditionalP t f, op) = (ConditionalP2 (L "L" t) (L "L" f), op)
-    toLabel (JumpP t, op) = (JumpP2 (L "L" t), op)
-    toLabel (DestP t, op) = (DestP2 (L "L" t), op)
+-- make sure we have an "entry:"
+prependEntry :: BranchTags -> BranchTags
+prependEntry ((NoPrim, op):ts) = (DestP 0, op):ts
 
 insertMarkers :: [Abc.OpCode] -> BranchTags
 insertMarkers ops = loop 0 0 ops $ map ((,) NoPrim) ops

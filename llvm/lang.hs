@@ -25,22 +25,22 @@ data Block = Block Label [LLVMOp]
 instance Show Block where
   show (Block l ops) = unlines $ (show l ++ ":"):map ((++)"  " . show) ops
 
-data Label = L String Int deriving (Eq)
+data Label = L Int | Entry
 instance Show Label where
-  show (L "" i) = "L" ++ show i
-  show (L s i) = s ++ show i
+  show (L i) = "L" ++ show i
+  show Entry = "entry"
 
-data R = RN D Int   -- numbered
-       | RAS3 D Int -- maps to GetLocal and SetLocal
-       | RT D Int   -- temporary (not sure if String will be needed)
+data R = RN D Int   -- LLVM's function args
+       | RAS3 D Int -- AS3's GetLocal and SetLocal
+       | RT D Int   -- Temporary
 instance RHS R where
-  rhs (RT d i) = show d ++ " %T_" ++ show i
   rhs (RN d i) = show d ++ " %" ++ show i
+  rhs (RT d i) = show d ++ " %T_" ++ show i
   rhs (RAS3 d i) = show d ++ " %REG_" ++ show i
 -- The left-hand side of = and typically the second operand in a bin op
 instance LHS R where
-  lhs (RT _ i) = "%T_" ++ show i
   lhs (RN _ i) = "%" ++ show i
+  lhs (RT _ i) = "%T_" ++ show i
   lhs (RAS3 _ i) = "%REG_" ++ show i
 instance Eq R where
   (RN _ a) == (RN _ b) = a == b
@@ -92,6 +92,8 @@ instance Show Cond where
 data LLVMOp = Add R R R
             | AddC R Int R
             | Alloca R
+            | Bitcast R D R D -- <ty> <value> <ty2>
+            | BitcastC R D Int D -- <ty> <value> <ty2>
             | Br BrType
             | Comment String
             | GetElementPtr R R [Int]
@@ -117,6 +119,8 @@ instance Show LLVMOp where
   
   show (Br (UnConditional l)) = "br label %" ++ show l
   show (Br (Conditional i1 t f)) = "br " ++ rhs i1 ++ ", label %" ++ show t ++ ", label %" ++ show f
+  show (Bitcast r ty a ty2) = lhs r ++ " = bitcast " ++ show ty ++ " " ++ rhs a ++ " to " ++ show ty2
+  show (BitcastC r ty a ty2) = lhs r ++ " = bitcast " ++ show ty ++ " " ++ show a ++ " to " ++ show ty2
   show (Comment a) = "; " ++ a
   show (Icmp t cond a b) = lhs t ++ " = icmp " ++ show cond ++ " " ++ rhs a ++ ", " ++ lhs b
   show (Load a b) = lhs a ++ " = load " ++ rhs b

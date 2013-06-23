@@ -259,4 +259,3 @@ data OpCode = {- 0x01 -} Breakpoint
               {- 0xFD -} {-codegenop-}
               {- 0xFE -} {-verifyop-}
               {- 0xFF -} {-decode-}
-            deriving (Show, Eq)

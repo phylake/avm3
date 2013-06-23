@@ -2,7 +2,7 @@ module LLVM.Passes.AbcT (abcT) where
 
 import           Data.Word
 import           LLVM.AbcOps
-import           LLVM.Lang (Label)
+import           LLVM.Lang (Label(..))
 import           LLVM.Passes.Branch
 import qualified Abc.Def as Abc
 
@@ -11,24 +11,32 @@ abcT :: ( (Abc.IntIdx -> Abc.S32)
         , (Abc.DoubleIdx -> Double)
         , (Abc.StringIdx -> String)
         , (Abc.MultinameIdx -> Maybe String) )
-     -> [(BranchPrim2, Abc.OpCode)]
+     -> [(BranchPrim, Abc.OpCode)]
      -> [(Label, [OpCode])]
-abcT (i, u, d, s, m) = abcT2 . map (abcT1 i u d s m)
+abcT (i, u, d, s, m) =
+  ensureTrailingBranch . groupByLabel . map (abcT1 i u d s m)
 
-abcT2 :: [(BranchPrim2, [OpCode])]
-      -> [(Label, [OpCode])]
-abcT2 ((DestP2 l, op):ops) = (l, op ++ labelOps ops):abcT2 ops
-abcT2 ((ConditionalP2 _ _, _):ops) = abcT2 ops
-abcT2 ((JumpP2 _, _):ops) = abcT2 ops
-abcT2 ((NoPrim2, _):ops) = abcT2 ops
-abcT2 [] = []
+ensureTrailingBranch :: [(Label, [OpCode])] -> [(Label, [OpCode])]
+ensureTrailingBranch ret@(_:[]) = ret
+ensureTrailingBranch (b1@(l, ops):b2@(l2, _):bs) = case last ops of
+  Jump _ -> b1 : ensureTrailingBranch (b2:bs)
+  otherwise -> (l, (ops ++ [Jump l2])) : ensureTrailingBranch (b2:bs)
+
+groupByLabel :: [(BranchPrim, [OpCode])]
+             -> [(Label, [OpCode])]
+groupByLabel ((DestP 0, op):ops) = (Entry, op ++ labelOps ops):groupByLabel ops
+groupByLabel ((DestP l, op):ops) = (L l, op ++ labelOps ops):groupByLabel ops
+groupByLabel ((ConditionalP _ _, _):ops) = groupByLabel ops
+groupByLabel ((JumpP _, _):ops) = groupByLabel ops
+groupByLabel ((NoPrim, _):ops) = groupByLabel ops
+groupByLabel [] = []
 
 -- the op codes under a Label
-labelOps :: [(BranchPrim2, [OpCode])] -> [OpCode]
-labelOps ((ConditionalP2 _ _, op):ops) = op ++ labelOps ops
-labelOps ((JumpP2 _, op):ops) = op ++ labelOps ops
-labelOps ((NoPrim2, op):ops) = op ++ labelOps ops
-labelOps ((DestP2 _, op):ops) = []
+labelOps :: [(BranchPrim, [OpCode])] -> [OpCode]
+labelOps ((ConditionalP _ _, op):ops) = op ++ labelOps ops
+labelOps ((JumpP _, op):ops) = op ++ labelOps ops
+labelOps ((NoPrim, op):ops) = op ++ labelOps ops
+labelOps ((DestP _, op):ops) = []
 labelOps [] = []
 
 -- 1. move branches into ops
@@ -38,8 +46,8 @@ abcT1 :: (Abc.IntIdx -> Abc.S32)            -- int resolution
       -> (Abc.DoubleIdx -> Double)          -- double resolution
       -> (Abc.StringIdx -> String)          -- string resolution
       -> (Abc.MultinameIdx -> Maybe String) -- multiname resolution
-      -> (BranchPrim2, Abc.OpCode)
-      -> (BranchPrim2, [OpCode])
+      -> (BranchPrim, Abc.OpCode)
+      -> (BranchPrim, [OpCode])
 abcT1 {- 0x01 -} i u d s m (br, Abc.Breakpoint) = (br, [Breakpoint])
 abcT1 {- 0x02 -} i u d s m (br, Abc.Nop) = (br, [Nop])
 abcT1 {- 0x03 -} i u d s m (br, Abc.Throw) = (br, [Throw])
@@ -51,21 +59,21 @@ abcT1 {- 0x08 -} i u d s m (br, Abc.Kill u30) = (br, [Kill u30])
 abcT1 {- 0x09 -} i u d s m (br, Abc.Label) = (br,  [])
       {- 0x0A -}
       {- 0x0B -}
-abcT1 {- 0x0C -} i u d s m (br@(ConditionalP2 t f), Abc.IfNotLessThan _) = (br, [IfNotLessThan t f])
-abcT1 {- 0x0D -} i u d s m (br@(ConditionalP2 t f), Abc.IfNotLessEqual _) = (br, [IfNotLessEqual t f])
-abcT1 {- 0x0E -} i u d s m (br@(ConditionalP2 t f), Abc.IfNotGreaterThan _) = (br, [IfNotGreaterThan t f])
-abcT1 {- 0x0F -} i u d s m (br@(ConditionalP2 t f), Abc.IfNotGreaterEqual _) = (br, [IfNotGreaterEqual t f])
-abcT1 {- 0x10 -} i u d s m (br@(JumpP2 l), Abc.Jump _) = (br, [Jump l])
-abcT1 {- 0x11 -} i u d s m (br@(ConditionalP2 t f), Abc.IfTrue _) = (br, [IfTrue t f])
-abcT1 {- 0x12 -} i u d s m (br@(ConditionalP2 t f), Abc.IfFalse _) = (br, [IfFalse t f])
-abcT1 {- 0x13 -} i u d s m (br@(ConditionalP2 t f), Abc.IfEqual _) = (br, [IfEqual t f])
-abcT1 {- 0x14 -} i u d s m (br@(ConditionalP2 t f), Abc.IfNotEqual _) = (br, [IfNotEqual t f])
-abcT1 {- 0x15 -} i u d s m (br@(ConditionalP2 t f), Abc.IfLessThan _) = (br, [IfLessThan t f])
-abcT1 {- 0x16 -} i u d s m (br@(ConditionalP2 t f), Abc.IfLessEqual _) = (br, [IfLessEqual t f])
-abcT1 {- 0x17 -} i u d s m (br@(ConditionalP2 t f), Abc.IfGreaterThan _) = (br, [IfGreaterThan t f])
-abcT1 {- 0x18 -} i u d s m (br@(ConditionalP2 t f), Abc.IfGreaterEqual _) = (br, [IfGreaterEqual t f])
-abcT1 {- 0x19 -} i u d s m (br@(ConditionalP2 t f), Abc.IfStrictEqual _) = (br, [IfStrictEqual t f])
-abcT1 {- 0x1A -} i u d s m (br@(ConditionalP2 t f), Abc.IfStrictNotEqual _) = (br, [IfStrictNotEqual t f])
+abcT1 {- 0x0C -} i u d s m (br@(ConditionalP t f), Abc.IfNotLessThan _) = (br, [IfNotLessThan (L t) (L f)])
+abcT1 {- 0x0D -} i u d s m (br@(ConditionalP t f), Abc.IfNotLessEqual _) = (br, [IfNotLessEqual (L t) (L f)])
+abcT1 {- 0x0E -} i u d s m (br@(ConditionalP t f), Abc.IfNotGreaterThan _) = (br, [IfNotGreaterThan (L t) (L f)])
+abcT1 {- 0x0F -} i u d s m (br@(ConditionalP t f), Abc.IfNotGreaterEqual _) = (br, [IfNotGreaterEqual (L t) (L f)])
+abcT1 {- 0x10 -} i u d s m (br@(JumpP l), Abc.Jump _) = (br, [Jump $ L l])
+abcT1 {- 0x11 -} i u d s m (br@(ConditionalP t f), Abc.IfTrue _) = (br, [IfTrue (L t) (L f)])
+abcT1 {- 0x12 -} i u d s m (br@(ConditionalP t f), Abc.IfFalse _) = (br, [IfFalse (L t) (L f)])
+abcT1 {- 0x13 -} i u d s m (br@(ConditionalP t f), Abc.IfEqual _) = (br, [IfEqual (L t) (L f)])
+abcT1 {- 0x14 -} i u d s m (br@(ConditionalP t f), Abc.IfNotEqual _) = (br, [IfNotEqual (L t) (L f)])
+abcT1 {- 0x15 -} i u d s m (br@(ConditionalP t f), Abc.IfLessThan _) = (br, [IfLessThan (L t) (L f)])
+abcT1 {- 0x16 -} i u d s m (br@(ConditionalP t f), Abc.IfLessEqual _) = (br, [IfLessEqual (L t) (L f)])
+abcT1 {- 0x17 -} i u d s m (br@(ConditionalP t f), Abc.IfGreaterThan _) = (br, [IfGreaterThan (L t) (L f)])
+abcT1 {- 0x18 -} i u d s m (br@(ConditionalP t f), Abc.IfGreaterEqual _) = (br, [IfGreaterEqual (L t) (L f)])
+abcT1 {- 0x19 -} i u d s m (br@(ConditionalP t f), Abc.IfStrictEqual _) = (br, [IfStrictEqual (L t) (L f)])
+abcT1 {- 0x1A -} i u d s m (br@(ConditionalP t f), Abc.IfStrictNotEqual _) = (br, [IfStrictNotEqual (L t) (L f)])
 abcT1 {- 0x1B -} i u d s m (br, Abc.LookupSwitch _ _) = (br,  [])
 abcT1 {- 0x1C -} i u d s m (br, Abc.PushWith) = (br, [PushWith])
 abcT1 {- 0x1D -} i u d s m (br, Abc.PopScope) = (br, [PopScope])

@@ -1,4 +1,4 @@
-module LLVM.NameRes (getResolutionMethods) where
+module LLVM.Util.NameRes (getResolutionMethods) where
 
 import Abc.Def as Abc
 

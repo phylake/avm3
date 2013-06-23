@@ -375,6 +375,7 @@ parseOpCode = do
 
 parseOpCodeChoice :: Word8 -> Parser OpCode
 parseOpCodeChoice w
+      {- 0x00 -}
   | w == 0x01 = return Breakpoint
   | w == 0x02 = return Nop
   | w == 0x03 = return Throw
@@ -384,8 +385,8 @@ parseOpCodeChoice w
   | w == 0x07 = return DefaultXmlNamespaceL
   | w == 0x08 = liftM Kill fromU30LE_vl
   | w == 0x09 = return Label
-  {-| w == 0x0A = return-}
-  {-| w == 0x0B = return-}
+      {- 0x0A -}
+      {- 0x0B -}
   | w == 0x0C = liftM IfNotLessThan fromS24LE
   | w == 0x0D = liftM IfNotLessEqual fromS24LE
   | w == 0x0E = liftM IfNotGreaterThan fromS24LE
@@ -430,17 +431,17 @@ parseOpCodeChoice w
   | w == 0x32 = return$ HasNext2 0 0
   | w == 0x33 = return PushDecimal
   | w == 0x34 = return PushDNaN
-  {-| w == 0x35 = return GetByte-}
-  {-| w == 0x36 = return GetShort-}
-  {-| w == 0x37 = return GetInt-}
-  {-| w == 0x38 = return GetFloat-}
-  {-| w == 0x39 = return GetDouble-}
-  {-| w == 0x3A = return SetByte-}
-  {-| w == 0x3B = return SetShort-}
-  {-| w == 0x3C = return SetInt-}
-  {-| w == 0x3D = return SetFloat-}
-  {-| w == 0x3E = return SetDouble-}
-  {-| w == 0x3F = return-}
+      {- 0x35 -}
+      {- 0x36 -}
+      {- 0x37 -}
+      {- 0x38 -}
+      {- 0x39 -}
+      {- 0x3A -}
+      {- 0x3B -}
+      {- 0x3C -}
+      {- 0x3D -}
+      {- 0x3E -}
+      {- 0x3F -}
   | w == 0x40 = liftM NewFunction fromU30LE_vl
   | w == 0x41 = liftM Call fromU30LE_vl
   | w == 0x42 = liftM Construct fromU30LE_vl
@@ -457,10 +458,11 @@ parseOpCodeChoice w
   | w == 0x4D = return CallInterface
   | w == 0x4E = liftM2 CallSuperVoid fromU30LE_vl fromU30LE_vl
   | w == 0x4F = liftM2 CallPropVoid fromU30LE_vl fromU30LE_vl
-  {-| w == 0x50 = return Sign1-}
-  {-| w == 0x51 = return Sign8-}
-  {-| w == 0x52 = return Sign16-}
+      {- 0x50 -}
+      {- 0x51 -}
+      {- 0x52 -}
   | w == 0x53 = return ApplyType
+      {- 0x54 -}
   | w == 0x55 = liftM NewObject fromU30LE_vl
   | w == 0x56 = liftM NewArray fromU30LE_vl
   | w == 0x57 = return NewActivation
@@ -497,13 +499,13 @@ parseOpCodeChoice w
   | w == 0x76 = return ConvertBoolean
   | w == 0x77 = return ConvertObject
   | w == 0x78 = return CheckFilter
-  {-| w == 0x79 = return convert_m-}
-  {-| w == 0x7A = return convert_m_p-}
-  {-| w == 0x7B = return-}
-  {-| w == 0x7C = return-}
-  {-| w == 0x7D = return-}
-  {-| w == 0x7E = return-}
-  {-| w == 0x7F = return-}
+      {- 0x79 -}
+      {- 0x7A -}
+      {- 0x7B -}
+      {- 0x7C -}
+      {- 0x7D -}
+      {- 0x7E -}
+      {- 0x7F -}
   | w == 0x80 = liftM Coerce fromU30LE_vl
   | w == 0x81 = return CoerceBoolean
   | w == 0x82 = return CoerceAny
@@ -514,12 +516,12 @@ parseOpCodeChoice w
   | w == 0x87 = return AsTypeLate
   | w == 0x88 = return CoerceUInt
   | w == 0x89 = return CoerceObject
-  {-| w == 0x8A = return-}
-  {-| w == 0x8B = return-}
-  {-| w == 0x8C = return-}
-  {-| w == 0x8D = return-}
-  {-| w == 0x8E = return-}
-  {-| w == 0x8F = return negate_p-}
+      {- 0x8A -}
+      {- 0x8B -}
+      {- 0x8C -}
+      {- 0x8D -}
+      {- 0x8E -}
+      {- 0x8F -}
   | w == 0x90 = return Negate
   | w == 0x91 = return Increment
   | w == 0x92 = liftM IncLocal fromU30LE_vl
@@ -528,14 +530,14 @@ parseOpCodeChoice w
   | w == 0x95 = return TypeOf
   | w == 0x96 = return Not
   | w == 0x97 = return BitNot
-  {-| w == 0x98 = return-}
-  {-| w == 0x99 = return-}
+      {- 0x98 -}
+      {- 0x99 -}
   | w == 0x9A = return Concat
   | w == 0x9B = return AddDouble
-  {-| w == 0x9C = return increment_p-}
-  {-| w == 0x9D = return inclocal_p-}
-  {-| w == 0x9E = return decrement_p-}
-  {-| w == 0x9F = return declocal_p-}
+      {- 0x9C -}
+      {- 0x9D -}
+      {- 0x9E -}
+      {- 0x9F -}
   | w == 0xA0 = return Add
   | w == 0xA1 = return Subtract
   | w == 0xA2 = return Multiply
@@ -557,17 +559,17 @@ parseOpCodeChoice w
   | w == 0xB2 = liftM IsType fromU30LE_vl
   | w == 0xB3 = return IsTypeLate
   | w == 0xB4 = return In
-  {-| w == 0xB5 = return-}
-  {-| w == 0xB6 = return-}
-  {-| w == 0xB7 = return-}
-  {-| w == 0xB8 = return-}
-  {-| w == 0xB9 = return-}
-  {-| w == 0xBA = return-}
-  {-| w == 0xBB = return-}
-  {-| w == 0xBC = return-}
-  {-| w == 0xBD = return-}
-  {-| w == 0xBE = return-}
-  {-| w == 0xBF = return-}
+      {- 0xB5 -}
+      {- 0xB6 -}
+      {- 0xB7 -}
+      {- 0xB8 -}
+      {- 0xB9 -}
+      {- 0xBA -}
+      {- 0xBB -}
+      {- 0xBC -}
+      {- 0xBD -}
+      {- 0xBE -}
+      {- 0xBF -}
   | w == 0xC0 = return IncrementInt
   | w == 0xC1 = return DecrementInt
   | w == 0xC2 = liftM IncLocalInt fromU30LE_vl
@@ -576,14 +578,14 @@ parseOpCodeChoice w
   | w == 0xC5 = return AddInt
   | w == 0xC6 = return SubtractInt
   | w == 0xC7 = return MultiplyInt
-  {-| w == 0xC8 = return-}
-  {-| w == 0xC9 = return-}
-  {-| w == 0xCA = return-}
-  {-| w == 0xCB = return-}
-  {-| w == 0xCC = return-}
-  {-| w == 0xCD = return-}
-  {-| w == 0xCE = return-}
-  {-| w == 0xCF = return-}
+      {- 0xC8 -}
+      {- 0xC9 -}
+      {- 0xCA -}
+      {- 0xCB -}
+      {- 0xCC -}
+      {- 0xCD -}
+      {- 0xCE -}
+      {- 0xCF -}
   | w == 0xD0 = return GetLocal0
   | w == 0xD1 = return GetLocal1
   | w == 0xD2 = return GetLocal2
@@ -592,29 +594,29 @@ parseOpCodeChoice w
   | w == 0xD5 = return SetLocal1
   | w == 0xD6 = return SetLocal2
   | w == 0xD7 = return SetLocal3
-  {-| w == 0xD8 = return-}
-  {-| w == 0xD9 = return-}
-  {-| w == 0xDA = return-}
-  {-| w == 0xDB = return-}
-  {-| w == 0xDC = return-}
-  {-| w == 0xDD = return-}
-  {-| w == 0xDE = return-}
-  {-| w == 0xDF = return-}
-  {-| w == 0xE0 = return-}
-  {-| w == 0xE1 = return-}
-  {-| w == 0xE2 = return-}
-  {-| w == 0xE3 = return-}
-  {-| w == 0xE4 = return-}
-  {-| w == 0xE5 = return-}
-  {-| w == 0xE6 = return-}
-  {-| w == 0xE7 = return-}
-  {-| w == 0xE8 = return-}
-  {-| w == 0xE9 = return-}
-  {-| w == 0xEA = return-}
-  {-| w == 0xEB = return-}
-  {-| w == 0xEC = return-}
-  {-| w == 0xED = return-}
-  {-| w == 0xEE = return abs_jump-}
+      {- 0xD8 -}
+      {- 0xD9 -}
+      {- 0xDA -}
+      {- 0xDB -}
+      {- 0xDC -}
+      {- 0xDD -}
+      {- 0xDE -}
+      {- 0xDF -}
+      {- 0xE0 -}
+      {- 0xE1 -}
+      {- 0xE2 -}
+      {- 0xE3 -}
+      {- 0xE4 -}
+      {- 0xE5 -}
+      {- 0xE6 -}
+      {- 0xE7 -}
+      {- 0xE8 -}
+      {- 0xE9 -}
+      {- 0xEA -}
+      {- 0xEB -}
+      {- 0xEC -}
+      {- 0xED -}
+      {- 0xEE -}
   | w == 0xEF = do
     debugType <- fromU8
     index <- fromU30LE_vl
@@ -624,18 +626,19 @@ parseOpCodeChoice w
   | w == 0xF0 = liftM DebugLine fromU30LE_vl
   | w == 0xF1 = liftM DebugFile fromU30LE_vl
   | w == 0xF2 = return BreakpointLine
-  {-| w == 0xF3 = return timestamp-}
-  {-| w == 0xF5 = return verifypass-}
-  {-| w == 0xF6 = return alloc-}
-  {-| w == 0xF7 = return mark-}
-  {-| w == 0xF8 = return wb-}
-  {-| w == 0xF9 = return prologue-}
-  {-| w == 0xFA = return sendenter-}
-  {-| w == 0xFB = return doubletoatom-}
-  {-| w == 0xFC = return sweep-}
-  {-| w == 0xFD = return codegenop-}
-  {-| w == 0xFE = return verifyop-}
-  {-| w == 0xFF = return decode-}
+      {- 0xF3 -}
+      {- 0xF4 -}
+      {- 0xF5 -}
+      {- 0xF6 -}
+      {- 0xF7 -}
+      {- 0xF8 -}
+      {- 0xF9 -}
+      {- 0xFA -}
+      {- 0xFB -}
+      {- 0xFC -}
+      {- 0xFD -}
+      {- 0xFE -}
+      {- 0xFF -}
 
 {-
   4.12
