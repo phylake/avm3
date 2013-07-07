@@ -1,10 +1,9 @@
 module LLVM.Compile where
 
-import LLVM.Passes.Branch
-
 import           Abc.Def as Abc
 import           Abc.Deserialize
 import           LLVM.Emitter
+import           LLVM.Passes.Branch
 import qualified Data.Enumerator as E
 import qualified Data.Enumerator.Binary as EB
 import qualified MonadLib as ML

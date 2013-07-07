@@ -3,11 +3,12 @@ module LLVM.Emitter (emitLLVM) where
 
 import           Data.Word
 import           LLVM.AbcOps
+import           LLVM.Emitter.Bootstrap
 import           LLVM.Lang
-import           LLVM.Util
 import           LLVM.Passes.AbcT
 import           LLVM.Passes.Branch
 import           LLVM.Passes.LLVMT
+import           LLVM.Util
 import qualified Abc.Def as Abc
 import qualified MonadLib as ML
 
@@ -238,10 +239,10 @@ toLLVMOps _ = return []
 --topStatement = undefined
 --topStatement ((l, ops):ts) = return [Block l [Load (R Bool "A") (R Bool "B")]]
 
-emitLLVM :: Abc.Abc -> IO [TopStmt]
+emitLLVM :: Abc.Abc -> IO [Module]
 emitLLVM abc@(Abc.Abc ints uints doubles strings nsInfo nsSet multinames methodSigs metadata instances classes scripts methodBodies) = do
   (fs :: [(FunctionDef, [R])]) <- mapM (\abctM -> ML.runStateT [RN I32 0] $ functionEmitter abctM) llvms
-  return $ map (\(f, _) -> FunctionDef_ f) fs
+  return [Module [] $ map (\(f, _) -> FunctionDef_ f) fs]
   where
     rms@(ires, ures, dres, sres, mres) = getResolutionMethods abc
     (llvms :: [AbcTMethod]) = map (toAbcTMethod rms (abcT rms . insertLabels)) $ zip methodSigs methodBodies

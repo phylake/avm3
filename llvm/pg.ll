@@ -5,6 +5,11 @@
 @.percentD = private unnamed_addr constant [4 x i8] c"%d\0A\00"
 @.test = constant {i32, [2 x i32]} {i32 42, [2 x i32] [i32 43, i32 84]}
 
+;@.class_as3_int = private unnamed_addr constant {i8*, i32, i32*, i8**}
+;@.class_as3_int = global {i8*, i32, i32*, i8**}
+
+%int = type { %int*, { {i8*, i32, i32*, i8**} *, i32 } * }
+
 define
 {i32, i8 * (i8 *, ...) *} *
 @baseClass () {
@@ -37,6 +42,31 @@ define void @helloworld() {
   ret void
 }
 
+define void @class_as3_int_ctor() {
+  ;%T1 = getelementptr
+  ret void
+}
+
+define { {i8*, i32, i32*, i8**} *, i32 } * @new_int (i32) {
+  ; do this on the stack since all ints are pass-by-value
+  %T1 = alloca { {i8*, i32, i32*, i8**} *, i32 }
+  ; hook up global int class
+  ; set value
+  ret { {i8*, i32, i32*, i8**} *, i32 } * %T1
+}
+
+; http://nondot.org/sabre/LLVMNotes/SizeOf-OffsetOf-VariableSizedStructs.txt
+; http://llvm.org/docs/doxygen/html/Constants_8cpp_source.html#l01742
+define i64 @sizeof (i8*) {
+entry:
+  ;%Size = getelementptr i8* %0, i32 1
+  ;%SizeI = bitcast %0 %Size to i64
+  ;%T1 = getelementptr { {i8*, i32, i32*, i8**} *, i32 } * null, i32 1
+  ;%T2 = bitcast { {i8*, i32, i32*, i8**} *, i32 } * %T1 to i64
+  ;ret i64 %SizeI
+  ret i64 0
+}
+
 define i32 @valueOf({ {i8*, i32, i32*, i8**} *, i32 } *)
 {
   %valuePtr = getelementptr { {i8*, i32, i32*, i8**} *, i32 } * %0, i32 0, i32 1
@@ -45,6 +75,11 @@ define i32 @valueOf({ {i8*, i32, i32*, i8**} *, i32 } *)
 }
 
 define i32 @main() {
+  ;call void @boxedIntTest()
+  ret i32 0
+}
+
+define void @boxedIntTest() {
   %class = alloca {i8*, i32, i32*, i8**}
 
   
@@ -95,5 +130,5 @@ define i32 @main() {
   %value = call i32 %valueOf({ {i8*, i32, i32*, i8**} *, i32 } * %boxedInt)
   call void @printInt(i32 %value)
 
-  ret i32 0
+  ret void
 }

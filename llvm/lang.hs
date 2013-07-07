@@ -30,15 +30,18 @@ instance Show Label where
   show (L i) = "L" ++ show i
   show Entry = "entry"
 
-data R = RN D Int   -- LLVM's function args
+data R = R D String -- for hand-crafted bitcode
+       | RN D Int   -- LLVM's function args
        | RAS3 D Int -- AS3's GetLocal and SetLocal
        | RT D Int   -- Temporary
 instance RHS R where
+  rhs (R d i) = show d ++ " %" ++ show i
   rhs (RN d i) = show d ++ " %" ++ show i
   rhs (RT d i) = show d ++ " %T_" ++ show i
   rhs (RAS3 d i) = show d ++ " %REG_" ++ show i
 -- The left-hand side of = and typically the second operand in a bin op
 instance LHS R where
+  lhs (R _ i) = "%" ++ show i
   lhs (RN _ i) = "%" ++ show i
   lhs (RT _ i) = "%T_" ++ show i
   lhs (RAS3 _ i) = "%REG_" ++ show i
@@ -92,13 +95,15 @@ instance Show Cond where
 data LLVMOp = Add R R R
             | AddC R Int R
             | Alloca R
-            | Bitcast R D R D -- <ty> <value> <ty2>
-            | BitcastC R D Int D -- <ty> <value> <ty2>
+            | Bitcast R R -- use registers' data type
+            | BitcastO R D R D -- Override with specific data
+            | BitcastC R D Int D -- Constant
             | Br BrType
             | Comment String
             | GetElementPtr R R [Int]
             | Icmp R Cond R R
             | Load R R
+            | Newline
             | Ret R
             | StoreC D Int R
             | StoreR R R
@@ -113,21 +118,28 @@ instance Show LLVMOp where
   --   %ptr = alloca i32      ; yields {i32*}:ptr
   --   store i32 3, i32* %ptr ; yields {void}
   --   %val = load i32* %ptr  ; yields {i32}:val = i32 3
+  show (Alloca a@(R (P d) _)) = lhs a ++ " = alloca " ++ show d
   show (Alloca a@(RN (P d) _)) = lhs a ++ " = alloca " ++ show d
   show (Alloca a@(RAS3 (P d) _)) = lhs a ++ " = alloca " ++ show d
   show (Alloca a@(RT (P d) _)) = lhs a ++ " = alloca " ++ show d
   
-  show (Br (UnConditional l)) = "br label %" ++ show l
-  show (Br (Conditional i1 t f)) = "br " ++ rhs i1 ++ ", label %" ++ show t ++ ", label %" ++ show f
-  show (Bitcast r ty a ty2) = lhs r ++ " = bitcast " ++ show ty ++ " " ++ rhs a ++ " to " ++ show ty2
+  show (Bitcast r1@(R ty _) r2@(R ty2 _)) = lhs r1 ++ " = bitcast " ++ show ty2 ++ " " ++ rhs r2 ++ " to " ++ show ty
+  show (Bitcast r1@(RN ty _) r2@(RN ty2 _)) = lhs r1 ++ " = bitcast " ++ show ty2 ++ " " ++ rhs r2 ++ " to " ++ show ty
+  show (Bitcast r1@(RAS3 ty _) r2@(RAS3 ty2 _)) = lhs r1 ++ " = bitcast " ++ show ty2 ++ " " ++ rhs r2 ++ " to " ++ show ty
+  show (Bitcast r1@(RT ty _) r2@(RT ty2 _)) = lhs r1 ++ " = bitcast " ++ show ty2 ++ " " ++ rhs r2 ++ " to " ++ show ty
+  
+  show (BitcastO r ty a ty2) = lhs r ++ " = bitcast " ++ show ty ++ " " ++ rhs a ++ " to " ++ show ty2
   show (BitcastC r ty a ty2) = lhs r ++ " = bitcast " ++ show ty ++ " " ++ show a ++ " to " ++ show ty2
+  show (Br (Conditional i1 t f)) = "br " ++ rhs i1 ++ ", label %" ++ show t ++ ", label %" ++ show f
+  show (Br (UnConditional l)) = "br label %" ++ show l
   show (Comment a) = "; " ++ a
   show (Icmp t cond a b) = lhs t ++ " = icmp " ++ show cond ++ " " ++ rhs a ++ ", " ++ lhs b
   show (Load a b) = lhs a ++ " = load " ++ rhs b
+  show Newline = "\n"
+  show (Ret a) = "ret " ++ rhs a
   show (StoreC a i b) = "store " ++ show a ++ " " ++ show i ++ ", " ++ rhs b
   show (StoreR a b) = "store " ++ rhs a ++ ", " ++ rhs b
   show (Sub a b c) = lhs a ++ " = sub " ++ rhs b ++ ", " ++ show c
-  show (Ret a) = "ret " ++ rhs a
   
 
 data D = Bool
@@ -153,6 +165,7 @@ instance Show D where
   show (P I8) = show I8 ++ "*"
   show (P I32) = show I32 ++ "*"
   show (P U32) = show U32 ++ "*"
+  show (P Void) = "i8*" -- http://llvm.org/docs/LangRef.html#pointer-type
   show (P i@(IN _)) = show i ++ "*"
   show (P d@(P _)) = show d ++ "*"
   show (P d) = show d ++ " *"
@@ -160,7 +173,16 @@ instance Show D where
 csv :: [D] -> String
 csv = concat . intersperse ", " . map show
 
+data Module = Module [Global] [TopStmt]
+instance Show Module where
+  show (Module a b) = ums a ++ ums b where
+    ums :: Show a => [a] -> String
+    ums = unlines . map show
+
 data Global = Global String Linkage
+instance Show Global where
+  show (Global a b) = show a ++ "\n" ++ show b
+
 data TopStmt = Global_ Global
              | FunctionDec_ FunctionDec
              | FunctionDef_ FunctionDef
@@ -232,7 +254,7 @@ instance Show FunctionDef where
     maybe "" (\a -> show a ++ "\n") cc ++
     show ret ++ "\n" ++
     "@" ++ name ++
-    " (" ++ csv params ++ ")\n{\n" ++
+    " (" ++ csv params ++ ") {\n" ++
     unlines (map show body) ++ "}"
 
 data FunctionDec = FunctionDec
