@@ -57,7 +57,7 @@ stringToHex = map showHex' . BS.unpack . BSC.pack
 stringToHexRe :: String -> IO ()
 stringToHexRe str = putStrLn $ intercalate "\\s?" $ stringToHex str
 
-shuffle_bits :: (Bits a)
+shuffle_bits :: (Bits a, Num a)
              => Int --right shift
              -> [a]
              -> [a]
@@ -131,10 +131,10 @@ fromS24LE ws@(w3:w2:w1:[])
 fromS32LE_vl :: [Word8] -> Int32
 fromS32LE_vl = foldr (flip foldVarLen) 0
 
-foldWords :: (Integral a, Bits b) => b -> a -> b
+foldWords :: (Integral a, Bits b, Num b) => b -> a -> b
 foldWords acc w = (acc `shiftL` 8) .|. fromIntegral w
 
-foldVarLen :: (Integral a, Bits b) => b -> a -> b
+foldVarLen :: (Integral a, Bits b, Num b) => b -> a -> b
 foldVarLen acc w = (acc `shiftL` 7) .|. (fromIntegral w .&. 0x7f)
 
 {-varLenInt :: Bits a => [a] -> (a, [a])
@@ -160,7 +160,7 @@ u30Bytes u30
   | u30 >= 0x00004000 && u30 <= 0x001FFFFF = 3
   | u30 >= 0x00200000 && u30 <= 0x3FFFFFFF = 4
 
-fromU29 :: (Bits a) => [a] -> a
+fromU29 :: (Bits a, Num a) => [a] -> a
 fromU29 (w1:[]) = lsb1
   where
     lsb1 =  w1 .&. 0x7f
