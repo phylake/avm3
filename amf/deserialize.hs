@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Amf.Deserialize (deserialize, deserializeBs) where
+module Amf.Deserialize (deserialize, deserializeBs, toValues) where
 
 import           Amf.Def
 import           Amf.Util as U
@@ -18,40 +18,21 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
 import qualified MonadLib as ML
 
-{-
+reverseAmfs :: ([Amf], Tables) -> IO ([Amf], Tables)
+reverseAmfs (amfs, (st, cot, tt)) =
+  return (reverse amfs, (reverse st, reverse cot, reverse tt))
 
-BEGIN test code
-
--}
-
-testFile :: IO ()
-testFile = do
-  (amfs :: [Amf], (string, cot, tt)) <- deserialize "amf/file.amf"
-  putStrLn "AMFS"
-  putStrLn $ unlines $ Prelude.map show amfs
-  putStrLn "TABLES"
-  putStrLn "Strings"
-  putStrLn $ unlines $ Prelude.map show string
-  putStrLn "Complex Objects"
-  putStrLn $ unlines $ Prelude.map show cot
-  putStrLn "Traits"
-  putStrLn $ unlines $ Prelude.map show tt
-  return ()
-
-p :: String -> Parser ()
-p = ML.lift . lift . lift . putStrLn
-
-{-
-
-END test code
-
--}
+-- resolve all references
+toValues :: ([Amf], Tables) -> ([Amf], Tables)
+toValues = undefined
 
 deserialize :: FilePath -> IO ([Amf], Tables)
-deserialize file = runResourceT $ CB.sourceFile file $$ ML.runStateT nilTable parseAmf
+deserialize file = (runResourceT $
+  CB.sourceFile file $$ ML.runStateT nilTable parseAmf) >>= reverseAmfs
 
 deserializeBs :: BL.ByteString -> IO ([Amf], Tables)
-deserializeBs lbs = runResourceT $ CB.sourceLbs lbs $$ ML.runStateT nilTable parseAmf
+deserializeBs lbs = (runResourceT $
+  CB.sourceLbs lbs $$ ML.runStateT nilTable parseAmf) >>= reverseAmfs
 
 parseAmf :: Parser [Amf]
 parseAmf = do
@@ -81,23 +62,6 @@ instance AmfPrim Amf where
       | w == 0xB = fromXmlType
       | w == 0xC = fromByteArray
       | otherwise = fail "encountered unknown marker"
-
-
-
---toAmfImpl :: ([Amf], Tables) -> Either AmfErr [Word8]
---toAmfImpl (AmfUndefined:amfs)       = undefined
---toAmfImpl (AmfNull:amfs)            = undefined
---toAmfImpl (AmfFalse:amfs)           = undefined
---toAmfImpl (AmfTrue:amfs)            = undefined
---toAmfImpl ((AmfInt u29):amfs)       = undefined
---toAmfImpl ((AmfDouble double):amfs) = undefined
---toAmfImpl ((AmfString utf8vr):amfs) = undefined
---toAmfImpl ((AmfXmlDoc string):amfs) = undefined
---toAmfImpl ((AmfDate string):amfs)   = undefined
---toAmfImpl ((AmfArray u29a):amfs)    = undefined
---toAmfImpl ((AmfObject u29o):amfs)   = undefined
---toAmfImpl ((AmfXml string):amfs)    = undefined
---toAmfImpl ((AmfByteArray ba):amfs)  = undefined
 
 {-
   AmfByteArray
@@ -155,23 +119,36 @@ u29OFunc u29
   | {- U29O-traits     -} u29 .&. 0x7 == 0x3 = fromU29OTraits u29
   | otherwise = fail$ "u29OFunc - unrecognized u29"
 
+{-
+  Doc correction:
+  - "The remaining 1 to 28 significant bits are used to encode an object reference index (an integer)."
+  + "The remaining 1 to 27 significant bits are used to encode an object reference index (an integer)."
+-}
 fromU29ORef :: U29 -> Parser Amf
-fromU29ORef = return . AmfObject . U29O_Ref . (`shiftR` 1)
+fromU29ORef = return . AmfObject . U29O_Ref . (`shiftR` 2)
 
 fromU29OTraitsRef :: U29 -> Parser Amf
 fromU29OTraitsRef u29 = do
-  (traits :: [Traits]) <- getTT
-  commonU29O (traits !! (u29 `shiftR` 2)) >>= return . AmfObject . U29O_TraitsRef
+  getTT traitIdx >>= checkDynamic >>=
+    pushCOT . AmfObject . uncurry (U29O_TraitsRef traitIdx)
+  where
+    traitIdx = u29 `shiftR` 2
+
+    checkDynamic :: Traits -> Parser ([Amf], [Assoc_Value])
+    checkDynamic (_, props, True) =
+      liftM2 (,) (replicateM (Prelude.length props) fromAmf) fromAssoc
+    checkDynamic (_, props, False) =
+      liftM2 (,) (replicateM (Prelude.length props) fromAmf) (return [])
 
 fromU29OTraitsExt :: U29 -> Parser Amf
 fromU29OTraitsExt u29 = fail "fromU29OTraitsExt not implemented"
 
 fromU29OTraits :: U29 -> Parser Amf
 fromU29OTraits u29 = do
-  (utf8vr :: UTF_8_vr) <- fromAmf
+  (className :: UTF_8_vr) <- fromAmf
   (props :: [UTF_8_vr]) <- replicateM (u29 `shiftR` 4) fromUtf8Loop
-  pushTT (utf8vr, props, u29 .&. 0x8 == 0x8)
-    >>= commonU29O >>= return . AmfObject . U29O_Traits
+  pushTT (className, props, u29 .&. 0x8 == 0x8) >>= checkDynamic >>=
+    pushCOT . AmfObject . uncurry (U29O_Traits className)
   where
     fromUtf8Loop :: Parser UTF_8_vr
     fromUtf8Loop = do
@@ -180,20 +157,20 @@ fromU29OTraits u29 = do
       if str == utf8_empty
         then fail "fromUtf8Loop - empty string"
         else return utf8vr
+    
+    checkDynamic :: Traits -> Parser ([Assoc_Value], [Assoc_Value])
+    checkDynamic (_, props, True) = liftM2 (,) (strictProps props) fromAssoc
+    checkDynamic (_, props, False) = liftM2 (,) (strictProps props) (return [])
 
-commonU29O :: Traits -> Parser [Assoc_Value]
-commonU29O (_, props, dynamic) = if dynamic
-  then liftM2 (++) (strictProps props) fromAssoc
-  else strictProps props
+    strictProps :: [UTF_8_vr] -> Parser [Assoc_Value]
+    strictProps props = do
+      (valueAmfs :: [Amf]) <- replicateM (Prelude.length props) fromAmf
+      if Prelude.length valueAmfs /= Prelude.length props
+        then fail $ "strictProps - length mismatch"
+          ++ "\n\t props: " ++ show props
+          ++ "\n\tvalues: " ++ show valueAmfs
+        else return $ Prelude.zip props valueAmfs
 
-strictProps :: [UTF_8_vr] -> Parser [Assoc_Value]
-strictProps props = do
-  (valueAmfs :: [Amf]) <- replicateM (Prelude.length props) fromAmf
-  if Prelude.length valueAmfs /= Prelude.length props
-    then fail$ "strictProps - length mismatch"
-      ++ "\n\t props: " ++ show props
-      ++ "\n\tvalues: " ++ show valueAmfs
-    else return$ Prelude.zip props valueAmfs
 
 {-
   AmfArray
@@ -213,10 +190,8 @@ fromU29ARef :: U29 -> Parser Amf
 fromU29ARef = return . AmfArray . U29A_Ref
 
 fromU29AValue :: U29 -> Parser Amf
-fromU29AValue len = do
-  assocValues <- fromAssoc
-  (denseAmfs :: [Amf]) <- replicateM len fromAmf
-  pushCOT$ AmfArray$ U29A_Value assocValues denseAmfs
+fromU29AValue len =
+  liftM2 U29A_Value fromAssoc (replicateM len fromAmf) >>= pushCOT . AmfArray
 
 fromAssoc :: Parser [Assoc_Value]
 fromAssoc = do
@@ -289,44 +264,10 @@ deserializedU29Length x
 
 getString :: UTF_8_vr -> Parser String
 getString (U29S_Value v) = return v
-getString (U29S_Ref u29) = fail "getString - not handling refs"
-
-{-
-getString :: UTF_8_vr -> [Amf] -> String
-getString (U29S_Value v) as = v
-getString (U29S_Ref u29) as = stringFromTable as u29
-
-stringFromTable :: [Amf] -> Int -> String
-stringFromTable amfs idx = table !! idx'
-  where
-    table = stringTable amfs
-    idx' = (length table) - idx - 1
-
-stringTable :: [Amf] -> [String]
-stringTable ((AmfStack as):bs) = (stringTable as) ++ (stringTable bs)
-stringTable ((AmfString (U29S_Value a)):as) = a : stringTable as
-stringTable (a:as) = stringTable as
-stringTable [] = []
-
-complexObjectTable :: [Amf] -> [Amf]
-complexObjectTable ((AmfArray (U29A_Value a b)):as) = AmfArray (U29A_Value a b) : complexObjectTable as
-complexObjectTable (a:as) = complexObjectTable as
-complexObjectTable [] = []
-
-traitsTable :: [Amf] -> [Traits]
-traitsTable ((AmfObject (U29O_Traits cls props _ [])):as) = (cls, props, False) : traitsTable as
-traitsTable ((AmfObject (U29O_Traits cls props _  _)):as) = (cls, props, True) : traitsTable as
-traitsTable (a:as) = traitsTable as
-traitsTable [] = []
--}
-{-
-  Util
--}
-
-toStrict :: BL.ByteString -> Parser B.ByteString
-toStrict = return . B.pack . BL.unpack
+getString (U29S_Ref u29) = getST u29
 
 pushST :: String -> Parser String
+pushST "" = return ""
 pushST a = do
   (st, cot, tt) <- ML.get
   ML.set (a : st, cot, tt)
@@ -344,17 +285,30 @@ pushTT a = do
   ML.set (st, cot, a : tt)
   return a
 
-getST :: Parser [String]
-getST = ML.get >>= return . t31
+getST :: Int -> Parser String
+getST i = do
+  (st, _, _) <- ML.get
+  return $ st !! (length st - i - 1)
 
-getCOT :: Parser [Amf]
-getCOT = ML.get >>= return . t32
+getCOT :: Int -> Parser Amf
+getCOT i = do
+  (_, cot, _) <- ML.get
+  return $ cot !! (length cot - i - 1)
 
-getTT :: Parser [Traits]
-getTT = ML.get >>= return . t33
+getTT :: Int -> Parser Traits
+getTT i = do
+  (_, _, tt) <- ML.get
+  return $ tt !! (length tt - i - 1)
 
 nilTable :: Tables
 nilTable = ([], [], [])
+
+{-
+  Util
+-}
+
+toStrict :: BL.ByteString -> Parser B.ByteString
+toStrict = return . B.pack . BL.unpack
 
 refOrValue :: (Int -> Parser Amf) -- ref
            -> (Int -> Parser Amf) -- value
@@ -364,3 +318,27 @@ refOrValue ref value = do
   if u29 .&. 1 == 0
     then ref  $ u29 `shiftR` 1
     else value$ u29 `shiftR` 1
+
+{-
+BEGIN test code
+-}
+
+test :: IO ()
+test = do
+  (amfs :: [Amf], (string, cot, tt)) <- deserialize "amf/file.amf"
+  putStrLn "AMFS"
+  putStrLn $ unlines $ Prelude.map show amfs
+  putStrLn "TABLES - STRINGS"
+  putStrLn $ unlines $ Prelude.map show string
+  putStrLn "TABLES - COMPLEX OBJECTS"
+  putStrLn $ unlines $ Prelude.map show cot
+  putStrLn "TABLES - TRAITS"
+  putStrLn $ unlines $ Prelude.map show tt
+  return ()
+
+p :: String -> Parser ()
+p = ML.lift . lift . lift . putStrLn
+
+{-
+END test code
+-}

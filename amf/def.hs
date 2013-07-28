@@ -28,13 +28,6 @@ type Traits = (UTF_8_vr, [UTF_8_vr], Bool)
 class AmfPrim a where
   fromAmf :: Parser a
 
-{-data Acc a = Acc {
-                   accAs  :: [a]
-                 , accBs  :: Int
-                 , accTs  :: Tables
-                 , accLog :: [String]
-                 }-}
-
 data Amf = {- 0x0 -} AmfUndefined {- undefined-marker -}
          | {- 0x1 -} AmfNull      {- null-marker -}
          | {- 0x2 -} AmfFalse     {- false-marker -}
@@ -115,21 +108,24 @@ type U29X = UTF_8_vr
 -}
 
 data U29O = U29O_Ref U29
-          | U29O_TraitsRef [Assoc_Value]
+          | U29O_TraitsRef U29 [Amf] [Assoc_Value] -- trait ref, list of fixed member values, dynamic members
           | U29O_TraitsExt UTF_8_vr [Word8] {-[Amf] [Assoc_Value]-} --TODO handle this
-          | U29O_Traits [Assoc_Value]
+          | U29O_Traits UTF_8_vr [Assoc_Value] [Assoc_Value] -- class name, fixed member keys and values, dynamic members
           deriving (Eq)
 
 instance NFData U29O where
   rnf (U29O_Ref a) = a `deepseq` ()
-  rnf (U29O_TraitsRef a) = a `deepseq` ()
+  rnf (U29O_TraitsRef a b c) = a `deepseq` b `deepseq` c `deepseq` ()
   rnf (U29O_TraitsExt a b) = a `deepseq` b `deepseq` ()
-  rnf (U29O_Traits a) = a `deepseq` ()
+  rnf (U29O_Traits a b c) = a `deepseq` b `deepseq` c `deepseq` ()
 
 instance Show U29O where
   show (U29O_Ref u29) = "U29O-ref " ++ show u29
-  show (U29O_TraitsRef assocs) = "U29O-traits-ref " ++ show assocs
-  show (U29O_Traits assocs)    = "U29O-traits " ++ show assocs
+  show (U29O_TraitsRef u29 fixed dynam) = "U29O-traits-ref " ++ show u29 ++ " " ++ show fixed ++ " " ++ show dynam
+  show (U29O_Traits klass fixed dynam) = "U29O-traits "
+    ++ show klass ++ " "
+    ++ show fixed ++ " "
+    ++ show dynam
   show (U29O_TraitsExt _ _) = show "U29O-traits-ext"
 
 {-
@@ -145,7 +141,11 @@ instance Show U29O where
 
 data U29A = U29A_Ref U29
           | U29A_Value [Assoc_Value] [Amf]
-          deriving (Show, Eq)
+          deriving (Eq)
+
+instance Show U29A where
+  show (U29A_Ref a) = "U29A-ref " ++ show a
+  show (U29A_Value a b) = "U29A-value " ++ show a ++ " " ++ show b
 
 instance NFData U29A where
   rnf (U29A_Ref a) = a `deepseq` ()
@@ -157,7 +157,11 @@ instance NFData U29A where
 
 data UTF_8_vr = U29S_Ref U29
               | U29S_Value String
-              deriving (Show, Eq)
+              deriving (Eq)
+
+instance Show UTF_8_vr where
+  show (U29S_Ref a) = "U29S-ref " ++ show a
+  show (U29S_Value a) = "U29S-value " ++ show a
 
 instance NFData UTF_8_vr where
   rnf (U29S_Ref a) = a `deepseq` ()
