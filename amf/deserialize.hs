@@ -10,7 +10,8 @@ import           Data.Bits
 import           Data.Char (digitToInt, intToDigit)
 import           Data.Conduit
 import           Data.Conduit.Binary as CB
-import           Data.Word (Word8)
+import           Data.Int (Int32)
+import           Data.Word
 import           Util.Misc
 import           Util.Words
 import qualified Data.ByteString as B
@@ -78,7 +79,7 @@ fromU29BRef = return . AmfByteArray . U29B_Ref
 
 fromU29BValue :: U29 -> Parser Amf
 fromU29BValue len = U.take (fromIntegral len) >>=
-                    return . BL.unpack >>= return . AmfByteArray . U29B_Value
+                    return . AmfByteArray . U29B_Value . BL.unpack
 
 {-
   AmfXml and AmfXmlDoc
@@ -239,11 +240,12 @@ fromDoubleType = fromAmf >>= return . AmfDouble
   Int
 -}
 
+instance AmfPrim Int32 where
+  fromAmf = liftM2 BL.append (U.take 1) (U.takeWhile hasSignalBit) >>=
+    return . fromIntegral . fromU29 . BL.unpack
+
 instance AmfPrim Int where
-  fromAmf = do
-    w <- U.take 1
-    ws <- U.takeWhile hasSignalBit
-    return . fromIntegral . fromU29 $ BL.unpack (BL.append w ws)
+  fromAmf = do (i :: Int32) <- fromAmf; return (fromIntegral i)
 
 fromIntegerType :: Parser Amf
 fromIntegerType = fromAmf >>= return . AmfInt

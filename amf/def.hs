@@ -28,19 +28,24 @@ type Traits = (UTF_8_vr, [UTF_8_vr], Bool)
 class AmfPrim a where
   fromAmf :: Parser a
 
-data Amf = {- 0x0 -} AmfUndefined {- undefined-marker -}
-         | {- 0x1 -} AmfNull      {- null-marker -}
-         | {- 0x2 -} AmfFalse     {- false-marker -}
-         | {- 0x3 -} AmfTrue      {- true-marker -}
-         | {- 0x4 -} AmfInt U29
-         | {- 0x5 -} AmfDouble Double
-         | {- 0x6 -} AmfString UTF_8_vr
-         | {- 0x7 -} AmfXmlDoc U29X
-         | {- 0x8 -} AmfDate String
-         | {- 0x9 -} AmfArray U29A
-         | {- 0xA -} AmfObject U29O
-         | {- 0xB -} AmfXml U29X
-         | {- 0xC -} AmfByteArray U29B
+data Amf = {- 0x00 -} AmfUndefined {- undefined-marker -}
+         | {- 0x01 -} AmfNull      {- null-marker -}
+         | {- 0x02 -} AmfFalse     {- false-marker -}
+         | {- 0x03 -} AmfTrue      {- true-marker -}
+         | {- 0x04 -} AmfInt Int32
+         | {- 0x05 -} AmfDouble Double
+         | {- 0x06 -} AmfString UTF_8_vr
+         | {- 0x07 -} AmfXmlDoc U29X
+         | {- 0x08 -} AmfDate String
+         | {- 0x09 -} AmfArray U29A
+         | {- 0x0A -} AmfObject U29O
+         | {- 0x0B -} AmfXml U29X
+         | {- 0x0C -} AmfByteArray U29B
+         | {- 0x0D -} AmfVecInt [Int32]
+         | {- 0x0E -} AmfVecUInt [Word32]
+         | {- 0x0F -} AmfVecDouble [Double]
+         | {- 0x10 -} AmfVecObject [Amf]
+         | {- 0x11 -} AmfDictionary [Amf]
          deriving (Eq)
 
 instance NFData Amf where
