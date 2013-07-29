@@ -16,4 +16,12 @@ Bootstrap
 Runtime
 =======
 - consider writing out all variables as accessor pairs so multiname-function map can continue to be leveraged
+- add/subtract int   may be polymorphic if every object has toInt()
+- add/subtract float may be polymorphic if every object has toNumber()
 - UNBOXED_INTS, UNBOXED_FLOATS
+- Class Sizeof, instance Sizeof D
+- GC? memory manager?
+
+Misc
+====
+- DSL for LLVM bitcode authoring (data D by itself isn't cutting it)
