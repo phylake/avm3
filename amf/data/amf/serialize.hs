@@ -11,7 +11,6 @@ import           Data.Char (digitToInt, intToDigit)
 import           Data.Conduit
 import           Data.Conduit.Binary as CB
 import           Data.Word (Word8)
-import           Util.Misc
 import           Util.Words
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL

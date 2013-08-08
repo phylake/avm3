@@ -12,7 +12,6 @@ import           Data.Conduit
 import           Data.Conduit.Binary as CB
 import           Data.Int (Int32)
 import           Data.Word
-import           Util.Misc
 import           Util.Words
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
