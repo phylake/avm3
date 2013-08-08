@@ -15,14 +15,15 @@ module Abc.Util (
 , fromS24LE
 ) where
 
-import Abc.Def
-import Data.Enumerator as E
-import Data.Enumerator.Binary as EB
-import Data.Enumerator.List as EL
-import Data.Int
-import Data.Word
+import           Abc.Def
+import           Data.Enumerator as E
+import           Data.Enumerator.Binary as EB
+import           Data.Enumerator.List as EL
+import           Data.Int
+import           Data.Word
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified MonadLib as ML
 import Util.Words hiding
   (
     fromU8
@@ -51,6 +52,9 @@ import qualified Util.Words as Util
   , fromS32LE_vl
   , fromS24LE
   )
+
+instance ML.MonadT (Iteratee a) where
+  lift m = Iteratee (m >>= runIteratee . return)
 
 returnJ :: Monad m => a -> Iteratee b m (Maybe a)
 returnJ = return . Just
