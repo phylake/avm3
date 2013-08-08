@@ -1,35 +1,35 @@
 module Util.Words (
-    charToWord8
-  , word8ToChar
-  , stringToHex
-  , stringToHexRe
-  , shuffle_bits
-  , nWords
-  , fromU8
-  , fromU16
-  , fromU16LE
-  , fromU32
-  , fromU32LE
-  , fromDouble
-  , fromDoubleLE
-  , toWord16
-  , toWord16LE
-  , toWord32
-  , toWord32LE
-  , toWord64
-  , toWord64LE
-  , toDouble
-  , fromU32LE_vl
-  , fromU30LE_vl
-  , fromS24LE
-  , fromS32LE_vl
-  , foldWords
-  , foldVarLen
-  , hasSignalBit
-  , varIntLenBS
-  , varIntLen
-  , u30Bytes
-  , fromU29
+  charToWord8
+, word8ToChar
+, stringToHex
+, stringToHexRe
+, shuffle_bits
+, nWords
+, fromU8
+, fromU16
+, fromU16LE
+, fromU32
+, fromU32LE
+, fromDouble
+, fromDoubleLE
+, toWord16
+, toWord16LE
+, toWord32
+, toWord32LE
+, toWord64
+, toWord64LE
+, toDouble
+, fromU32LE_vl
+, fromU30LE_vl
+, fromS24LE
+, fromS32LE_vl
+, foldWords
+, foldVarLen
+, hasSignalBit
+, varIntLenBS
+, varIntLen
+, u30Bytes
+, fromU29
 ) where
 
 import Control.Applicative ((<$>))
