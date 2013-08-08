@@ -1,10 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Amf.Deserialize (deserialize, deserializeBs, toValues) where
+module Data.Amf.Deserialize (deserialize, deserializeBs, toValues) where
 
-import           Amf.Def
-import           Amf.Util as U
 import           Control.Monad (replicateM, liftM2)
 import           Control.Monad.Trans.Class (MonadTrans (lift))
+import           Data.Amf.Def
+import           Data.Amf.Util as U
 import           Data.Binary.IEEE754 (wordToDouble)
 import           Data.Bits
 import           Data.Char (digitToInt, intToDigit)

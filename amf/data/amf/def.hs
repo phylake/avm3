@@ -1,4 +1,4 @@
-module Amf.Def where
+module Data.Amf.Def where
 
 import           Control.DeepSeq
 import           Data.Conduit

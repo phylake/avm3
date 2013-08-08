@@ -1,6 +1,11 @@
-module Amf.Util (Amf.Util.peek, head_, Amf.Util.take, Amf.Util.takeWhile) where
+module Data.Amf.Util (
+  Data.Amf.Util.peek
+, head_
+, Data.Amf.Util.take
+, Data.Amf.Util.takeWhile
+) where
 
-import           Amf.Def
+import           Data.Amf.Def
 import           Data.Conduit
 import           Data.Conduit.Binary as CB
 import           Data.Conduit.List as CL
