@@ -74,8 +74,8 @@ fromU29BRef :: U29 -> Parser Amf
 fromU29BRef = return . AmfByteArray . U29B_Ref
 
 fromU29BValue :: U29 -> Parser Amf
-fromU29BValue len = U.take (fromIntegral len) >>=
-                    return . AmfByteArray . U29B_Value . BL.unpack
+fromU29BValue len =
+  liftM (AmfByteArray . U29B_Value) $ U.take (fromIntegral len)
 
 {-
   AmfXml and AmfXmlDoc

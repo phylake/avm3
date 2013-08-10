@@ -18,8 +18,7 @@ module Data.Amf.Def (
 import           Control.DeepSeq
 import           Data.Int (Int32)
 import           Data.Word (Word8, Word32)
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as BL
 
 type U8 = Word8
 type U30 = Word32
@@ -100,12 +99,12 @@ instance Show Amf where
 -}
 
 data U29B = U29B_Ref U29
-          | U29B_Value [Word8]
+          | U29B_Value BL.ByteString
           deriving (Show, Eq)
 
 instance NFData U29B where
   rnf (U29B_Ref a) = a `deepseq` ()
-  rnf (U29B_Value a) = a `deepseq` ()
+  rnf (U29B_Value a) = ()
 
 {-
     AmfXml and AmfXmlDoc
