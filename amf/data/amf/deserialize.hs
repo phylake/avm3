@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Data.Amf.Deserialize (deserialize, deserializeBs, toValues) where
 
-import           Control.Monad (replicateM, liftM2)
+import           Control.Monad (replicateM, liftM, liftM2)
 import           Control.Monad.Trans.Class (MonadTrans (lift))
 import           Data.Amf.Def
 import           Data.Amf.Util as U
@@ -11,7 +11,8 @@ import           Data.Char (digitToInt, intToDigit)
 import           Data.Conduit
 import           Data.Conduit.Binary as CB
 import           Data.Int (Int32)
-import           Data.Word
+import           Data.Word (Word8)
+import           System.FilePath ((</>))
 import           Util.Words
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
@@ -28,11 +29,11 @@ toValues = undefined
 
 deserialize :: FilePath -> IO ([Amf], Tables)
 deserialize file = (runResourceT $
-  CB.sourceFile file $$ ML.runStateT nilTable parseAmf) >>= reverseAmfs
+  CB.sourceFile file $$ ML.runStateT emptyTable parseAmf) >>= reverseAmfs
 
 deserializeBs :: BL.ByteString -> IO ([Amf], Tables)
 deserializeBs lbs = (runResourceT $
-  CB.sourceLbs lbs $$ ML.runStateT nilTable parseAmf) >>= reverseAmfs
+  CB.sourceLbs lbs $$ ML.runStateT emptyTable parseAmf) >>= reverseAmfs
 
 parseAmf :: Parser [Amf]
 parseAmf = do
@@ -202,7 +203,7 @@ fromAssoc = do
     else do
       (value :: Amf) <- fromAmf
       rest <- fromAssoc
-      return$ (key, value):rest
+      return $ (key, value):rest
 
 {-
   Char
@@ -220,7 +221,7 @@ instance AmfPrim UTF_8_vr where
            return . BLC.unpack >>= pushST >>= return . U29S_Value
 
 fromStringType :: Parser Amf
-fromStringType = fromAmf >>= return . AmfString
+fromStringType = liftM AmfString fromAmf
 
 utf8_empty :: String
 utf8_empty = ""
@@ -233,7 +234,7 @@ instance AmfPrim Double where
   fromAmf = U.take 8 >>= return . wordToDouble . toWord64 . BL.unpack
 
 fromDoubleType :: Parser Amf
-fromDoubleType = fromAmf >>= return . AmfDouble
+fromDoubleType = liftM AmfDouble fromAmf
 
 {-
   Int
@@ -247,7 +248,7 @@ instance AmfPrim Int where
   fromAmf = do (i :: Int32) <- fromAmf; return (fromIntegral i)
 
 fromIntegerType :: Parser Amf
-fromIntegerType = fromAmf >>= return . AmfInt
+fromIntegerType = liftM AmfInt fromAmf
 
 {- the number of bytes an Int will occupy once serialized -}
 --deserializedU29Length :: (Real a) => a -> Int
@@ -301,8 +302,8 @@ getTT i = do
   (_, _, tt) <- ML.get
   return $ tt !! (length tt - i - 1)
 
-nilTable :: Tables
-nilTable = ([], [], [])
+emptyTable :: Tables
+emptyTable = ([], [], [])
 
 {-
   Util
@@ -326,7 +327,7 @@ BEGIN test code
 
 test :: IO ()
 test = do
-  (amfs :: [Amf], (string, cot, tt)) <- deserialize "amf/file.amf"
+  (amfs :: [Amf], (string, cot, tt)) <- deserialize $  "amf" </> "file.amf"
   putStrLn "AMFS"
   putStrLn $ unlines $ Prelude.map show amfs
   putStrLn "TABLES - STRINGS"
