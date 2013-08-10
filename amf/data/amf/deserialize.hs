@@ -49,8 +49,8 @@ instance AmfPrim Amf where
       | w == 0x1 = return AmfNull
       | w == 0x2 = return AmfFalse
       | w == 0x3 = return AmfTrue
-      | w == 0x4 = fromIntegerType
-      | w == 0x5 = fromDoubleType
+      | w == 0x4 = fromIntType
+      | w == 0x5 = fromNumberType
       | w == 0x6 = fromStringType
       | w == 0x7 = fromXmlDocType
       | w == 0x8 = fail "Date unsupported"
@@ -229,8 +229,8 @@ utf8_empty = ""
 instance AmfPrim Double where
   fromAmf = U.take 8 >>= return . wordToDouble . toWord64 . BL.unpack
 
-fromDoubleType :: Parser Amf
-fromDoubleType = liftM AmfDouble fromAmf
+fromNumberType :: Parser Amf
+fromNumberType = liftM AmfNumber fromAmf
 
 {-
   Int
@@ -243,8 +243,8 @@ instance AmfPrim Int32 where
 instance AmfPrim Int where
   fromAmf = do (i :: Int32) <- fromAmf; return (fromIntegral i)
 
-fromIntegerType :: Parser Amf
-fromIntegerType = liftM AmfInt fromAmf
+fromIntType :: Parser Amf
+fromIntType = liftM AmfInt fromAmf
 
 {- the number of bytes an Int will occupy once serialized -}
 --deserializedU29Length :: (Real a) => a -> Int

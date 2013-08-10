@@ -28,35 +28,35 @@ type S24 = Int32
 type U29 = Int
 type Assoc_Value = (UTF_8_vr, Amf)
 
--- (Strings, Complex Object, Traits)
+-- | (Strings, Complex Object, Traits)
 type Tables = ([String], [Amf], [Traits])
 
--- (class name, [properties], dynamic)
+-- | (class name, [properties], dynamic)
 type Traits = (UTF_8_vr, [UTF_8_vr], Bool)
 
-data Amf = {- 0x00 -} AmfUndefined -- ^ undefined-marker
-         | {- 0x01 -} AmfNull      -- ^ null-marker
-         | {- 0x02 -} AmfFalse     -- ^ false-marker
-         | {- 0x03 -} AmfTrue      -- ^ true-marker
-         | {- 0x04 -} AmfInt Int32
-         | {- 0x05 -} AmfDouble Double
-         | {- 0x06 -} AmfString UTF_8_vr
+data Amf = {- 0x00 -} AmfUndefined          -- ^ undefined
+         | {- 0x01 -} AmfNull               -- ^ null
+         | {- 0x02 -} AmfFalse              -- ^ false
+         | {- 0x03 -} AmfTrue               -- ^ true
+         | {- 0x04 -} AmfInt Int32          -- ^ int
+         | {- 0x05 -} AmfNumber Double      -- ^ Number
+         | {- 0x06 -} AmfString UTF_8_vr    -- ^ String
          | {- 0x07 -} AmfXmlDoc U29X
-         | {- 0x08 -} AmfDate String
-         | {- 0x09 -} AmfArray U29A
-         | {- 0x0A -} AmfObject U29O
-         | {- 0x0B -} AmfXml U29X
-         | {- 0x0C -} AmfByteArray U29B
-         | {- 0x0D -} AmfVecInt [Int32]
-         | {- 0x0E -} AmfVecUInt [Word32]
-         | {- 0x0F -} AmfVecDouble [Double]
-         | {- 0x10 -} AmfVecObject [Amf]
-         | {- 0x11 -} AmfDictionary [Amf]
+         | {- 0x08 -} AmfDate String        -- ^ Date
+         | {- 0x09 -} AmfArray U29A         -- ^ \[\]
+         | {- 0x0A -} AmfObject U29O        -- ^ {}
+         | {- 0x0B -} AmfXml U29X           -- ^ XML
+         | {- 0x0C -} AmfByteArray U29B     -- ^ flash.utils.ByteArray
+         | {- 0x0D -} AmfVecInt [Int32]     -- ^ Vector.\<int\>
+         | {- 0x0E -} AmfVecUInt [Word32]   -- ^ Vector.\<uint\>
+         | {- 0x0F -} AmfVecNumber [Double] -- ^ Vector.\<Number\>
+         | {- 0x10 -} AmfVecObject [Amf]    -- ^ Vector.\<Object\>
+         | {- 0x11 -} AmfDictionary [Amf]   -- ^ flash.utils.Dictionary
          deriving (Eq)
 
 instance NFData Amf where
   rnf (AmfInt a) = a `deepseq` ()
-  rnf (AmfDouble a) = a `deepseq` ()
+  rnf (AmfNumber a) = a `deepseq` ()
   rnf (AmfString a) = a `deepseq` ()
   rnf (AmfXmlDoc a) = a `deepseq` ()
   rnf (AmfDate a) = a `deepseq` ()
@@ -66,7 +66,7 @@ instance NFData Amf where
   rnf (AmfByteArray a) = a `deepseq` ()
   rnf (AmfVecInt a) = a `deepseq` ()
   rnf (AmfVecUInt a) = a `deepseq` ()
-  rnf (AmfVecDouble a) = a `deepseq` ()
+  rnf (AmfVecNumber a) = a `deepseq` ()
   rnf (AmfVecObject a) = a `deepseq` ()
   rnf (AmfDictionary a) = a `deepseq` ()
   rnf _ = ()
@@ -77,7 +77,7 @@ instance Show Amf where
   show AmfFalse          = "false"
   show AmfTrue           = "true"
   show (AmfInt a)        = show a
-  show (AmfDouble a)     = show a
+  show (AmfNumber a)     = show a
   show (AmfString a)     = show a
   show (AmfXmlDoc a)     = show a
   show (AmfDate a)       = show a
@@ -88,7 +88,7 @@ instance Show Amf where
   show (AmfByteArray _)  = "bytearray"
   show (AmfVecInt a)     = "Vector.<int>[" ++ show a ++ "]"
   show (AmfVecUInt a)    = "Vector.<uint>[" ++ show a ++ "]"
-  show (AmfVecDouble a)  = "Vector.<Number>[" ++ show a ++ "]"
+  show (AmfVecNumber a)  = "Vector.<Number>[" ++ show a ++ "]"
   show (AmfVecObject a)  = "Vector.<Object>[" ++ show a ++ "]"
   show (AmfDictionary a) = "AmfDictionary"
 
@@ -129,9 +129,9 @@ type U29X = UTF_8_vr
 -}
 
 data U29O = U29O_Ref U29
-          | U29O_TraitsRef U29 [Amf] [Assoc_Value] -- trait ref, list of fixed member values, dynamic members
+          | U29O_TraitsRef U29 [Amf] [Assoc_Value] -- ^ trait ref, list of fixed member values, dynamic members
           | U29O_TraitsExt UTF_8_vr [Word8] {-[Amf] [Assoc_Value]-} --TODO handle this
-          | U29O_Traits UTF_8_vr [Assoc_Value] [Assoc_Value] -- class name, fixed member keys and values, dynamic members
+          | U29O_Traits UTF_8_vr [Assoc_Value] [Assoc_Value] -- ^ class name, fixed member keys and values, dynamic members
           deriving (Eq)
 
 instance NFData U29O where
