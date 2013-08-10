@@ -4,7 +4,7 @@ module Data.Amf.Serialize (serialize) where
 import           Control.Monad (replicateM, liftM2)
 import           Control.Monad.Trans.Class (MonadTrans (lift))
 import           Data.Amf.Def
-import           Data.Amf.Util as U
+--import           Data.Amf.Util as U
 import           Data.Binary.IEEE754 (wordToDouble)
 import           Data.Bits
 import           Data.Char (digitToInt, intToDigit)

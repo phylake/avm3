@@ -1,21 +1,30 @@
-module Data.Amf.Def where
+module Data.Amf.Def (
+  U8
+, U30
+, U32
+, S24
+, U29
+, Assoc_Value
+, Tables
+, Traits
+, Amf(..)
+, U29B(..)
+, U29X
+, U29O(U29O_Ref, U29O_TraitsRef, U29O_Traits)
+, U29A(..)
+, UTF_8_vr(..)
+) where
 
 import           Control.DeepSeq
-import           Data.Conduit
-import           Data.Int
-import           Data.Void
-import           Data.Word
+import           Data.Int (Int32)
+import           Data.Word (Word8, Word32)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
-import qualified MonadLib as ML
-
-type Parser = ML.StateT Tables (ConduitM B.ByteString Void (ResourceT IO))
 
 type U8 = Word8
 type U30 = Word32
 type U32 = Word32
 type S24 = Int32
-
 type U29 = Int
 type Assoc_Value = (UTF_8_vr, Amf)
 
@@ -25,13 +34,10 @@ type Tables = ([String], [Amf], [Traits])
 -- (class name, [properties], dynamic)
 type Traits = (UTF_8_vr, [UTF_8_vr], Bool)
 
-class AmfPrim a where
-  fromAmf :: Parser a
-
-data Amf = {- 0x00 -} AmfUndefined {- undefined-marker -}
-         | {- 0x01 -} AmfNull      {- null-marker -}
-         | {- 0x02 -} AmfFalse     {- false-marker -}
-         | {- 0x03 -} AmfTrue      {- true-marker -}
+data Amf = {- 0x00 -} AmfUndefined -- ^ undefined-marker
+         | {- 0x01 -} AmfNull      -- ^ null-marker
+         | {- 0x02 -} AmfFalse     -- ^ false-marker
+         | {- 0x03 -} AmfTrue      -- ^ true-marker
          | {- 0x04 -} AmfInt Int32
          | {- 0x05 -} AmfDouble Double
          | {- 0x06 -} AmfString UTF_8_vr
@@ -58,6 +64,11 @@ instance NFData Amf where
   rnf (AmfObject a) = a `deepseq` ()
   rnf (AmfXml a) = a `deepseq` ()
   rnf (AmfByteArray a) = a `deepseq` ()
+  rnf (AmfVecInt a) = a `deepseq` ()
+  rnf (AmfVecUInt a) = a `deepseq` ()
+  rnf (AmfVecDouble a) = a `deepseq` ()
+  rnf (AmfVecObject a) = a `deepseq` ()
+  rnf (AmfDictionary a) = a `deepseq` ()
   rnf _ = ()
 
 instance Show Amf where
@@ -65,16 +76,21 @@ instance Show Amf where
   show AmfNull           = "null"
   show AmfFalse          = "false"
   show AmfTrue           = "true"
-  show (AmfInt v)        = show v
-  show (AmfDouble v)     = show v
-  show (AmfString v)     = show v
-  show (AmfXmlDoc v)     = show v
-  show (AmfDate v)       = show v
+  show (AmfInt a)        = show a
+  show (AmfDouble a)     = show a
+  show (AmfString a)     = show a
+  show (AmfXmlDoc a)     = show a
+  show (AmfDate a)       = show a
   show (AmfArray xs)     = show xs
   --show (AmfObject hs) = show $ map (\(k,v) -> show k ++ ": " ++ show v) hs
-  show (AmfObject v)     = show v
-  show (AmfXml v)        = show v
-  show (AmfByteArray ba) = "bytearray"
+  show (AmfObject a)     = show a
+  show (AmfXml a)        = show a
+  show (AmfByteArray _)  = "bytearray"
+  show (AmfVecInt a)     = "Vector.<int>[" ++ show a ++ "]"
+  show (AmfVecUInt a)    = "Vector.<uint>[" ++ show a ++ "]"
+  show (AmfVecDouble a)  = "Vector.<Number>[" ++ show a ++ "]"
+  show (AmfVecObject a)  = "Vector.<Object>[" ++ show a ++ "]"
+  show (AmfDictionary a) = "AmfDictionary"
 
 {-
     AmfByteArray
