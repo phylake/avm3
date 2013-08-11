@@ -29,9 +29,9 @@ take = ML.lift . CB.take
 takeWhile :: (Word8 -> Bool) -> Parser BL.ByteString
 takeWhile f = ML.lift $ CB.takeWhile f =$ CL.consume >>= return . BL.fromChunks
 
-reverseAmfs :: ([Amf], Tables) -> IO ([Amf], Tables)
+reverseAmfs :: ([Amf], Tables) -> ([Amf], Tables)
 reverseAmfs (amfs, (st, cot, tt)) =
-  return (reverse amfs, (reverse st, reverse cot, reverse tt))
+  (reverse amfs, (reverse st, reverse cot, reverse tt))
 
 {-
   Tables
@@ -93,10 +93,9 @@ BEGIN test code
 -}
 
 {-
-import           System.FilePath ((</>))
 test :: IO ()
 test = do
-  (amfs :: [Amf], (string, cot, tt)) <- deserialize $  "amf" </> "file.amf"
+  (amfs :: [Amf], (string, cot, tt)) <- deserialize "file.amf"
   putStrLn "AMFS"
   putStrLn $ unlines $ Prelude.map show amfs
   putStrLn "TABLES - STRINGS"
@@ -105,7 +104,8 @@ test = do
   putStrLn $ unlines $ Prelude.map show cot
   putStrLn "TABLES - TRAITS"
   putStrLn $ unlines $ Prelude.map show tt
-  return ()-}
+  return ()
+-}
 
 {-
 END test code

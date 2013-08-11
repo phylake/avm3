@@ -36,3 +36,13 @@ serialize = undefined
 --toAmfImpl ((AmfObject u29o):amfs)   = undefined
 --toAmfImpl ((AmfXml string):amfs)    = undefined
 --toAmfImpl ((AmfByteArray ba):amfs)  = undefined
+
+{- the number of bytes an Int will occupy once serialized -}
+--deserializedU29Length :: (Real a) => a -> Int
+deserializedU29Length :: Int -> Int
+deserializedU29Length x
+  | x >= 0x00000000 && x <= 0x0000007f = 1
+  | x >= 0x00000080 && x <= 0x00003fff = 2
+  | x >= 0x00004000 && x <= 0x001fffff = 3
+  | x >= 0x00200000 && x <= 0x3fffffff = 4
+  | otherwise                          = 0

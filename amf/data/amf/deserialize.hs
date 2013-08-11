@@ -20,16 +20,16 @@ import qualified MonadLib as ML
 
 -- | Resolve all references in the implicit dictionary
 toValues :: ([Amf], Tables) -> [Amf]
-toValues = undefined
+toValues (amfs, tables) = Prelude.map (toValue tables) amfs
 
 deserialize :: FilePath
             -> IO ([Amf], Tables) -- ^ A list of Amfs and the implicit dictionary that was built up
 deserialize file = (runResourceT $
-  CB.sourceFile file $$ ML.runStateT U.emptyTable parseAmf) >>= reverseAmfs
+  CB.sourceFile file $$ ML.runStateT U.emptyTable parseAmf) >>= return .reverseAmfs
 
 deserializeBs :: BL.ByteString -> IO ([Amf], Tables)
 deserializeBs lbs = (runResourceT $
-  CB.sourceLbs lbs $$ ML.runStateT U.emptyTable parseAmf) >>= reverseAmfs
+  CB.sourceLbs lbs $$ ML.runStateT U.emptyTable parseAmf) >>= return .reverseAmfs
 
 parseAmf :: Parser [Amf]
 parseAmf = do
@@ -45,19 +45,24 @@ instance AmfPrim Amf where
   fromAmf = U.head_ >>= fromAmfImpl where
     fromAmfImpl :: Word8 -> Parser Amf
     fromAmfImpl w
-      | w == 0x0 = return AmfUndefined
-      | w == 0x1 = return AmfNull
-      | w == 0x2 = return AmfFalse
-      | w == 0x3 = return AmfTrue
-      | w == 0x4 = fromIntType
-      | w == 0x5 = fromNumberType
-      | w == 0x6 = fromStringType
-      | w == 0x7 = fromXmlDocType
-      | w == 0x8 = fail "Date unsupported"
-      | w == 0x9 = fromArrayType
-      | w == 0xA = fromObjectType
-      | w == 0xB = fromXmlType
-      | w == 0xC = fromByteArray
+      | w == 0x00 = return AmfUndefined
+      | w == 0x01 = return AmfNull
+      | w == 0x02 = return AmfFalse
+      | w == 0x03 = return AmfTrue
+      | w == 0x04 = fromIntType
+      | w == 0x05 = fromNumberType
+      | w == 0x06 = fromStringType
+      | w == 0x07 = fromXmlDocType
+      | w == 0x08 = fail "Date unsupported"
+      | w == 0x09 = fromArrayType
+      | w == 0x0A = fromObjectType
+      | w == 0x0B = fromXmlType
+      | w == 0x0C = fromByteArray
+      | w == 0x0D = fail "AmfVecInt unsupported"
+      | w == 0x0E = fail "AmfVecUInt unsupported"
+      | w == 0x0F = fail "AmfVecNumber unsupported"
+      | w == 0x10 = fail "AmfVecObject unsupported"
+      | w == 0x11 = fail "AmfDictionary unsupported"
       | otherwise = fail "encountered unknown marker"
 
 {-
@@ -91,7 +96,7 @@ fromXmlDocType :: Parser Amf
 fromXmlDocType = fromCommonXml AmfXmlDoc
 
 fromCommonXml :: (U29X -> Amf) -> Parser Amf
-fromCommonXml f = fromAmf >>= return . f
+fromCommonXml = (flip liftM) fromAmf
 
 {-
   AmfObject
@@ -245,16 +250,6 @@ instance AmfPrim Int where
 
 fromIntType :: Parser Amf
 fromIntType = liftM AmfInt fromAmf
-
-{- the number of bytes an Int will occupy once serialized -}
---deserializedU29Length :: (Real a) => a -> Int
-deserializedU29Length :: Int -> Int
-deserializedU29Length x
-  | x >= 0x00000000 && x <= 0x0000007f = 1
-  | x >= 0x00000080 && x <= 0x00003fff = 2
-  | x >= 0x00004000 && x <= 0x001fffff = 3
-  | x >= 0x00200000 && x <= 0x3fffffff = 4
-  | otherwise                          = 0
 
 {-
   Util
