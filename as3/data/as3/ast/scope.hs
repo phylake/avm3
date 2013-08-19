@@ -73,7 +73,7 @@ get_scopes klass = do
     maybe_ht2 <- H.lookup ht1 klass
     case maybe_ht2 of
       Nothing -> return Nothing
-      Just ht -> liftM Just $H.toList ht
+      Just ht -> liftM Just $ H.toList ht
 
 get_scope_ids :: String -> As3Parser (Maybe [String])
 get_scope_ids klass = get_scopes klass >>= \m -> return (map fst A.<$> m)

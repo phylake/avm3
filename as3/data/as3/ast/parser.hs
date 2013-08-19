@@ -5,6 +5,7 @@ import           Data.AS3.AST.Def
 import           Data.AS3.AST.Prims
 import           Data.AS3.AST.Scope
 import           Data.AS3.AST.ThirdParty
+import           Data.AS3.AST.Show
 import           Data.List (intersperse)
 import           Text.Parsec
 import           Util.File (recurseDirs)
@@ -12,7 +13,7 @@ import           Util.Misc (t31)
 import qualified Control.Applicative as A
 import qualified Data.HashTable.IO as H
 
-parser :: As3Parser Package
+parser :: As3Parser AST
 parser = package
 
 class_id :: As3Parser String
@@ -77,40 +78,42 @@ scope_mods = tok (scope_mod `sepEndBy1` (many1 $ char ' ')) <?> "scope modifiers
 package_id :: As3Parser String
 package_id = many1 lower `sepBy1` char '.' >>= dots
 
-package :: As3Parser Package
+package :: As3Parser AST
 package = do
   string "package" <* ss
   name <- option "" package_id
-  packageBody <- between_braces $ optionMaybe body
+  body <- between_braces package_body
   spaces
-  return Package {
-    packageName = name
-  , packageBody = packageBody
-  }
+  return $ Node End (Package name) body
   <?> "package"
-  where
-    body = many $spaces *> package_dec <* spaces
 
-package_dec :: As3Parser PackageBody
-package_dec =
-      (liftM PackageImport imporT)
-  <|> (liftM PackageClass as3_class)
-  <?> "package declaration"
+package_body :: As3Parser AST
+--package_body = liftM3 Node (option End imporTs) (return PackageBody) (option End as3_class)
+package_body = liftM3 Node (option End imporTs) (return Stmt) (return End)
 
-imporT :: As3Parser String
-imporT = do
-  string "import "
-  package <- package_id
-  semi
-  return package
-  <?> "import stmt"
+imporTs :: As3Parser AST
+imporTs = do
+  m <- tok imporT
+  case m of
+    Nothing -> return End
+    Just a -> do
+      rest <- imporTs
+      case rest of
+        End -> return $ Leaf a
+        leaf@(Leaf _) -> return $ Node End a leaf
+
+
+imporT :: As3Parser (Maybe NodeData)
+imporT = (optionMaybe $ liftM Import (string "import " *> package_id <* semi))
+         <?> "import"
 
 {-----------------
    CLASS-LEVEL
 -----------------}
 
-as3_class :: As3Parser Class
-as3_class = do
+as3_class :: As3Parser AST
+as3_class = undefined
+{-as3_class = do
   spaces
   scopes <- scope_mods
   tok $ string "class"
@@ -124,14 +127,10 @@ as3_class = do
   , classExtend = extends
   , classImpl = implements
   , classBody = decs
-  }
-
-{-
-might be able to generate list of AST and fold them into a single one
--}
+  }-}
 
 class_body :: As3Parser AST
-class_body = undefined
+class_body = try class_expression <|> class_declaration
 
 {-class_body :: As3Parser (AST -> AST)
 class_body = do
@@ -148,25 +147,25 @@ class_body f = do
     Just a -> return Stmt a End-}
 
 class_expression :: As3Parser AST
-class_expression = try assignment <|> class_stmt
+class_expression = try assignment <|> class_ident
 
 class_declaration :: As3Parser AST
 class_declaration = undefined
 
-class_stmt :: As3Parser AST
-class_stmt = try class_ident
-
 assignment :: As3Parser AST
-assignment = class_ident >>= eq
+assignment = liftM3 Node
+  class_ident
+  (tok (char '=') >> return (BinOp Assigment))
+  (rhs <* optional semi)
 
-eq :: AST -> As3Parser AST
-eq lhs = spaces *> char '=' *> spaces *> rhs <* optional semi >>= return . Eq lhs
+end :: As3Parser AST
+end = return End
 
 rhs :: As3Parser AST
-rhs = liftM (Lit . S) (try string_literal)
+rhs = liftM (Leaf . Lit . L_String) (try string_literal)
 
 class_ident :: As3Parser AST
-class_ident = liftM3 Id scope_mods cv ident
+class_ident = liftM Leaf $ liftM3 Id scope_mods cv ident
 
 cv :: As3Parser CV
 cv = tok $
@@ -174,9 +173,9 @@ cv = tok $
   <|> (string "const" >> return Const)
 
 ident :: As3Parser Ident
-ident = liftM2 Ident (tok var_id) (char ':' >> ss >> type_id)
+ident = liftM2 Ident var_id (ss *> char ':' *> ss *> type_id <* ss)
 
-class_property :: As3Parser ClassBody
+{-class_property :: As3Parser ClassBody
 class_property = do
   spaces
   scopes <- scope_mods
@@ -193,10 +192,8 @@ class_function = do
   body <- function_body
   --exit_fn
   return $ FunctionDec scopes signature body
-  <?> "class-level function"
+  <?> "class-level function"-}
 
-function_signature :: Bool -> As3Parser FunctionSignature
-function_signature alters_scope = undefined
 {-function_signature :: Bool -> As3Parser FunctionSignature
 function_signature alters_scope = do
   spaces
@@ -225,14 +222,14 @@ function_signature alters_scope = do
     props :: As3Parser [(String, Type)]
     props = csv (ident literal) <?> "function params"-}
 
-function_body :: As3Parser [Expression]
-function_body = between_braces $many function_expression
+{-function_body :: As3Parser [Expression]
+function_body = between_braces $many function_expression-}
 
 {-----------------
   CONTROL FLOW
 -----------------}
 
-control_flow_stmt :: As3Parser ControlFlow
+{-control_flow_stmt :: As3Parser ControlFlow
 control_flow_stmt =
       if_stmt
   <|> while_stmt
@@ -254,13 +251,13 @@ commonCF str f = do
   body <- case inline of
     Nothing -> between_braces $ many expression
     Just exp -> return [exp]
-  return $f condition body
+  return $f condition body-}
 
 {-----------------
   FUNCTION-LEVEL
 -----------------}
 
-function_call :: As3Parser String
+{-function_call :: As3Parser String
 function_call = do
   --notFollowedBy keyword
   name <- function_id
@@ -269,16 +266,16 @@ function_call = do
   --return $name ++ (concat $intersperse ", " params)
   let ret = name ++ (concat $ intersperse ", " params)
   liftIO.putStrLn $ "function_call RETURNED " ++ ret
-  return ret
+  return ret-}
 
 {-
   valid expression on the right side of
   assignment or as a function parameter
 -}
-function_assignment :: As3Parser String
-function_assignment = try literal <|> unary_statement
+{-function_assignment :: As3Parser String
+function_assignment = try literal <|> unary_statement-}
 
-unary_statement :: As3Parser String
+{-unary_statement :: As3Parser String
 unary_statement = do
   --liftIO.putStrLn $"\tunary_statement"
   prefix <- option "" unary_op_pre
@@ -296,17 +293,15 @@ unary_statement = do
       call <- optionMaybe $do
         maybe_params <- between_parens $optionMaybe $csv function_assignment
         return $maybe "()" concat maybe_params
-      return $ident ++ maybe "" id call
+      return $ident ++ maybe "" id call-}
 
-binary_statement :: As3Parser String
+{-binary_statement :: As3Parser String
 binary_statement = do
   lhs <- unary_statement
   op <- binary_op
   rhs <- function_assignment
-  return $lhs ++ " " ++ op ++ " " ++ rhs
+  return $lhs ++ " " ++ op ++ " " ++ rhs-}
 
-function_property :: As3Parser Ident
-function_property = undefined
 {-function_property :: As3Parser Ident
 function_property = do
   (string "var" <|> string "const") <* ss
@@ -324,9 +319,6 @@ function_property = do
 (null)
 (this)
 -}
-
-expression :: As3Parser Expression
-expression = undefined
 
 function_expression :: As3Parser String
 function_expression = undefined
@@ -365,24 +357,24 @@ boolean_op =
   <|> string "||"
   <?> "boolean op"
 
-binary_op :: As3Parser String
+binary_op :: As3Parser BinaryOp
 binary_op =
-      boolean_op
-  <|> string "+"
-  <|> string "-"
-  <|> string "*"
-  <|> string "/"
-  <|> string "%"
-  <|> string "<<"
-  <|> string ">>"
-  <|> string ">>>"
-  <|> string "&"
-  <|> string "|"
-  <|> string "="
-  <|> string "+="
-  <|> string "-="
-  <|> string "*="
-  <|> string "/="
+      --boolean_op
+  {-<|> -}(string "+" >> return Plus)
+  <|> (string "-" >> return Minus)
+  <|> (string "*" >> return Multiplication)
+  <|> (string "/" >> return Division)
+  <|> (string "%" >> return Modulo)
+  <|> (string "<<" >> return LShift)
+  <|> (string ">>" >> return RShift)
+  <|> (string "&" >> return BitwiseAND)
+  <|> (string "|" >> return BitwiseOR)
+  <|> (string "=" >> return Assigment)
+  <|> (string "+=" >> return PlusAssignment)
+  <|> (string "-=" >> return MinusAssignment)
+  <|> (string "*=" >> return MultiplicationAssignment)
+  <|> (string "/=" >> return DivisionAssignment)
+ -- <|> string ">>>"
  -- <|> string "%="
  -- <|> string "<<="
  -- <|> string ">>="
