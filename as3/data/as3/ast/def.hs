@@ -48,6 +48,7 @@ data Type = T_int
           | T_Boolean
           | T_String
           | T_Array
+          | T_Object
           | T_Vector Type
           | T_UserDefined String
 
@@ -84,9 +85,10 @@ everything else
 -}
 
 data NodeData = Stmt
+              | Null
               | CommentSingle String
               | CommentBlock [String]
-              | Package String
+              | Package (Maybe String)
               | Import String
               | Class [ScopeMod] String (Maybe String) (Maybe [String])
               | ArgList

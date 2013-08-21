@@ -81,7 +81,7 @@ package_id = many1 lower `sepBy1` char '.' >>= dots
 package :: As3Parser AST
 package = do
   string "package" <* ss
-  name <- option "" package_id
+  name <- optionMaybe package_id
   body <- between_braces package_body
   spaces
   return $ Node End (Package name) body
@@ -89,7 +89,8 @@ package = do
 
 package_body :: As3Parser AST
 --package_body = liftM3 Node (option End imporTs) (return PackageBody) (option End as3_class)
-package_body = liftM3 Node (option End imporTs) (return Stmt) (return End)
+--package_body = liftM3 Node (option End imporTs) (return Stmt) (return End)
+package_body = liftM3 Node (option End imporTs) (return Null) (option End as3_class)
 
 imporTs :: As3Parser AST
 imporTs = do
@@ -112,8 +113,7 @@ imporT = (optionMaybe $ liftM Import (string "import " *> package_id <* semi))
 -----------------}
 
 as3_class :: As3Parser AST
-as3_class = undefined
-{-as3_class = do
+as3_class = do
   spaces
   scopes <- scope_mods
   tok $ string "class"
@@ -121,13 +121,7 @@ as3_class = undefined
   extends <- optionMaybe $ string "extends " *> tok class_id -- make sure "extends" is the first match in order to fail fast and return Nothing
   implements <- optionMaybe $ string "implements " *> csv class_id -- make sure "implements" is the first match in order to fail fast and return Nothing
   decs <- between_braces class_body
-  return Class {
-    classMods = scopes
-  , className = name
-  , classExtend = extends
-  , classImpl = implements
-  , classBody = decs
-  }-}
+  return $ Node End (Class scopes name extends implements) decs
 
 class_body :: As3Parser AST
 class_body = try class_expression <|> class_declaration

@@ -38,6 +38,7 @@ instance Show Type where
   show T_Number = "Number"
   show T_Boolean = "Boolean"
   show T_String = "String"
+  show T_Object = "Object"
   show (T_Vector t) = "Vector.<" ++ show t ++ ">"
   show (T_UserDefined t) = t
 
@@ -68,7 +69,7 @@ instance Show Ident where
   show (Ident a b) = a ++ ":" ++ show b
 
 instance Show NodeData where
-  show (Package a) = "package {\n" ++ a ++ "\n}"
+  show (Package a) = "package" ++ maybe "" ((++)" ") a ++ " {\n"
   show (Import a) = "\nimport " ++ a ++ ";"
   show (Class scopes name extends implements) =
     intercalate " " (map show scopes) ++ " class"
@@ -76,6 +77,7 @@ instance Show NodeData where
     ++ maybe "" (\i -> " implements " ++ intercalate ", " i) implements
   show ArgList = ", "
   show Stmt = ";\n"
+  show Null = "\n"
   show TernOp = "?"
   show (BinOp a) = show a
   show (Lit a) = show a
