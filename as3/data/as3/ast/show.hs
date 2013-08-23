@@ -5,8 +5,8 @@ import           Data.List (intersperse, intercalate)
 import           Data.AS3.AST.Def
 
 instance Show BinaryOp where
-  show Plus = "+"
-  show Minus = "-"
+  show Addition = "+"
+  show Subtraction = "-"
   show Multiplication = "*"
   show Division = "/"
   show Modulo = "%"
@@ -42,17 +42,6 @@ instance Show Type where
   show (T_Vector t) = "Vector.<" ++ show t ++ ">"
   show (T_UserDefined t) = t
 
-instance (Show a) => Show (Tree a) where
-  show ast = let (Leaf b) = Data.Foldable.foldl f End (fmap show ast) in b
-    where
-      f :: Tree String -> String -> Tree String
-      f End acc = Leaf acc
-      f (Leaf a) acc = Leaf $ a ++ acc
-      f (Node l m r) acc = Node
-                             (Data.Foldable.foldl f (Leaf acc) l)
-                             m
-                             (Data.Foldable.foldl f End r)
-
 instance Show ScopeMod where
   show Public = "public"
   show Protected = "protected"
@@ -65,27 +54,25 @@ instance Show CV where
   show Const = "const"
   show Var = "var"
 
-instance Show Ident where
-  show (Ident a b) = a ++ ":" ++ show b
-
-instance Show NodeData where
-  show (Package a) = "package" ++ maybe "" ((++)" ") a ++ " {\n"
-  show (Import a) = "\nimport " ++ a ++ ";"
-  show (Class scopes name extends implements) =
+instance Show AST where
+  show (Package a body) = "package" ++ maybe "" ((++)" ") a
+    ++ "\n{\n"
+    ++ unlines (map ((++)"\t" . show) body)
+    ++ "\n}\n"
+  show (Import a) = "import " ++ a ++ ";"
+  show (Class scopes name extends implements body) =
     intercalate " " (map show scopes) ++ " class"
     ++ maybe "" ((++) " extends ") extends
     ++ maybe "" (\i -> " implements " ++ intercalate ", " i) implements
-  show ArgList = ", "
-  show Stmt = ";\n"
-  show Null = "\n"
-  show TernOp = "?"
-  show (BinOp a) = show a
+    ++ "\n{\n" ++ unlines (map ((++)"\t" . show) body) ++ "\n}"
+  show (Ident ms cv n t) = intercalate " " (map show ms ++ [maybe "" show cv, n]) ++ ":" ++ show t
+  show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f ++ ";"
+  show (BinOp l op r) = intercalate " " [show l, show op, show r]
   show (Lit a) = show a
-  show (If a) = a
-  show (For a) = a
-  show (UnOp a) = a
-  show (ForIn a) = a
-  show (ForEach a) = a
-  show (While a) = a
-  show (Switch a) = a
-  show (Id a b c) = intercalate " " $ map show a ++ [show b, show c]
+  --show (If a) = a
+  --show (For a) = a
+  --show (UnOp a) = a
+  --show (ForIn a) = a
+  --show (ForEach a) = a
+  --show (While a) = a
+  --show (Switch a) = a

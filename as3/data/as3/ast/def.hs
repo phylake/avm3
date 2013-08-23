@@ -26,8 +26,8 @@ type M = StateT (IO ScopeTree, This, [String]) IO
 --type TypeInfoParser = ParsecT String () IO [TypeInfo]
 type As3Parser = ParsecT String () M
 
-data BinaryOp = Plus
-              | Minus
+data BinaryOp = Addition
+              | Subtraction
               | Multiplication
               | Division
               | Modulo
@@ -40,6 +40,17 @@ data BinaryOp = Plus
               | MinusAssignment
               | MultiplicationAssignment
               | DivisionAssignment
+
+data UnaryOp = Delete
+             | Void
+             | TypeOf
+             | Increment
+             | Decrement
+             | Positive
+             | Negative
+             | BitwiseNOT
+             | LogicalNOT -- end of ECMA-262
+             | BitwiseXOR
 
 data Type = T_int
           | T_uint
@@ -70,11 +81,6 @@ data ScopeMod = Public
               | Override
               | Static
 
-data Ident = Ident {
-                     propName :: String
-                   , propType :: Type
-                   }
-
 {-
 TODO start here
 global functions for translation
@@ -84,36 +90,46 @@ control flow statements
 everything else
 -}
 
-data NodeData = Stmt
-              | Null
-              | CommentSingle String
-              | CommentBlock [String]
-              | Package (Maybe String)
-              | Import String
-              | Class [ScopeMod] String (Maybe String) (Maybe [String])
-              | ArgList
-              | TernOp
-              | BinOp BinaryOp
-              | UnOp String
-              | Id [ScopeMod] CV Ident
-              | Lit Literal
-              | If String
-              | For String
-              | ForIn String
-              | ForEach String
-              | While String
-              | Switch String
+data AST = TODO String
+         | CommentSingle String
+         | CommentBlock [String]
+         | ParenGroup AST
+         | Package (Maybe String) [AST]
+         | Import String
+         -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
+         | Class [ScopeMod] String (Maybe String) (Maybe [String]) [AST]
+         | Function [ScopeMod] 
+         -- ^ "?" is implied since it's the only ternary operator
+         | TernOp AST AST AST
+         | BinOp AST BinaryOp AST
+         | UnaryX UnaryOp AST
+         -- ^ in a function arg list there are no scope modifiers and CV is
+         -- ^ implicity Var
+         | Ident [ScopeMod] (Maybe CV) String Type
+         | Lit Literal
+         -- ^ conditional, body
+         | If AST [AST]
+         | For String
+         | ForIn String
+         | ForEach String
+         | While String
+         | Switch String
+         | PostfixX AST UnaryOp
+         | NewX AST
 
-type AST = Tree NodeData
+{-type AST = Tree NodeData
 
-data Tree a = End | Leaf a | Node (Tree a) a (Tree a)
+-- not sure if I need left sub-tree. test on binary and ternary ops
+data Tree a = End | Node [Tree a] a [Tree a]
 
 instance Functor Tree where
   fmap f End = End
-  fmap f (Leaf a) = Leaf $ f a
-  fmap f (Node l m r) = Node (fmap f l) (f m) (fmap f r)
+  fmap f (Node l m r) = Node
+    (map (fmap f) l)
+    (f m)
+    (map (fmap f) r)
 
 instance Foldable Tree where
   foldr f acc End = acc
-  foldr f acc (Leaf a) = f a acc
   foldr f acc (Node l m r) = foldr f (f m (foldr f acc r)) l
+-}

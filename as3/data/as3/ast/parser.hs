@@ -82,31 +82,16 @@ package :: As3Parser AST
 package = do
   string "package" <* ss
   name <- optionMaybe package_id
-  body <- between_braces package_body
+  body <- between_braces $ many package_body
   spaces
-  return $ Node End (Package name) body
+  return $ Package name body
   <?> "package"
 
 package_body :: As3Parser AST
---package_body = liftM3 Node (option End imporTs) (return PackageBody) (option End as3_class)
---package_body = liftM3 Node (option End imporTs) (return Stmt) (return End)
-package_body = liftM3 Node (option End imporTs) (return Null) (option End as3_class)
+package_body = tok $ try imporT <|> as3_class
 
-imporTs :: As3Parser AST
-imporTs = do
-  m <- tok imporT
-  case m of
-    Nothing -> return End
-    Just a -> do
-      rest <- imporTs
-      case rest of
-        End -> return $ Leaf a
-        leaf@(Leaf _) -> return $ Node End a leaf
-
-
-imporT :: As3Parser (Maybe NodeData)
-imporT = (optionMaybe $ liftM Import (string "import " *> package_id <* semi))
-         <?> "import"
+imporT :: As3Parser AST
+imporT = liftM Import (string "import " *> package_id <* semi) <?> "import"
 
 {-----------------
    CLASS-LEVEL
@@ -120,11 +105,13 @@ as3_class = do
   name <- tok class_id
   extends <- optionMaybe $ string "extends " *> tok class_id -- make sure "extends" is the first match in order to fail fast and return Nothing
   implements <- optionMaybe $ string "implements " *> csv class_id -- make sure "implements" is the first match in order to fail fast and return Nothing
-  decs <- between_braces class_body
-  return $ Node End (Class scopes name extends implements) decs
+  decs <- between_braces $ many class_body
+  return $ Class scopes name extends implements decs
 
 class_body :: As3Parser AST
-class_body = try class_expression <|> class_declaration
+class_body =
+      try assignment
+  <|> try class_ident
 
 {-class_body :: As3Parser (AST -> AST)
 class_body = do
@@ -140,34 +127,62 @@ class_body f = do
     Nothing -> f End
     Just a -> return Stmt a End-}
 
-class_expression :: As3Parser AST
-class_expression = try assignment <|> class_ident
-
-class_declaration :: As3Parser AST
-class_declaration = undefined
-
 assignment :: As3Parser AST
-assignment = liftM3 Node
-  class_ident
-  (tok (char '=') >> return (BinOp Assigment))
+assignment = liftM3 BinOp
+  ident
+  (tok (char '=') >> return Assigment)
   (rhs <* optional semi)
 
-end :: As3Parser AST
-end = return End
-
 rhs :: As3Parser AST
-rhs = liftM (Leaf . Lit . L_String) (try string_literal)
+rhs =
+      try paren_group
+  <|> try unary_expression
+  <|> try postfix_expression
+  <|> liftM (Lit . L_String) (try string_literal)
+  <?> "rhs"
+  -- <|> try 
+
+conditional_expression :: As3Parser AST
+conditional_expression = liftM3 TernOp (tok rhs <* string "?") (tok rhs) (tok rhs)
+
+member_expression :: As3Parser AST
+member_expression = fail "member_expression"
+
+new_expression :: As3Parser AST
+new_expression = liftM NewX (string "new" *> new_expression)
+
+call_expression :: As3Parser AST
+call_expression = fail "call_expression"
+
+lhs_expression :: As3Parser AST
+lhs_expression = try new_expression <|> call_expression <?> "lhs_expression"
+
+postfix_expression :: As3Parser AST
+postfix_expression = liftM2 PostfixX (lhs_expression <* ss) unary_expression_post
+                     <?> "postfix_expression"
+
+unary_expression :: As3Parser AST
+unary_expression = liftM2
+                     UnaryX
+                     unary_expression_pre
+                     (try unary_expression <|> postfix_expression)
+
+paren_group :: As3Parser AST
+paren_group = liftM ParenGroup $ between_parens rhs
 
 class_ident :: As3Parser AST
-class_ident = liftM Leaf $ liftM3 Id scope_mods cv ident
+class_ident = ident
 
-cv :: As3Parser CV
-cv = tok $
-      (string "var" >> return Var)
-  <|> (string "const" >> return Const)
+-- TODO classify class id, function id so there's no Maybe
+cv :: As3Parser (Maybe CV)
+cv = optionMaybe $
+      (string "var " >> return Var)
+  <|> (string "const " >> return Const)
 
-ident :: As3Parser Ident
-ident = liftM2 Ident var_id (ss *> char ':' *> ss *> type_id <* ss)
+ident :: As3Parser AST
+ident = liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
+
+
 
 {-class_property :: As3Parser ClassBody
 class_property = do
@@ -272,10 +287,10 @@ function_assignment = try literal <|> unary_statement-}
 {-unary_statement :: As3Parser String
 unary_statement = do
   --liftIO.putStrLn $"\tunary_statement"
-  prefix <- option "" unary_op_pre
+  prefix <- option "" unary_expression_pre
   identifier <- scope_or_func `sepBy1` char '.' >>= dots
   liftIO.putStrLn $"\tunary_statement identifier " ++ identifier
-  postfix <- option "" unary_op_post
+  postfix <- option "" unary_expression_post
   return $prefix ++ identifier ++ postfix
   where
     scope_or_func :: As3Parser String
@@ -321,20 +336,24 @@ boolean_expression :: As3Parser String
 boolean_expression = undefined
 --boolean_expression = (try binary_statement <|> unary_statement) `sepBy1` boolean_op
 
-unary_op_pre :: As3Parser String
-unary_op_pre =
-      string "-"
-  <|> string "++"
-  <|> string "--"
-  <|> string "^"
-  <|> string "!"
-  <|> string "~"
+unary_expression_pre :: As3Parser UnaryOp
+unary_expression_pre =
+      (string "delete" >> return Delete)
+  <|> (string "void" >> return Void)
+  <|> (string "typeof" >> return TypeOf)
+  <|> (string "++" >> return Increment)
+  <|> (string "--" >> return Decrement)
+  <|> (string "+" >> return Positive)
+  <|> (string "-" >> return Negative)
+  <|> (string "~" >> return BitwiseNOT)
+  <|> (string "!" >> return LogicalNOT)
+  <|> (string "^" >> return BitwiseXOR)
   <?> "unary PREFIX op"
 
-unary_op_post :: As3Parser String
-unary_op_post =
-      string "++"
-  <|> string "--"
+unary_expression_post :: As3Parser UnaryOp
+unary_expression_post =
+      (string "++" >> return Increment)
+  <|> (string "--" >> return Decrement)
   <?> "unary POSTFIX op"
 
 boolean_op :: As3Parser String
@@ -354,8 +373,8 @@ boolean_op =
 binary_op :: As3Parser BinaryOp
 binary_op =
       --boolean_op
-  {-<|> -}(string "+" >> return Plus)
-  <|> (string "-" >> return Minus)
+  {-<|> -}(string "+" >> return Addition)
+  <|> (string "-" >> return Subtraction)
   <|> (string "*" >> return Multiplication)
   <|> (string "/" >> return Division)
   <|> (string "%" >> return Modulo)
@@ -377,9 +396,6 @@ binary_op =
  -- <|> string "|="
  -- <|> string "^="
   <?> "binary op"
-
-ternary_op :: As3Parser String
-ternary_op = undefined
 
 
 
