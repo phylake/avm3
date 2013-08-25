@@ -1,9 +1,9 @@
 module Data.AS3.AST.Scope (
   build_scope_tree
-, exit_fn
-, get_scope
-, get_scopes
-, push_fn_scope
+--, exit_fn
+--, get_scope
+--, get_scopes
+--, push_fn_scope
 ) where
 
 import           Control.Monad (forM_, liftM)
@@ -19,7 +19,7 @@ import qualified Control.Applicative as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashTable.IO as H
 
--- | Build all 
+-- | { class:String => { id:String => scopeAndType:ScopeId }}
 build_scope_tree :: [FilePath] -> IO ScopeTree
 build_scope_tree files = do
   tree <- H.new
@@ -49,15 +49,18 @@ build_scope_tree files = do
           return ht
       where
         -- TODO make this real
-        type_info_p :: ParsecT String () IO [(String, TypeInfo)]
+        type_info_p :: ParsecT String () IO [(String, ScopeId)]
         type_info_p = return $ [
-            ("a", (Nothing, T_int))
-          , ("_equipment", (Nothing, T_int))
-          , ("_gadgets", (Nothing, T_int))
-          , ("_actions", (Nothing, T_int))
+            ("a", (InstanceId [Public] T_int))
+          , ("_equipment", (InstanceId [Public] T_int))
+          , ("_gadgets", (InstanceId [Public] T_int))
+          , ("_actions", (InstanceId [Public] T_int))
+          , ("STATIC", (ClassId [Public] T_String))
           ]
 
-get_scope :: String -> String -> As3Parser (Maybe TypeInfo)
+get_scope :: String -- ^ The class containing an identifier
+          -> String -- ^ The public identifier (property or function) to fetch
+          -> As3Parser (Maybe ScopeId)
 get_scope klass ident = do
   ht1 <- gets t31 >>= liftIO
   liftIO $ do
@@ -66,7 +69,7 @@ get_scope klass ident = do
       Nothing -> return Nothing
       Just ht -> H.lookup ht ident
 
-get_scopes :: String -> As3Parser (Maybe [(String, TypeInfo)])
+get_scopes :: String -> As3Parser (Maybe [(String, ScopeId)])
 get_scopes klass = do
   ht1 <- gets t31 >>= liftIO
   liftIO $do
@@ -97,7 +100,7 @@ exit_fn = modify $ \(a, b, _) -> (a, b, [])
 -- TODO deprecated by build_scope_tree ?
 push_class_scope :: String -- ^ class
                  -> String -- ^ identifier
-                 -> TypeInfo
+                 -> ScopeId
                  -> As3Parser ()
 --push_class_scope new = modify $\(ts, (klass, func)) -> (ts, (new:klass, func))
 push_class_scope klass ident info = do

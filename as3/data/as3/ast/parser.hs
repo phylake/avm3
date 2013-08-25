@@ -23,7 +23,7 @@ type_whitelist :: As3Parser String
 type_whitelist = do
   ht <- gets t31 >>= liftIO
   list <- map fst A.<$> (liftIO $ H.toList ht)
-  --p$ show list
+  --p$ "type_whitelist\n" ++ show list
   foldl plusfold (string $ head list) (drop 1 list)
 
 type_id :: As3Parser Type
@@ -103,14 +103,14 @@ as3_class = do
   scopes <- scope_mods
   tok $ string "class"
   name <- tok class_id
-  extends <- optionMaybe $ string "extends " *> tok class_id -- make sure "extends" is the first match in order to fail fast and return Nothing
+  extends <- optionMaybe $ string "extends " *> class_id <* ss -- make sure "extends" is the first match in order to fail fast and return Nothing
   implements <- optionMaybe $ string "implements " *> csv class_id -- make sure "implements" is the first match in order to fail fast and return Nothing
   decs <- between_braces $ many class_body
   return $ Class scopes name extends implements decs
 
 class_body :: As3Parser AST
 class_body =
-      try assignment
+      try assignment_expression
   <|> try class_ident
 
 {-class_body :: As3Parser (AST -> AST)
@@ -127,12 +127,6 @@ class_body f = do
     Nothing -> f End
     Just a -> return Stmt a End-}
 
-assignment :: As3Parser AST
-assignment = liftM3 BinOp
-  ident
-  (tok (char '=') >> return Assigment)
-  (rhs <* optional semi)
-
 rhs :: As3Parser AST
 rhs =
       try paren_group
@@ -142,30 +136,244 @@ rhs =
   <?> "rhs"
   -- <|> try 
 
-conditional_expression :: As3Parser AST
-conditional_expression = liftM3 TernOp (tok rhs <* string "?") (tok rhs) (tok rhs)
+-- $11.1 Primary Expressions
+
+primary_expression :: As3Parser AST
+primary_expression =
+      (liftM TODO (try $ string "this"))
+  <|> try ident
+  <|> liftM TODO literal
+
+function_expression :: As3Parser AST
+function_expression = fail "function_expression"
+
+-- $11.2 Left-Hand-Side Expressions
 
 member_expression :: As3Parser AST
-member_expression = fail "member_expression"
+member_expression =
+      try primary_expression
+  <|> try function_expression
+  -- TODO
 
 new_expression :: As3Parser AST
-new_expression = liftM NewX (string "new" *> new_expression)
+new_expression =
+  try (liftM NewX $ string "new " *> new_expression)
+  <|> member_expression
+  <?> "new expression"
 
 call_expression :: As3Parser AST
 call_expression = fail "call_expression"
 
+arguments :: As3Parser [AST]
+arguments = between_parens argument_list
+
+argument_list :: As3Parser [AST]
+argument_list = csv assignment_expression
+
 lhs_expression :: As3Parser AST
 lhs_expression = try new_expression <|> call_expression <?> "lhs_expression"
 
+-- $11.3 Postfix Expressions
+
 postfix_expression :: As3Parser AST
-postfix_expression = liftM2 PostfixX (lhs_expression <* ss) unary_expression_post
-                     <?> "postfix_expression"
+postfix_expression =
+  liftM2 PostfixX (lhs_expression <* ss) unary_expression_post
+  <?> "postfix_expression"
+
+-- $11.4 Unary Operators
 
 unary_expression :: As3Parser AST
 unary_expression = liftM2
                      UnaryX
                      unary_expression_pre
                      (try unary_expression <|> postfix_expression)
+
+-- $11.5 Multiplicative Operators
+
+multiplicative_expression :: As3Parser AST
+multiplicative_expression =
+  try (liftM3
+         BinOp
+         (tok multiplicative_expression)
+         (tok multiplicative_op)
+         unary_expression)
+  <|> unary_expression
+  <?> "multiplicative expression"
+  where
+    multiplicative_op :: As3Parser BinaryOp
+    multiplicative_op =
+          (string "*" >> return Multiplication)
+      <|> (string "/" >> return Division)
+      <|> (string "%" >> return Modulo)
+      <?> "multiplicative operator"
+
+-- $11.6 Additive Operators
+
+additive_expression :: As3Parser AST
+additive_expression =
+  try (liftM3 BinOp additive_expression additive_op multiplicative_expression)
+  <|> multiplicative_expression
+  <?> "additive expression"
+  where
+    additive_op :: As3Parser BinaryOp
+    additive_op =
+          (string "+" >> return Addition)
+      <|> (string "-" >> return Subtraction)
+      <?> "additive operator"
+
+-- $11.7 Bitwise Shift Operators
+
+shift_expression :: As3Parser AST
+shift_expression =
+  try (liftM3 BinOp shift_expression shift_op additive_expression)
+  <|> additive_expression
+  <?> "shift expression"
+  where
+    shift_op :: As3Parser BinaryOp
+    shift_op =
+          (string "<<" >> return LShift)
+      <|> (string ">>" >> return RShift)
+      <|> (string ">>>" >> return URShift)
+      <?> "bitwise shift operator"
+
+-- $11.8 Relational Operators
+
+relational_expression :: As3Parser AST
+relational_expression =
+  try (liftM3 BinOp relational_expression relational_op shift_expression)
+  <|> shift_expression
+  <?> "relational expression"
+  where
+    relational_op :: As3Parser BinaryOp
+    relational_op =
+          (string "<" >> return LessThan)
+      <|> (string ">" >> return GreaterThan)
+      <|> (string "<=" >> return LessThanEq)
+      <|> (string ">=" >> return GreaterThanEq)
+      <|> (string "instanceof" >> return InstanceOf)
+      <|> (string "in" >> return In)
+      <?> "relational operator"
+
+-- $11.9 Equality Operators
+
+equality_expression :: As3Parser AST
+equality_expression =
+  liftM3 BinOp equality_expression equality_op relational_expression
+  <?> "equality expression"
+  where
+    equality_op :: As3Parser BinaryOp
+    equality_op =
+          (string "==" >> return Equality)
+      <|> (string "!=" >> return StrictEquality)
+      <|> (string "===" >> return InEquality)
+      <|> (string "!==" >> return StrictInEquality)
+      <?> "equality operator"
+
+-- $11.10 Binary Bitwise Operators
+
+bitwiseAND_expression :: As3Parser AST
+bitwiseAND_expression =
+  try (liftM3
+         BinOp
+         (tok bitwiseAND_expression)
+         (tok (char '&') >> return BitwiseAND)
+         (tok equality_expression))
+  <|> equality_expression
+  <?> "bitwise AND expression"
+
+bitwiseXOR_expression :: As3Parser AST
+bitwiseXOR_expression =
+  try (liftM3
+         BinOp
+         (tok bitwiseXOR_expression)
+         (tok (char '^') >> return BitwiseXOR)
+         (tok bitwiseAND_expression))
+  <|> bitwiseAND_expression
+  <?> "bitwise XOR expression"
+
+bitwiseOR_expression :: As3Parser AST
+bitwiseOR_expression =
+  try (liftM3
+         BinOp
+         (tok bitwiseOR_expression)
+         (tok (char '|') >> return BitwiseOR)
+         (tok bitwiseXOR_expression))
+  <|> bitwiseXOR_expression
+  <?> "bitwise OR expression"
+
+-- $11.11 Binary Logical Operators
+
+logicalAND_expression :: As3Parser AST
+logicalAND_expression =
+  try (liftM3
+         BinOp
+         (tok logicalAND_expression)
+         (tok (string "&&") >> return LogicalAND)
+         (tok bitwiseOR_expression))
+  <|> bitwiseOR_expression
+  <?> "logical AND expression"
+
+logicalOR_expression :: As3Parser AST
+logicalOR_expression =
+  try (liftM3
+         BinOp
+         (tok logicalOR_expression)
+         (tok (string "||") >> return LogicalOR)
+         (tok logicalAND_expression))
+  <|> logicalAND_expression
+  <?> "logical OR expression"
+
+-- $11.12 Conditional Operator ( ? : )
+
+conditional_expression :: As3Parser AST
+conditional_expression =
+  try (liftM3
+         TernOp
+         (tok logicalOR_expression <* string "?")
+         (tok assignment_expression) -- true
+         (tok assignment_expression)) -- false
+  <|> logicalOR_expression
+  <?> "conditional expression"
+
+-- $11.13 Assignment Operators
+
+assignment_expression :: As3Parser AST
+assignment_expression =
+  try (liftM3
+         BinOp
+         (tok lhs_expression)
+         (tok assignment_op)
+         assignment_expression)
+  <|> conditional_expression
+  <?> "assignment expression"
+  where
+    {- *= /= %= += -= <<= >>= >>>= &= ^= |= -}
+    assignment_op :: As3Parser BinaryOp
+    assignment_op =
+          (string "=" >> return Assignment)
+      <|> (string "+=" >> return PlusAssignment)
+      <|> (string "-=" >> return MinusAssignment)
+      <|> (string "*=" >> return MultiplicationAssignment)
+      <|> (string "/=" >> return DivisionAssignment)
+      <?> "assignment operator"
+
+{-simple_assignment :: As3Parser AST
+simple_assignment = liftM3 BinOp
+  ident
+  (tok (char '=') >> return Assignment)
+  (rhs <* optional semi)
+  <?> "simple assignment"
+
+compound_assignment :: As3Parser AST
+compound_assignment = liftM3 BinOp
+  ident
+  (tok compound_assignment_op)
+  (rhs <* optional semi)
+  <?> "compound assignment"
+  where-}
+
+
+-- $Miscellaneous
 
 paren_group :: As3Parser AST
 paren_group = liftM ParenGroup $ between_parens rhs
@@ -180,7 +388,11 @@ cv = optionMaybe $
   <|> (string "const " >> return Const)
 
 ident :: As3Parser AST
-ident = liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
+--ident = liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
+ident = do
+  ast <- liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
+  p$ show ast
+  return ast
 
 
 
@@ -329,9 +541,6 @@ function_property = do
 (this)
 -}
 
-function_expression :: As3Parser String
-function_expression = undefined
-
 boolean_expression :: As3Parser String
 boolean_expression = undefined
 --boolean_expression = (try binary_statement <|> unary_statement) `sepBy1` boolean_op
@@ -347,7 +556,7 @@ unary_expression_pre =
   <|> (string "-" >> return Negative)
   <|> (string "~" >> return BitwiseNOT)
   <|> (string "!" >> return LogicalNOT)
-  <|> (string "^" >> return BitwiseXOR)
+ -- <|> (string "^" >> return BitwiseXOR)
   <?> "unary PREFIX op"
 
 unary_expression_post :: As3Parser UnaryOp
@@ -382,7 +591,7 @@ binary_op =
   <|> (string ">>" >> return RShift)
   <|> (string "&" >> return BitwiseAND)
   <|> (string "|" >> return BitwiseOR)
-  <|> (string "=" >> return Assigment)
+  <|> (string "=" >> return Assignment)
   <|> (string "+=" >> return PlusAssignment)
   <|> (string "-=" >> return MinusAssignment)
   <|> (string "*=" >> return MultiplicationAssignment)
@@ -396,7 +605,6 @@ binary_op =
  -- <|> string "|="
  -- <|> string "^="
   <?> "binary op"
-
 
 
 
@@ -533,7 +741,7 @@ literal =
   <|> boolean_literal
   <|> numeric_literal
   <|> string_literal
-  <|> regex_literal
+  {-<|> regex_literal-}
   <?> "literal"
 
 null_literal :: As3Parser String

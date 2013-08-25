@@ -14,7 +14,7 @@ instance Show BinaryOp where
   show RShift = ">>"
   show BitwiseAND = "&"
   show BitwiseOR = "|"
-  show Assigment = "="
+  show Assignment = "="
   show PlusAssignment = "+="
   show MinusAssignment = "-="
   show MultiplicationAssignment = "*="

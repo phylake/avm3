@@ -15,31 +15,55 @@ p = liftIO . putStrLn
 --type M = StateT ([ClassInterface], ScopeChain) IO
 
 {- (params, type) -}
-type TypeInfo = (Maybe [Type], Type)
-type Identifiers = H.BasicHashTable String TypeInfo
+data ScopeId = ClassId [ScopeMod] Type
+             | ClassFn [ScopeMod] [Type] Type -- ^ scopes, params, return
+             | InstanceId [ScopeMod] Type
+             | InstanceFn [ScopeMod] [Type] Type -- ^ scopes, params, return
+type Identifiers = H.BasicHashTable String ScopeId
 type ScopeTree = H.BasicHashTable String Identifiers
 
 type This = String
+type NothingJustNeededToRecompile = [String]
 
-type M = StateT (IO ScopeTree, This, [String]) IO
+type M = StateT (IO ScopeTree, This, NothingJustNeededToRecompile) IO
 
---type TypeInfoParser = ParsecT String () IO [TypeInfo]
+--type ScopeIdParser = ParsecT String () IO [ScopeId]
 type As3Parser = ParsecT String () M
 
-data BinaryOp = Addition
-              | Subtraction
-              | Multiplication
-              | Division
-              | Modulo
-              | LShift
-              | RShift
-              | BitwiseAND
-              | BitwiseOR
-              | Assigment
-              | PlusAssignment
-              | MinusAssignment
-              | MultiplicationAssignment
-              | DivisionAssignment
+data BinaryOp = Addition -- ^ +
+              | Subtraction -- ^ -
+              | Multiplication -- ^ *
+              | Division -- ^ /
+              | Modulo -- ^ %
+              -- shift
+              | LShift -- ^ <<
+              | RShift -- ^ >>
+              | URShift -- ^ >>
+              -- TODO logical
+              | LogicalAND -- ^ &&
+              | LogicalOR -- ^ ||
+              -- TODO bitwise
+              | BitwiseAND -- ^ &
+              | BitwiseOR -- ^ |
+              | BitwiseXOR -- ^ ^
+              -- relational
+              | LessThan -- ^ <
+              | GreaterThan -- ^ >
+              | LessThanEq -- ^ <=
+              | GreaterThanEq -- ^ >=
+              | InstanceOf -- ^ instanceof
+              | In -- ^ in
+              -- assignment
+              | Assignment -- ^ =
+              | PlusAssignment -- ^ +=
+              | MinusAssignment -- ^ -=
+              | MultiplicationAssignment -- ^ *=
+              | DivisionAssignment -- ^ /=
+              -- equality
+              | Equality -- ^ ==
+              | StrictEquality -- ^ ===
+              | InEquality -- ^ !=
+              | StrictInEquality -- ^ !==
 
 data UnaryOp = Delete
              | Void
@@ -50,7 +74,6 @@ data UnaryOp = Delete
              | Negative
              | BitwiseNOT
              | LogicalNOT -- end of ECMA-262
-             | BitwiseXOR
 
 data Type = T_int
           | T_uint
