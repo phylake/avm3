@@ -30,40 +30,47 @@ type M = StateT (IO ScopeTree, This, NothingJustNeededToRecompile) IO
 --type ScopeIdParser = ParsecT String () IO [ScopeId]
 type As3Parser = ParsecT String () M
 
-data BinaryOp = Addition -- ^ +
-              | Subtraction -- ^ -
-              | Multiplication -- ^ *
-              | Division -- ^ /
-              | Modulo -- ^ %
+data BinaryOp = Addition
+              | Subtraction
+              | Multiplication
+              | Division
+              | Modulo
               -- shift
-              | LShift -- ^ <<
-              | RShift -- ^ >>
-              | URShift -- ^ >>
-              -- TODO logical
-              | LogicalAND -- ^ &&
-              | LogicalOR -- ^ ||
-              -- TODO bitwise
-              | BitwiseAND -- ^ &
-              | BitwiseOR -- ^ |
-              | BitwiseXOR -- ^ ^
+              | LShift
+              | RShift
+              | URShift
+              -- logical
+              | LogicalAND
+              | LogicalOR
+              -- bitwise
+              | BitwiseAND
+              | BitwiseOR
+              | BitwiseXOR
               -- relational
-              | LessThan -- ^ <
-              | GreaterThan -- ^ >
-              | LessThanEq -- ^ <=
-              | GreaterThanEq -- ^ >=
-              | InstanceOf -- ^ instanceof
-              | In -- ^ in
+              | LessThan
+              | GreaterThan
+              | LessThanEq
+              | GreaterThanEq
+              | InstanceOf
+              | In
               -- assignment
-              | Assignment -- ^ =
-              | PlusAssignment -- ^ +=
-              | MinusAssignment -- ^ -=
-              | MultiplicationAssignment -- ^ *=
-              | DivisionAssignment -- ^ /=
+              | Assignment
+              | PlusAssignment
+              | MinusAssignment
+              | MultiplicationAssignment
+              | DivisionAssignment
+              | ModuloAssignment
+              | LShiftAssignment
+              | RShiftAssignment
+              | URShiftAssignment
+              | BitwiseANDAssignment
+              | BitwiseORAssignment
+              | BitwiseXORAssignment
               -- equality
-              | Equality -- ^ ==
-              | StrictEquality -- ^ ===
-              | InEquality -- ^ !=
-              | StrictInEquality -- ^ !==
+              | Equality
+              | StrictEquality
+              | InEquality
+              | StrictInEquality
 
 data UnaryOp = Delete
              | Void
@@ -125,6 +132,8 @@ data AST = TODO String
          -- ^ "?" is implied since it's the only ternary operator
          | TernOp AST AST AST
          | BinOp AST BinaryOp AST
+         | RBinOp BinaryOp AST AST -- ^ right associative
+         | LBinOp BinaryOp AST AST -- ^ left associative
          | UnaryX UnaryOp AST
          -- ^ in a function arg list there are no scope modifiers and CV is
          -- ^ implicity Var

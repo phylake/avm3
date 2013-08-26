@@ -10,15 +10,42 @@ instance Show BinaryOp where
   show Multiplication = "*"
   show Division = "/"
   show Modulo = "%"
+
   show LShift = "<<"
   show RShift = ">>"
+  show URShift = ">>>"
+
+  show LogicalAND = "&&"
+  show LogicalOR = "||"
+
   show BitwiseAND = "&"
   show BitwiseOR = "|"
+  show BitwiseXOR = "^"
+
+  show LessThan = "<"
+  show GreaterThan = ">"
+  show LessThanEq = "<="
+  show GreaterThanEq = ">="
+  show InstanceOf = "instanceof"
+  show In = "in"
+
   show Assignment = "="
   show PlusAssignment = "+="
   show MinusAssignment = "-="
   show MultiplicationAssignment = "*="
   show DivisionAssignment = "/="
+  show ModuloAssignment = "%="
+  show LShiftAssignment = "<<="
+  show RShiftAssignment = ">>="
+  show URShiftAssignment = ">>>="
+  show BitwiseANDAssignment = "&="
+  show BitwiseORAssignment = "|="
+  show BitwiseXORAssignment = "^="
+
+  show Equality = "=="
+  show StrictEquality = "==="
+  show InEquality = "!="
+  show StrictInEquality = "!=="
 
 instance Show Literal where
   show L_void = "void"
@@ -55,6 +82,7 @@ instance Show CV where
   show Var = "var"
 
 instance Show AST where
+  show (TODO a) = a
   show (Package a body) = "package" ++ maybe "" ((++)" ") a
     ++ "\n{\n"
     ++ unlines (map ((++)"\t" . show) body)
@@ -68,6 +96,8 @@ instance Show AST where
   show (Ident ms cv n t) = intercalate " " (map show ms ++ [maybe "" show cv, n]) ++ ":" ++ show t
   show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f ++ ";"
   show (BinOp l op r) = intercalate " " [show l, show op, show r]
+  show (RBinOp op l r) = intercalate " " [show l, show op, show r]
+  show (LBinOp op l r) = intercalate " " [show l, show op, show r]
   show (Lit a) = show a
   --show (If a) = a
   --show (For a) = a
