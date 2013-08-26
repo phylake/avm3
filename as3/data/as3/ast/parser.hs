@@ -307,7 +307,7 @@ conditional_expression =
   try (liftM3
          TernOp
          (tok logicalOR_expression <* string "?")
-         (tok assignment_expression) -- true
+         (tok assignment_expression <* string ":") -- true
          (tok assignment_expression)) -- false
   <|> logicalOR_expression
   <?> "conditional expression"

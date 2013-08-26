@@ -89,8 +89,8 @@ instance Show AST where
     ++ "\n}\n"
   show (Import a) = "import " ++ a ++ ";"
   show (Class scopes name extends implements body) =
-    intercalate " " (map show scopes) ++ " class"
-    ++ maybe "" ((++) " extends ") extends
+    intercalate " " (map show scopes) ++ " class " ++ name
+    ++ maybe "" (" extends "++) extends
     ++ maybe "" (\i -> " implements " ++ intercalate ", " i) implements
     ++ "\n{\n" ++ unlines (map ((++)"\t" . show) body) ++ "\n}"
   show (Ident ms cv n t) = intercalate " " (map show ms ++ [maybe "" show cv, n]) ++ ":" ++ show t
