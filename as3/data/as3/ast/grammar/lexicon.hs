@@ -1,7 +1,102 @@
 module Data.AS3.AST.Grammar.Lexicon where
 
-import           Text.Parsec
+import           Control.Monad.State
 import           Data.AS3.AST.Def
+import           Data.AS3.AST.Prims
+import           Data.AS3.AST.Show
+import           Data.AS3.AST.ThirdParty
+import           Text.Parsec
+import           Util.Misc (t31)
+import qualified Control.Applicative as A
+import qualified Data.HashTable.IO as H
+
+
+
+
+
+
+{-scope_id :: As3Parser String
+scope_id = do
+  (_, ((k:klasses), fns)) <- get
+  try $foldl plusfold (string k) (klasses ++ fns)
+  <?> "scope id"-}
+
+function_id :: As3Parser String
+function_id = many1 $ alphaNum <|> char '_'
+
+
+
+
+
+-- $7.6 Identifier Names and Identifiers
+
+scope_mods :: As3Parser [ScopeMod]
+scope_mods = tok (scope_mod `sepEndBy1` (many1 $ char ' ')) <?> "scope modifiers"
+  where
+    scope_mod :: As3Parser ScopeMod
+    scope_mod = (try $
+          (string "public"    >> return Public)
+      <|> (string "protected" >> return Protected)
+      <|> (string "private"   >> return Private)
+      <|> (string "final"     >> return Final)
+      <|> (string "override"  >> return Override)
+      <|> (string "static"    >> return Static)) <?> "scope modifier"
+
+type_whitelist :: As3Parser String
+type_whitelist = do
+  ht <- gets t31 >>= liftIO
+  list <- map fst A.<$> (liftIO $ H.toList ht)
+  --p$ "type_whitelist\n" ++ show list
+  foldl plusfold (string $ head list) (drop 1 list)
+
+class_id :: As3Parser String
+class_id = type_whitelist <?> "class/interface def"
+
+type_id :: As3Parser Type
+type_id =
+      (liftM T_UserDefined $ try type_whitelist)
+  <|> (string "int" >> return T_int)
+  <|> (string "uint" >> return T_uint)
+  <|> (string "void" >> return T_void)
+  <|> (string "Number" >> return T_Number)
+  <|> (string "Boolean" >> return T_Boolean)
+  <|> (string "String" >> return T_String)
+  <|> (string "Array" >> return T_Array)
+  <|> (string "Vector.<" *> type_id <* string ">" >>= return . T_Vector)
+  <?> "type id"
+
+var_id :: As3Parser String
+var_id = many1 $ alphaNum <|> char '_'
+
+identifier :: As3Parser AST
+identifier = liftM Identifier $ many1 anyChar
+
+ident :: As3Parser AST
+ident = liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
+{-ident = do
+  ast <- liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
+  p$ "ident " ++ show ast
+  return ast-}
+
+-- TODO classify class id, function id so there's no Maybe
+cv :: As3Parser (Maybe CV)
+cv = optionMaybe $
+      (string "var " >> return Var)
+  <|> (string "const " >> return Const)
+
+identifier_name :: As3Parser AST
+identifier_name = undefined
+
+
+
+
+
+
+
+
+
+
+
 
 line_terminator :: As3Parser String
 line_terminator = try (string "\n\r")
@@ -129,6 +224,8 @@ punctuator =
 div_punctuator :: As3Parser String
 div_punctuator = string "/" <|> string "/="
 
+-- $7.8 Literals
+
 literal :: As3Parser String
 literal =
       null_literal
@@ -208,6 +305,8 @@ quote :: As3Parser Char
 quote = char '\'' <|> char '\"'
 --quote :: As3Parser String
 --quote = string "\'" <|> string "\""
+
+-- $7.8.5 Regular Expressions
 
 regex_literal :: As3Parser String
 regex_literal = undefined
