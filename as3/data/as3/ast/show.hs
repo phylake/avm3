@@ -92,13 +92,15 @@ instance Show AST where
     intercalate " " (map show scopes) ++ " class " ++ name
     ++ maybe "" (" extends "++) extends
     ++ maybe "" (\i -> " implements " ++ intercalate ", " i) implements
-    ++ "\n{\n" ++ unlines (map ((++)"\t" . show) body) ++ "\n}"
+    ++ "\n\t{\n" ++ unlines (map ((++)"\t\t" . show) body) ++ "\n\t}"
   show (Ident ms cv n t) = intercalate " " (map show ms ++ [maybe "" show cv, n]) ++ ":" ++ show t
-  show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f ++ ";"
+  show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f
   show (BinOp l op r) = intercalate " " [show l, show op, show r]
   show (RBinOp op l r) = intercalate " " [show l, show op, show r]
   show (LBinOp op l r) = intercalate " " [show l, show op, show r]
   show (Lit a) = show a
+  show (Expression a) = intercalate ", " $ map show a
+  show (ParenGroup a) = "(" ++ show a ++ ")"
   --show (If a) = a
   --show (For a) = a
   --show (UnOp a) = a

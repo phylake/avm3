@@ -123,7 +123,10 @@ everything else
 data AST = TODO String
          | CommentSingle String
          | CommentBlock [String]
+         | Expression [AST]
          | ParenGroup AST
+         | Identifier String
+         | ObjectLiteralX [AST]
          | Package (Maybe String) [AST]
          | Import String
          -- ^ [public] FooClass [extends Bar] [implements Baz] [body]

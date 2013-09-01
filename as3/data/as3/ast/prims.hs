@@ -3,6 +3,7 @@ module Data.AS3.AST.Prims (
 , between_parens
 , semi
 , ss
+, comma
 , plusfold
 , csv
 , dots
@@ -28,6 +29,9 @@ semi = char ';'
 
 ss :: As3Parser String
 ss = many $ char ' '
+
+comma :: As3Parser Char
+comma = tok $ char ','
 
 plusfold :: As3Parser String -> String -> As3Parser String
 plusfold acc str = acc `parserPlus` string str
