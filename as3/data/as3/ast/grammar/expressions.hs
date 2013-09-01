@@ -41,7 +41,7 @@ object_literal = liftM ObjectLiteralX $ between_braces kvps where
   property_name =
         try identifier_name
     <|> try (liftM (Lit . L_String) string_literal)
-    <|> try (liftM (Lit . L_String) numeric_literal)
+    <|> try (liftM (Lit . L_Number) numeric_literal)
 
 -- $11.2 Left-Hand-Side Expressions
 
@@ -258,7 +258,7 @@ assignment_expression =
 -- $11.14 Comma Operator
 
 expression :: As3Parser AST
-expression = liftM Expression (assignment_expression `sepBy` comma)
+expression = liftM CommaExpression (assignment_expression `sepBy` comma)
 
 -- $Chain links
 

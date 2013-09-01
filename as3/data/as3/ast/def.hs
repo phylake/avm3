@@ -97,7 +97,7 @@ data Literal = L_void
              | L_undefined
              | L_int Int
              | L_uint Int
-             | L_Number Double
+             | L_Number String -- TODO replace with Double
              | L_Boolean Bool
              | L_String String
              | L_RegExp String
@@ -120,10 +120,29 @@ control flow statements
 everything else
 -}
 
+type Expression = AST
+
+data Statement = TODO_S String
+               | Block [Statement]
+               | Variable Expression (Maybe Expression) -- ^ Ident Assignment, respectively
+               | Constant Expression (Maybe Expression) -- ^ Ident Assignment, respectively
+               | If Expression Statement
+               | IfElse Expression Statement Statement
+               | DoWhile Statement Expression
+               | While Expression Statement
+               | For (Maybe Expression) (Maybe Expression) (Maybe Expression) Statement
+               | ForIn Expression Expression Statement
+               | ForEach Expression Expression Statement
+               | Continue (Maybe Expression)
+               | Break (Maybe Expression)
+               | Return (Maybe Expression)
+               | With Expression Statement
+               | Switch Expression Statement
+
 data AST = TODO String
          | CommentSingle String
          | CommentBlock [String]
-         | Expression [AST]
+         | CommaExpression [AST]
          | ParenGroup AST
          | Identifier String
          | ObjectLiteralX [AST]
@@ -143,12 +162,12 @@ data AST = TODO String
          | Ident [ScopeMod] (Maybe CV) String Type
          | Lit Literal
          -- ^ conditional, body
-         | If AST [AST]
+         {-| If AST [AST]
          | For String
          | ForIn String
          | ForEach String
          | While String
-         | Switch String
+         | Switch String-}
          | PostfixX AST UnaryOp
          | NewX AST
 

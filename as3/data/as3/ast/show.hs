@@ -99,7 +99,7 @@ instance Show AST where
   show (RBinOp op l r) = intercalate " " [show l, show op, show r]
   show (LBinOp op l r) = intercalate " " [show l, show op, show r]
   show (Lit a) = show a
-  show (Expression a) = intercalate ", " $ map show a
+  show (CommaExpression a) = intercalate ", " $ map show a
   show (ParenGroup a) = "(" ++ show a ++ ")"
   --show (If a) = a
   --show (For a) = a

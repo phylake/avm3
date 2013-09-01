@@ -4,6 +4,7 @@ import           Control.Monad.State
 import           Data.AS3.AST.Def
 import           Data.AS3.AST.Grammar.Expressions
 import           Data.AS3.AST.Grammar.Lexicon
+import           Data.AS3.AST.Grammar.Statements
 import           Data.AS3.AST.Prims
 import           Data.AS3.AST.Scope
 import           Data.AS3.AST.Show
