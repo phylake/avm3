@@ -120,8 +120,6 @@ control flow statements
 everything else
 -}
 
-type Expression = AST
-
 data Statement = TODO_S String
                | Block [Statement]
                | Variable Expression (Maybe Expression) -- ^ Ident Assignment, respectively
@@ -138,40 +136,33 @@ data Statement = TODO_S String
                | Return (Maybe Expression)
                | With Expression Statement
                | Switch Expression Statement
+               
+               -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
+               | Package (Maybe String) [Statement]
+               | Import String
+               | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Expression]
+               | Function [ScopeMod] 
 
-data AST = TODO String
-         | CommentSingle String
-         | CommentBlock [String]
-         | CommaExpression [AST]
-         | ParenGroup AST
-         | Identifier String
-         | ObjectLiteralX [AST]
-         | Package (Maybe String) [AST]
-         | Import String
-         -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
-         | Class [ScopeMod] String (Maybe String) (Maybe [String]) [AST]
-         | Function [ScopeMod] 
-         -- ^ "?" is implied since it's the only ternary operator
-         | TernOp AST AST AST
-         | BinOp AST BinaryOp AST
-         | RBinOp BinaryOp AST AST -- ^ right associative
-         | LBinOp BinaryOp AST AST -- ^ left associative
-         | UnaryX UnaryOp AST
-         -- ^ in a function arg list there are no scope modifiers and CV is
-         -- ^ implicity Var
-         | Ident [ScopeMod] (Maybe CV) String Type
-         | Lit Literal
-         -- ^ conditional, body
-         {-| If AST [AST]
-         | For String
-         | ForIn String
-         | ForEach String
-         | While String
-         | Switch String-}
-         | PostfixX AST UnaryOp
-         | NewX AST
+data Expression = TODO_E String
+                | CommentSingle String
+                | CommentBlock [String]
+                | Comma [Expression]
+                | ParenGroup Expression
+                | Identifier String
+                | ObjectLiteral [Expression]
+                -- ^ "?" is implied since it's the only ternary operator
+                | TernOp Expression Expression Expression
+                | RBinOp Expression BinaryOp Expression -- ^ Right associative
+                | LBinOp BinaryOp Expression Expression -- ^ Left associative
+                | Unary UnaryOp Expression
+                -- ^ in a function arg list there are no scope modifiers and CV
+                -- ^ is implicity Var
+                | Ident [ScopeMod] (Maybe CV) String Type
+                | Lit Literal
+                | Postfix Expression UnaryOp
+                | New Expression
 
-{-type AST = Tree NodeData
+{-type Expression = Tree NodeData
 
 -- not sure if I need left sub-tree. test on binary and ternary ops
 data Tree a = End | Node [Tree a] a [Tree a]

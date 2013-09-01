@@ -68,10 +68,10 @@ type_id =
 var_id :: As3Parser String
 var_id = many1 $ alphaNum <|> char '_'
 
-identifier :: As3Parser AST
+identifier :: As3Parser Expression
 identifier = liftM Identifier $ many1 anyChar
 
-ident :: As3Parser AST
+ident :: As3Parser Expression
 ident = liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
 {-ident = do
   ast <- liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
@@ -84,7 +84,7 @@ cv = optionMaybe $
       (string "var " >> return Var)
   <|> (string "const " >> return Const)
 
-identifier_name :: As3Parser AST
+identifier_name :: As3Parser Expression
 identifier_name = undefined
 
 

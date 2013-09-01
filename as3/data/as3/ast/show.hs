@@ -81,8 +81,8 @@ instance Show CV where
   show Const = "const"
   show Var = "var"
 
-instance Show AST where
-  show (TODO a) = a
+instance Show Statement where
+  show (TODO_S a) = a
   show (Package a body) = "package" ++ maybe "" ((++)" ") a
     ++ "\n{\n"
     ++ unlines (map ((++)"\t" . show) body)
@@ -93,18 +93,28 @@ instance Show AST where
     ++ maybe "" (" extends "++) extends
     ++ maybe "" (\i -> " implements " ++ intercalate ", " i) implements
     ++ "\n\t{\n" ++ unlines (map ((++)"\t\t" . show) body) ++ "\n\t}"
+  --show Block [Statement]
+  --show Variable Expression (Maybe Expression)
+  --show Constant Expression (Maybe Expression)
+  --show If Expression Statement
+  --show IfElse Expression Statement Statement
+  --show DoWhile Statement Expression
+  --show While Expression Statement
+  --show For (Maybe Expression) (Maybe Expression) (Maybe Expression) Statement
+  --show ForIn Expression Expression Statement
+  --show ForEach Expression Expression Statement
+  --show Continue (Maybe Expression)
+  --show Break (Maybe Expression)
+  --show Return (Maybe Expression)
+  --show With Expression Statement
+  --show Switch Expression Statement
+
+instance Show Expression where
+  show (TODO_E a) = a
   show (Ident ms cv n t) = intercalate " " (map show ms ++ [maybe "" show cv, n]) ++ ":" ++ show t
   show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f
-  show (BinOp l op r) = intercalate " " [show l, show op, show r]
-  show (RBinOp op l r) = intercalate " " [show l, show op, show r]
+  show (RBinOp l op r) = intercalate " " [show l, show op, show r]
   show (LBinOp op l r) = intercalate " " [show l, show op, show r]
   show (Lit a) = show a
-  show (CommaExpression a) = intercalate ", " $ map show a
+  show (Comma a) = intercalate ", " $ map show a
   show (ParenGroup a) = "(" ++ show a ++ ")"
-  --show (If a) = a
-  --show (For a) = a
-  --show (UnOp a) = a
-  --show (ForIn a) = a
-  --show (ForEach a) = a
-  --show (While a) = a
-  --show (Switch a) = a

@@ -8,36 +8,36 @@ import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
 
 
-function_expression :: As3Parser AST
+function_expression :: As3Parser Expression
 function_expression = fail "function_expression"
 
 
 
 -- $11.1 Primary Expressions
 
-primary_expression :: As3Parser AST
+primary_expression :: As3Parser Expression
 primary_expression =
-      (liftM TODO (try $ string "this"))
+      (liftM TODO_E (try $ string "this"))
   <|> try ident
   <|> try (liftM ParenGroup $ between_parens expression)
-  <|> liftM TODO literal
+  <|> liftM TODO_E literal
   <?> "primary_expression"
 
-array_literal :: As3Parser AST
+array_literal :: As3Parser Expression
 array_literal = undefined
 
-element_list :: As3Parser AST
+element_list :: As3Parser Expression
 element_list = undefined
 
-object_literal :: As3Parser AST
-object_literal = liftM ObjectLiteralX $ between_braces kvps where
-  kvps :: As3Parser [AST]
+object_literal :: As3Parser Expression
+object_literal = liftM ObjectLiteral $ between_braces kvps where
+  kvps :: As3Parser [Expression]
   kvps = property_assignment `sepBy` comma
   
-  property_assignment :: As3Parser AST
+  property_assignment :: As3Parser Expression
   property_assignment = undefined
 
-  property_name :: As3Parser AST
+  property_name :: As3Parser Expression
   property_name =
         try identifier_name
     <|> try (liftM (Lit . L_String) string_literal)
@@ -45,35 +45,35 @@ object_literal = liftM ObjectLiteralX $ between_braces kvps where
 
 -- $11.2 Left-Hand-Side Expressions
 
-member_expression :: As3Parser AST
+member_expression :: As3Parser Expression
 member_expression =
       try primary_expression
   <|> {-try-} function_expression
   -- TODO
 
-new_expression :: As3Parser AST
+new_expression :: As3Parser Expression
 new_expression =
-  try (liftM NewX $ string "new " *> new_expression)
+  try (liftM New $ string "new " *> new_expression)
   <|> member_expression
   <?> "new expression"
 
-call_expression :: As3Parser AST
+call_expression :: As3Parser Expression
 call_expression = fail "call_expression"
 
-arguments :: As3Parser [AST]
+arguments :: As3Parser [Expression]
 arguments = between_parens argument_list
 
-argument_list :: As3Parser [AST]
+argument_list :: As3Parser [Expression]
 argument_list = csv assignment_expression
 
-lhs_expression :: As3Parser AST
+lhs_expression :: As3Parser Expression
 lhs_expression = try new_expression <|> call_expression <?> "lhs_expression"
 
 -- $11.3 Postfix Expressions
 
-postfix_expression :: As3Parser AST
+postfix_expression :: As3Parser Expression
 postfix_expression =
-  try (liftM2 PostfixX (lhs_expression <* ss) unary_expression_post)
+  try (liftM2 Postfix (lhs_expression <* ss) unary_expression_post)
   <|> lhs_expression
   <?> "postfix_expression"
   where
@@ -85,9 +85,9 @@ postfix_expression =
 
 -- $11.4 Unary Operators
 
-unary_expression :: As3Parser AST
+unary_expression :: As3Parser Expression
 unary_expression =
-      try (liftM2 UnaryX unary_expression_pre unary_expression)
+      try (liftM2 Unary unary_expression_pre unary_expression)
   <|> postfix_expression
   where
     unary_expression_pre :: As3Parser UnaryOp
@@ -106,12 +106,12 @@ unary_expression =
 
 -- $11.5 Multiplicative Operators
 
-multiplicative_expression :: As3Parser AST
+multiplicative_expression :: As3Parser Expression
 multiplicative_expression =
   chainl1 (tok unary_expression) multiplicative_op
   <?> "multiplicative expression"
   where
-    multiplicative_op :: As3Parser (AST -> AST -> AST)
+    multiplicative_op :: As3Parser (Expression -> Expression -> Expression)
     multiplicative_op =
           (linkL Multiplication)
       <|> (linkL Division)
@@ -120,12 +120,12 @@ multiplicative_expression =
 
 -- $11.6 Additive Operators
 
-additive_expression :: As3Parser AST
+additive_expression :: As3Parser Expression
 additive_expression =
   chainl1 (tok multiplicative_expression) additive_op
   <?> "additive expression"
   where
-    additive_op :: As3Parser (AST -> AST -> AST)
+    additive_op :: As3Parser (Expression -> Expression -> Expression)
     additive_op =
           (linkL Addition)
       <|> (linkL Subtraction)
@@ -133,12 +133,12 @@ additive_expression =
 
 -- $11.7 Bitwise Shift Operators
 
-shift_expression :: As3Parser AST
+shift_expression :: As3Parser Expression
 shift_expression =
   chainl1 (tok additive_expression) shift_op
   <?> "shift expression"
   where
-    shift_op :: As3Parser (AST -> AST -> AST)
+    shift_op :: As3Parser (Expression -> Expression -> Expression)
     shift_op =
           (linkL LShift)
       <|> (linkL RShift)
@@ -147,11 +147,11 @@ shift_expression =
 
 -- $11.8 Relational Operators
 
-relational_expression :: As3Parser AST
+relational_expression :: As3Parser Expression
 relational_expression =
   chainl1 (tok shift_expression) relational_op <?> "relational expression"
   where
-    relational_op :: As3Parser (AST -> AST -> AST)
+    relational_op :: As3Parser (Expression -> Expression -> Expression)
     relational_op =
           (linkL LessThan)
       <|> (linkL GreaterThan)
@@ -163,11 +163,11 @@ relational_expression =
 
 -- $11.9 Equality Operators
 
-equality_expression :: As3Parser AST
+equality_expression :: As3Parser Expression
 equality_expression =
   chainl1 (tok relational_expression) equality_op <?> "equality expression"
   where
-    equality_op :: As3Parser (AST -> AST -> AST)
+    equality_op :: As3Parser (Expression -> Expression -> Expression)
     equality_op =
           (linkL Equality)
       <|> (linkL StrictEquality)
@@ -177,48 +177,48 @@ equality_expression =
 
 -- $11.10 Binary Bitwise Operators
 
-bitwiseAND_expression :: As3Parser AST
+bitwiseAND_expression :: As3Parser Expression
 bitwiseAND_expression =
   chainl1 (tok equality_expression) (try op) -- try op so part of && isn't consumed
   <?> "bitwise AND expression"
   where
-    op :: As3Parser (AST -> AST -> AST)
+    op :: As3Parser (Expression -> Expression -> Expression)
     op = linkL BitwiseAND
 
-bitwiseXOR_expression :: As3Parser AST
+bitwiseXOR_expression :: As3Parser Expression
 bitwiseXOR_expression =
   chainl1 (tok bitwiseAND_expression) op <?> "bitwise XOR expression"
   where
-    op :: As3Parser (AST -> AST -> AST)
+    op :: As3Parser (Expression -> Expression -> Expression)
     op = linkL BitwiseXOR
 
-bitwiseOR_expression :: As3Parser AST
+bitwiseOR_expression :: As3Parser Expression
 bitwiseOR_expression =
   chainl1 (tok bitwiseXOR_expression) (try op)  -- try op so part of || isn't consumed
   <?> "bitwise OR expression"
   where
-    op :: As3Parser (AST -> AST -> AST)
+    op :: As3Parser (Expression -> Expression -> Expression)
     op = linkL BitwiseOR
 
 -- $11.11 Binary Logical Operators
 
-logicalAND_expression :: As3Parser AST
+logicalAND_expression :: As3Parser Expression
 logicalAND_expression =
   chainl1 (tok bitwiseOR_expression) op <?> "logical AND expression"
   where
-    op :: As3Parser (AST -> AST -> AST)
+    op :: As3Parser (Expression -> Expression -> Expression)
     op = linkL LogicalAND
 
-logicalOR_expression :: As3Parser AST
+logicalOR_expression :: As3Parser Expression
 logicalOR_expression =
    chainl1 (tok logicalAND_expression) op <?> "logical OR expression"
   where
-    op :: As3Parser (AST -> AST -> AST)
+    op :: As3Parser (Expression -> Expression -> Expression)
     op = linkL LogicalOR
 
 -- $11.12 Conditional Operator ( ? : )
 
-conditional_expression :: As3Parser AST
+conditional_expression :: As3Parser Expression
 conditional_expression =
   try (liftM3
          TernOp
@@ -230,9 +230,9 @@ conditional_expression =
 
 -- $11.13 Assignment Operators
 
-assignment_expression :: As3Parser AST
+assignment_expression :: As3Parser Expression
 assignment_expression =
-  try (liftM3 BinOp
+  try (liftM3 RBinOp
          (tok lhs_expression)
          (tok assignment_op)
          assignment_expression)
@@ -257,20 +257,20 @@ assignment_expression =
 
 -- $11.14 Comma Operator
 
-expression :: As3Parser AST
-expression = liftM CommaExpression (assignment_expression `sepBy` comma)
+expression :: As3Parser Expression
+expression = liftM Comma (assignment_expression `sepBy` comma)
 
 -- $Chain links
 
-linkR :: BinaryOp -> As3Parser (AST -> AST -> AST)
-linkR = linkCommon RBinOp
+{-linkR :: BinaryOp -> As3Parser (Expression -> Expression -> Expression)
+linkR = linkCommon RBinOp-}
 
-linkL :: BinaryOp -> As3Parser (AST -> AST -> AST)
+linkL :: BinaryOp -> As3Parser (Expression -> Expression -> Expression)
 linkL = linkCommon LBinOp
 
-linkCommon :: (BinaryOp -> AST -> AST -> AST)
+linkCommon :: (BinaryOp -> Expression -> Expression -> Expression)
            -> BinaryOp
-           -> As3Parser (AST -> AST -> AST)
+           -> As3Parser (Expression -> Expression -> Expression)
 linkCommon f op = try $ tok pop >> notFollowedBy pop >> return (f op)
   where
     pop = string (show op)
