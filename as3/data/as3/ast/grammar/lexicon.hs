@@ -34,13 +34,13 @@ scope_mods :: As3Parser [ScopeMod]
 scope_mods = tok (scope_mod `sepEndBy1` (many1 $ char ' ')) <?> "scope modifiers"
   where
     scope_mod :: As3Parser ScopeMod
-    scope_mod = (try $
-          (string "public"    >> return Public)
-      <|> (string "protected" >> return Protected)
-      <|> (string "private"   >> return Private)
-      <|> (string "final"     >> return Final)
-      <|> (string "override"  >> return Override)
-      <|> (string "static"    >> return Static)) <?> "scope modifier"
+    scope_mod =
+          try (string "public"    >> return Public)
+      <|> try (string "protected" >> return Protected)
+      <|>     (string "private"   >> return Private)
+      <|>     (string "final"     >> return Final)
+      <|>     (string "override"  >> return Override)
+      <|>     (string "static"    >> return Static) <?> "scope modifier"
 
 type_whitelist :: As3Parser String
 type_whitelist = do
@@ -303,8 +303,6 @@ string_literal = do
 
 quote :: As3Parser Char
 quote = char '\'' <|> char '\"'
---quote :: As3Parser String
---quote = string "\'" <|> string "\""
 
 -- $7.8.5 Regular Expressions
 
