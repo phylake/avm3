@@ -10,13 +10,22 @@ cabal-dev
 *.chs.h
 *.prof
 
+# haxe
+*.hx
+*.n
+
+# flash
+*.amf
+*.swf
+*.abc
+*.as
+*-app.xml
+
 # misc
 *.sublime-workspace
 *.pdf
-*.swf
-*.abc
-*.amf
 *.gz
 *.zip
 *.rb
-*.as
+*.ll
+test*.hs

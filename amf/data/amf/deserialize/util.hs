@@ -87,26 +87,3 @@ toStrict = return . B.pack . BL.unpack
 
 p :: String -> Parser ()
 p = ML.lift . lift . lift . putStrLn
-
-{-
-BEGIN test code
--}
-
-{-
-test :: IO ()
-test = do
-  (amfs :: [Amf], (string, cot, tt)) <- deserialize "file.amf"
-  putStrLn "AMFS"
-  putStrLn $ unlines $ Prelude.map show amfs
-  putStrLn "TABLES - STRINGS"
-  putStrLn $ unlines $ Prelude.map show string
-  putStrLn "TABLES - COMPLEX OBJECTS"
-  putStrLn $ unlines $ Prelude.map show cot
-  putStrLn "TABLES - TRAITS"
-  putStrLn $ unlines $ Prelude.map show tt
-  return ()
--}
-
-{-
-END test code
--}
