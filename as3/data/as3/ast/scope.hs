@@ -55,7 +55,7 @@ build_scope_tree files = do
           , ("_equipment", (InstanceId [Public] T_int))
           , ("_gadgets", (InstanceId [Public] T_int))
           , ("_actions", (InstanceId [Public] T_int))
-          , ("STATIC", (ClassId [Public] T_String))
+          , ("STATIC", (ClassId2 [Public] T_String))
           ]
 
 get_scope :: String -- ^ The class containing an identifier

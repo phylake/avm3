@@ -7,18 +7,12 @@ import           Data.AS3.AST.Prims
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
 
-
-function_expression :: As3Parser Expression
-function_expression = fail "function_expression"
-
-
-
 -- $11.1 Primary Expressions
 
 primary_expression :: As3Parser Expression
 primary_expression =
       (liftM TODO_E (try $ string "this"))
-  <|> try ident
+  <|> try function_body_id
   <|> try (liftM ParenGroup $ between_parens comma_expression)
   <|> liftM TODO_E literal
   <?> "primary_expression"
@@ -48,12 +42,18 @@ object_literal = liftM ObjectLiteral $ between_braces kvps where
 member_expression :: As3Parser Expression
 member_expression =
       try primary_expression
-  <|> {-try-} function_expression
-  -- TODO
+  {-<|> try function_expression-}
+
+function_expression :: As3Parser Expression
+function_expression = undefined
+{-function_expression = liftM3 FunctionExp
+                        (optionMaybe identifier)
+                        comma_expression
+                        (many statement)-}
 
 new_expression :: As3Parser Expression
 new_expression =
-  try (liftM New $ string "new " *> new_expression)
+      try (liftM New $ string "new " *> new_expression)
   <|> member_expression
   <?> "new expression"
 
@@ -73,7 +73,7 @@ lhs_expression = try new_expression <|> call_expression <?> "lhs_expression"
 
 postfix_expression :: As3Parser Expression
 postfix_expression =
-  try (liftM2 Postfix (lhs_expression <* ss) unary_expression_post)
+      try (liftM2 Postfix (lhs_expression <* ss) unary_expression_post)
   <|> lhs_expression
   <?> "postfix_expression"
   where
@@ -257,11 +257,15 @@ assignment_expression =
 
 -- $11.14 Comma Operator
 
+-- TODO Expression == ArgumentList. resolve this
 comma_expression :: As3Parser Expression
-comma_expression = liftM Comma (assignment_expression `sepBy` comma)
+comma_expression = liftM Comma (assignment_expression `sepBy1` comma)
 
 expression :: As3Parser Expression
 expression = comma_expression
+
+expressionNoIn :: As3Parser Expression
+expressionNoIn = expression -- TODO
 
 -- $Chain links
 

@@ -21,68 +21,73 @@ scope_id = do
   try $foldl plusfold (string k) (klasses ++ fns)
   <?> "scope id"-}
 
-function_id :: As3Parser String
-function_id = many1 $ alphaNum <|> char '_'
-
-
-
-
-
 -- $7.6 Identifier Names and Identifiers
 
 scope_mods :: As3Parser [ScopeMod]
-scope_mods = tok (scope_mod `sepEndBy1` (many1 $ char ' ')) <?> "scope modifiers"
+scope_mods = scope_mod `sepEndBy1` (many1 $ char ' ') <?> "scope modifiers"
   where
     scope_mod :: As3Parser ScopeMod
     scope_mod =
           try (string "public"    >> return Public)
       <|> try (string "protected" >> return Protected)
-      <|>     (string "private"   >> return Private)
-      <|>     (string "final"     >> return Final)
-      <|>     (string "override"  >> return Override)
+      <|> try (string "private"   >> return Private)
+      <|> try (string "final"     >> return Final)
+      <|> try (string "override"  >> return Override)
       <|>     (string "static"    >> return Static) <?> "scope modifier"
 
-type_whitelist :: As3Parser String
-type_whitelist = do
+user_defined_type :: As3Parser String
+user_defined_type = do
   ht <- gets t31 >>= liftIO
   list <- map fst A.<$> (liftIO $ H.toList ht)
-  --p$ "type_whitelist\n" ++ show list
+  --p$ "user_defined_type\n" ++ show list
   foldl plusfold (string $ head list) (drop 1 list)
 
-class_id :: As3Parser String
-class_id = type_whitelist <?> "class/interface def"
+extendable_type :: As3Parser String
+extendable_type = user_defined_type
 
-type_id :: As3Parser Type
-type_id =
-      (liftM T_UserDefined $ try type_whitelist)
-  <|> (string "int" >> return T_int)
-  <|> (string "uint" >> return T_uint)
-  <|> (string "void" >> return T_void)
-  <|> (string "Number" >> return T_Number)
-  <|> (string "Boolean" >> return T_Boolean)
-  <|> (string "String" >> return T_String)
-  <|> (string "Array" >> return T_Array)
-  <|> (string "Vector.<" *> type_id <* string ">" >>= return . T_Vector)
+implementable_type :: As3Parser String
+implementable_type = user_defined_type
+
+as3_type :: As3Parser Type
+as3_type =
+      try (liftM T_UserDefined user_defined_type)
+  <|> try (string "int" >> return T_int)
+  <|> try (string "uint" >> return T_uint)
+  <|> try (string "void" >> return T_void)
+  <|> try (string "*" >> return T_undefined)
+  <|> try (string "undefined" >> return T_undefined)
+  <|> try (string "Number" >> return T_Number)
+  <|> try (string "Boolean" >> return T_Boolean)
+  <|> try (string "String" >> return T_String)
+  <|> try (string "Array" >> return T_Array)
+  <|>     (string "Vector.<" *> as3_type <* string ">" >>= return . T_Vector)
   <?> "type id"
 
 var_id :: As3Parser String
 var_id = many1 $ alphaNum <|> char '_'
 
-identifier :: As3Parser Expression
-identifier = liftM Identifier $ many1 anyChar
+function_param_id :: As3Parser Expression
+function_param_id = liftM2 FnParamId var_id type_declaration
 
-ident :: As3Parser Expression
-ident = liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
+function_body_id :: As3Parser Expression
+function_body_id = liftM3 FnId cv var_id type_declaration
+
+class_id :: As3Parser Expression
+class_id = liftM4 ClassId scope_mods cv var_id type_declaration
+
+{-ident :: As3Parser Expression
+ident = liftM4 Ident scope_mods cv var_id -}
 {-ident = do
-  ast <- liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> type_id <* ss)
+  ast <- liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> as3_type <* ss)
   p$ "ident " ++ show ast
   return ast-}
 
 -- TODO classify class id, function id so there's no Maybe
-cv :: As3Parser (Maybe CV)
-cv = optionMaybe $
-      (string "var " >> return Var)
-  <|> (string "const " >> return Const)
+cv :: As3Parser CV
+cv = (string "var " >> return Var) <|> (string "const " >> return Const)
+
+type_declaration :: As3Parser Type
+type_declaration = option T_undefined $ ss *> char ':' *> ss *> as3_type
 
 identifier_name :: As3Parser Expression
 identifier_name = undefined

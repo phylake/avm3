@@ -82,6 +82,26 @@ instance Show CV where
   show Var = "var"
 
 instance Show Statement where
+  show EmptyS = ""
+  show (Block sts) = "{\n" ++ unlines (map show sts) ++ "\n}"
+  show (Variable e me) = show e ++ maybe "" (\a -> " " ++ show a) me
+  show (Constant e me) = show e ++ maybe "" (\a -> " " ++ show a) me
+  show (ExpressionStmt e) = show e
+  show (If e (Block s)) = "if (" ++ show e ++ ")\n{\n" ++ show s ++ "\n}\n"
+  show (If e s) = "if (" ++ show e ++ ") " ++ show s ++ ";"
+  {-show (IfElse e s1 s2)-}
+  {-show (DoWhile s e)-}
+  {-show (While e s)-}
+  {-show (For me1 me2 me3 s)-}
+  {-show (ForIn e1 e2 s)-}
+  {-show (ForEach e1 e2 s)-}
+  {-show (Continue me)-}
+  {-show (Break me)-}
+  {-show (Return me)-}
+  {-show (With e s)-}
+  {-show (Switch e s)-}
+  {-show (Case e ms)-}
+  {-show (Default ms)-}
   show (Package a body) = "package" ++ maybe "" ((++)" ") a
     ++ "\n{\n"
     ++ unlines (map ((++)"\t" . show) body)
@@ -92,25 +112,13 @@ instance Show Statement where
     ++ maybe "" (" extends "++) extends
     ++ maybe "" (\i -> " implements " ++ intercalate ", " i) implements
     ++ "\n\t{\n" ++ unlines (map ((++)"\t\t" . show) body) ++ "\n\t}"
-  --show Block [Statement]
-  --show Variable Expression (Maybe Expression)
-  --show Constant Expression (Maybe Expression)
-  --show If Expression Statement
-  --show IfElse Expression Statement Statement
-  --show DoWhile Statement Expression
-  --show While Expression Statement
-  --show For (Maybe Expression) (Maybe Expression) (Maybe Expression) Statement
-  --show ForIn Expression Expression Statement
-  --show ForEach Expression Expression Statement
-  --show Continue (Maybe Expression)
-  --show Break (Maybe Expression)
-  --show Return (Maybe Expression)
-  --show With Expression Statement
-  --show Switch Expression Statement
 
 instance Show Expression where
   show (TODO_E a) = a
-  show (Ident ms cv n t) = intercalate " " (map show ms ++ [maybe "" show cv, n]) ++ ":" ++ show t
+  show (Identifier a) = a
+  show (ClassId ms cv n t) = intercalate " " (map show ms ++ [show cv, n]) ++ ":" ++ show t
+  show (FnId cv n t) = intercalate " " [show cv, n] ++ ":" ++ show t
+  show (FnParamId n t) = show n ++ ":" ++ show t
   show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f
   show (RBinOp l op r) = intercalate " " [show l, show op, show r]
   show (LBinOp op l r) = intercalate " " [show l, show op, show r]

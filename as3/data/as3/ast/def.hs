@@ -15,7 +15,7 @@ p = liftIO . putStrLn
 --type M = StateT ([ClassInterface], ScopeChain) IO
 
 {- (params, type) -}
-data ScopeId = ClassId [ScopeMod] Type
+data ScopeId = ClassId2 [ScopeMod] Type
              | ClassFn [ScopeMod] [Type] Type -- ^ scopes, params, return
              | InstanceId [ScopeMod] Type
              | InstanceFn [ScopeMod] [Type] Type -- ^ scopes, params, return
@@ -23,9 +23,15 @@ type Identifiers = H.BasicHashTable String ScopeId
 type ScopeTree = H.BasicHashTable String Identifiers
 
 type This = String
-type NothingJustNeededToRecompile = [String]
 
-type M = StateT (IO ScopeTree, This, NothingJustNeededToRecompile) IO
+type M = StateT (IO ScopeTree, This, [String]) IO
+
+{-push_scope2 :: M ()
+push_scope2 = do
+  (scopeTree, t, l) <- get
+  return ()
+  set (scopeTree, t, l+1)-}
+
 
 --type ScopeIdParser = ParsecT String () IO [ScopeId]
 type As3Parser = ParsecT String () M
@@ -85,6 +91,7 @@ data UnaryOp = Delete
 data Type = T_int
           | T_uint
           | T_void
+          | T_undefined
           | T_Number
           | T_Boolean
           | T_String
@@ -107,6 +114,7 @@ data CV = Const | Var
 data ScopeMod = Public
               | Protected
               | Private
+              | Internal
               | Final
               | Override
               | Static
@@ -120,7 +128,7 @@ control flow statements
 everything else
 -}
 
-data Statement = EmptyStatement
+data Statement = EmptyS
                | Block [Statement]
                | Variable Expression (Maybe Expression) -- ^ Ident Assignment, respectively
                | Constant Expression (Maybe Expression) -- ^ Ident Assignment, respectively
@@ -137,12 +145,15 @@ data Statement = EmptyStatement
                | Return (Maybe Expression)
                | With Expression Statement
                | Switch Expression Statement
+               | Case Expression (Maybe Statement)
+               | Default (Maybe Statement)
                
                | Package (Maybe String) [Statement]
                | Import String
                -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
                | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Statement]
-               | Function [ScopeMod] 
+                -- ^ [public] <name> <params> <return> <body>
+               | FnDec [ScopeMod] String [Expression] Type [Statement]
 
 data Expression = TODO_E String
                 | CommentSingle String
@@ -158,10 +169,15 @@ data Expression = TODO_E String
                 | Unary UnaryOp Expression
                 -- ^ in a function arg list there are no scope modifiers and CV
                 -- ^ is implicity Var
-                | Ident [ScopeMod] (Maybe CV) String Type
+                | ClassId [ScopeMod] CV String Type
+                | FnId CV String Type
+                | FnParamId String Type
+--                | Ident [ScopeMod] (Maybe CV) String Type
                 | Lit Literal
                 | Postfix Expression UnaryOp
                 | New Expression
+                -- ^ 
+                | FnExp (Maybe Expression) [Expression] [Statement]
 
 {-type Expression = Tree NodeData
 
