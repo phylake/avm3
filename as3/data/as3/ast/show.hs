@@ -82,7 +82,6 @@ instance Show CV where
   show Var = "var"
 
 instance Show Statement where
-  show (TODO_S a) = a
   show (Package a body) = "package" ++ maybe "" ((++)" ") a
     ++ "\n{\n"
     ++ unlines (map ((++)"\t" . show) body)

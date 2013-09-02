@@ -19,7 +19,7 @@ primary_expression :: As3Parser Expression
 primary_expression =
       (liftM TODO_E (try $ string "this"))
   <|> try ident
-  <|> try (liftM ParenGroup $ between_parens expression)
+  <|> try (liftM ParenGroup $ between_parens comma_expression)
   <|> liftM TODO_E literal
   <?> "primary_expression"
 
@@ -257,8 +257,11 @@ assignment_expression =
 
 -- $11.14 Comma Operator
 
+comma_expression :: As3Parser Expression
+comma_expression = liftM Comma (assignment_expression `sepBy` comma)
+
 expression :: As3Parser Expression
-expression = liftM Comma (assignment_expression `sepBy` comma)
+expression = comma_expression
 
 -- $Chain links
 

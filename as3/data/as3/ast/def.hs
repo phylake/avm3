@@ -120,10 +120,11 @@ control flow statements
 everything else
 -}
 
-data Statement = TODO_S String
+data Statement = EmptyStatement
                | Block [Statement]
                | Variable Expression (Maybe Expression) -- ^ Ident Assignment, respectively
                | Constant Expression (Maybe Expression) -- ^ Ident Assignment, respectively
+               | ExpressionStmt Expression
                | If Expression Statement
                | IfElse Expression Statement Statement
                | DoWhile Statement Expression
@@ -137,10 +138,10 @@ data Statement = TODO_S String
                | With Expression Statement
                | Switch Expression Statement
                
-               -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
                | Package (Maybe String) [Statement]
                | Import String
-               | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Expression]
+               -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
+               | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Statement]
                | Function [ScopeMod] 
 
 data Expression = TODO_E String
