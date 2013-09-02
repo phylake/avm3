@@ -62,6 +62,7 @@ instance Show Type where
   show T_int = "int"
   show T_uint = "uint"
   show T_void = "void"
+  show T_undefined = "*"
   show T_Number = "Number"
   show T_Boolean = "Boolean"
   show T_String = "String"
@@ -89,19 +90,19 @@ instance Show Statement where
   show (ExpressionStmt e) = show e
   show (If e (Block s)) = "if (" ++ show e ++ ")\n{\n" ++ show s ++ "\n}\n"
   show (If e s) = "if (" ++ show e ++ ") " ++ show s ++ ";"
-  {-show (IfElse e s1 s2)-}
-  {-show (DoWhile s e)-}
-  {-show (While e s)-}
-  {-show (For me1 me2 me3 s)-}
-  {-show (ForIn e1 e2 s)-}
-  {-show (ForEach e1 e2 s)-}
-  {-show (Continue me)-}
-  {-show (Break me)-}
-  {-show (Return me)-}
-  {-show (With e s)-}
-  {-show (Switch e s)-}
-  {-show (Case e ms)-}
-  {-show (Default ms)-}
+  show (IfElse e s1 s2) = "IfElse"
+  show (DoWhile s e) = "DoWhile"
+  show (While e s) = "While"
+  show (For me1 me2 me3 s) = "For"
+  show (ForIn e1 e2 s) = "ForIn"
+  show (ForEach e1 e2 s) = "ForEach"
+  show (Continue me) = "Continue"
+  show (Break me) = "Break"
+  show (Return me) = "Return"
+  show (With e s) = "With"
+  show (Switch e s) = "Switch"
+  show (Case e ms) = "Case"
+  show (Default ms) = "Default"
   show (Package a body) = "package" ++ maybe "" ((++)" ") a
     ++ "\n{\n"
     ++ unlines (map ((++)"\t" . show) body)
@@ -112,13 +113,17 @@ instance Show Statement where
     ++ maybe "" (" extends "++) extends
     ++ maybe "" (\i -> " implements " ++ intercalate ", " i) implements
     ++ "\n\t{\n" ++ unlines (map ((++)"\t\t" . show) body) ++ "\n\t}"
+  show (FnDec scopes name params t body) =
+    intercalate " " (map show scopes) ++ " function " ++ name
+    ++ "(" ++ intercalate ", " (map show params) ++ "):" ++ show t ++ "\n"
+    ++ "\t\t{\n" ++ unlines (map ((++)"\t\t\t" . show) body) ++ "\n\t\t}"
 
 instance Show Expression where
   show (TODO_E a) = a
   show (Identifier a) = a
   show (ClassId ms cv n t) = intercalate " " (map show ms ++ [show cv, n]) ++ ":" ++ show t
   show (FnId cv n t) = intercalate " " [show cv, n] ++ ":" ++ show t
-  show (FnParamId n t) = show n ++ ":" ++ show t
+  show (FnParamId n t) = n ++ ":" ++ show t
   show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f
   show (RBinOp l op r) = intercalate " " [show l, show op, show r]
   show (LBinOp op l r) = intercalate " " [show l, show op, show r]

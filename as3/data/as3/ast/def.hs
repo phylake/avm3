@@ -1,6 +1,6 @@
 module Data.AS3.AST.Def where
 
-import           Control.Monad.State (StateT, liftIO)
+import           Control.Monad.State
 import           Data.Foldable
 import           Prelude hiding (foldr)
 import           Text.Parsec (ParsecT)
@@ -22,19 +22,31 @@ data ScopeId = ClassId2 [ScopeMod] Type
 type Identifiers = H.BasicHashTable String ScopeId
 type ScopeTree = H.BasicHashTable String Identifiers
 
-type This = String
-
-type M = StateT (IO ScopeTree, This, [String]) IO
-
-{-push_scope2 :: M ()
-push_scope2 = do
-  (scopeTree, t, l) <- get
-  return ()
-  set (scopeTree, t, l+1)-}
-
+type M = StateT (IO ScopeTree, ParseScope, [String]) IO
 
 --type ScopeIdParser = ParsecT String () IO [ScopeId]
 type As3Parser = ParsecT String () M
+
+-- ^ Swapped during parsing to alter the underlying grammar
+data ParseScope = PS_Class
+                | PS_Function
+                | PS_FunctionParams
+                deriving (Eq)
+
+set_scope :: ParseScope -> As3Parser ()
+set_scope new = do
+  (a, _, c) <- lift get
+  lift $ put (a, new, c)
+
+get_scope :: As3Parser ParseScope
+get_scope = do
+  (a, b, c) <- lift get
+  return b
+
+is_scope :: ParseScope -> As3Parser Bool
+is_scope ps2 = do
+  ps1 <- get_scope
+  return $ ps1 == ps2
 
 data BinaryOp = Addition
               | Subtraction
@@ -177,7 +189,7 @@ data Expression = TODO_E String
                 | Postfix Expression UnaryOp
                 | New Expression
                 -- ^ 
-                | FnExp (Maybe Expression) [Expression] [Statement]
+--                | FnExp (Maybe Expression) [Expression] [Statement]
 
 {-type Expression = Tree NodeData
 

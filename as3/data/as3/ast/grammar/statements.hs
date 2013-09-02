@@ -45,22 +45,22 @@ source_element = try statement <|> function_declaration
 --source_element = statement
 
 function_declaration :: As3Parser Statement
-function_declaration = liftM5 FnDec
-                         (scope_mods)
-                         (string "function " *> var_id)
-                         (between_parens $ many function_param_id)
-                         (char ':' *> as3_type)
-                         (between_braces $ many statement)
-{-function_declaration = do
-  mods <- scope_mods
-  name <- string "function " *> identifier
-  p$ "name " ++ show name
-  params <- between_parens $ many identifier
-  p$ "params " ++ show params
-  ret <- char ':' *> identifier
-  p$ "ret " ++ show ret
+{-function_declaration = liftM5 FnDec
+  scope_mods
+  (string "function " *> var_id)
+  (set_scope PS_FunctionParams $ between_parens $ function_param_id `sepBy` tok (char ','))
+  (char ':' *> as3_type)
+  (set_scope PS_Function *> (between_braces $ many statement))-}
+function_declaration = do
+  mods <- scope_mods <* string "function "
+  name <- var_id
+  set_scope PS_FunctionParams
+  params <- between_parens $ assignment_expression `sepBy` tok (char ',')
+  ret <- char ':' *> as3_type
+  set_scope PS_Function
   body <- between_braces $ many statement
-  return $ FunctionDec mods name params ret body-}
+  set_scope PS_Class
+  return $ FnDec mods name params ret body
 
 statement :: As3Parser Statement
 statement =

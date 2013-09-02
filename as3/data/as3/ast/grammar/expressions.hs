@@ -12,10 +12,18 @@ import           Text.Parsec
 primary_expression :: As3Parser Expression
 primary_expression =
       (liftM TODO_E (try $ string "this"))
-  <|> try function_body_id
+  <|> try scoped_identifier
   <|> try (liftM ParenGroup $ between_parens comma_expression)
   <|> liftM TODO_E literal
   <?> "primary_expression"
+  where
+    scoped_identifier :: As3Parser Expression
+    scoped_identifier = do
+      ps <- get_scope
+      case ps of
+        PS_Class -> class_id
+        PS_Function -> function_body_id
+        PS_FunctionParams -> function_param_id
 
 array_literal :: As3Parser Expression
 array_literal = undefined
@@ -146,6 +154,9 @@ shift_expression =
       <?> "bitwise shift operator"
 
 -- $11.8 Relational Operators
+
+{- TODO ...NoIn
+   relational_expression :: Bool -> As3Parser Expression -}
 
 relational_expression :: As3Parser Expression
 relational_expression =
