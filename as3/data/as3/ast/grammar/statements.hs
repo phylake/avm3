@@ -2,9 +2,10 @@ module Data.AS3.AST.Grammar.Statements where
 
 import           Control.Monad
 import           Data.AS3.AST.Def
-import           Data.AS3.AST.Grammar.Lexicon
 import           Data.AS3.AST.Grammar.Expressions
+import           Data.AS3.AST.Grammar.Lexicon
 import           Data.AS3.AST.Prims
+import           Data.AS3.AST.Scope
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
 
@@ -36,13 +37,21 @@ as3_class = do
   name <- tok user_defined_type
   extends <- optionMaybe $ string "extends " *> extendable_type <* ss -- make sure "extends" is the first match in order to fail fast and return Nothing
   implements <- optionMaybe $ string "implements " *> csv implementable_type -- make sure "implements" is the first match in order to fail fast and return Nothing
-  --body <- between_braces $ many class_body       for [Expression]
   body <- between_braces $ many $ tok (source_element <* optional semi)
+  --body <- between_braces $ many $ expanded
   return $ Class scopes name extends implements body
+  where
+    expanded = do
+      --srce <- tok (source_element <* optional semi)
+      p "entering source_element"
+      srce <- source_element
+      p$ show "source_element " ++ show srce
+      optional semi
+      skipMany spaces
+      return srce
 
 source_element :: As3Parser Statement
-source_element = try statement <|> function_declaration
---source_element = statement
+source_element = try tstatement <|> function_declaration
 
 function_declaration :: As3Parser Statement
 {-function_declaration = liftM5 FnDec
@@ -54,19 +63,32 @@ function_declaration :: As3Parser Statement
 function_declaration = do
   mods <- scope_mods <* string "function "
   name <- var_id
+  original <- get_scope
   set_scope PS_FunctionParams
-  params <- between_parens $ assignment_expression `sepBy` tok (char ',')
+  params <- between_parens $ assignment_expression `sepBy` comma
   ret <- char ':' *> as3_type
-  set_scope PS_Function
-  body <- between_braces $ many statement
-  set_scope PS_Class
+  
+  -- BEFORE
+  {-set_scope PS_Function
+  body <- between_braces $ many tstatement
+  set_scope original-}
+  
+  -- AFTER
+  set_scope original
+  body <- between_braces $ many tstatement
+
+  exit_fn
+  
   return $ FnDec mods name params ret body
+
+tstatement :: As3Parser Statement
+tstatement = tok (statement <* optional semi)
 
 statement :: As3Parser Statement
 statement =
       try block_statement
   <|> try variable_statement
-  <|> try constant_statement -- ^ not part of ECMA-262
+  <|> try constant_statement -- ^ ‡
   <|> try empty_statement
   <|> try expression_statement
   <|> try if_statement
@@ -81,15 +103,26 @@ statement =
   <|>     try_statement-}
 
 block_statement :: As3Parser Statement
-block_statement = liftM Block $ between_braces $ many statement
+block_statement = liftM Block $ between_braces $ many tstatement
 
 variable_statement :: As3Parser Statement
 variable_statement =
-  string "var " *> liftM2 Variable assignment_expression (return Nothing)
+  {-string "var " *> with_scope PS_FunctionParams idents <* optional semi where
+    idents = liftM Variable $ assignment_expression `sepBy1` comma-}
+  do
+    original <- get_scope
+    set_scope PS_FunctionParams
+    string "var "
+    assign <- assignment_expression `sepBy1` comma >>= add_ids
+    p$ "variable_statement " ++ show assign
+    optional semi
+    set_scope original
+    return $ Variable assign
 
 constant_statement :: As3Parser Statement
 constant_statement =
-  string "const " *> liftM2 Constant assignment_expression (return Nothing)
+  string "const " *> with_scope PS_FunctionParams idents <* optional semi where
+    idents = liftM Constant $ assignment_expression `sepBy1` comma
 
 empty_statement :: As3Parser Statement
 empty_statement = semi *> return EmptyS
@@ -98,15 +131,12 @@ expression_statement :: As3Parser Statement
 expression_statement = do
   notFollowedBy $ char '{'
   notFollowedBy $ string "function"
-  liftM ExpressionStmt expression
-  {-    try (lookAhead $ char '{' >> fail "")
-  <|> try (lookAhead $ string "function" >> fail "")
-  <|> liftM ExpressionStmt expression-}
+  liftM ExpressionStmt expression <* optional semi
 
 if_statement :: As3Parser Statement
 if_statement = liftM2 If
   (string "if" *> between_parens expression)
-  (between_braces statement <|> (statement <* semi))
+  tstatement
 
 iteration_statement :: As3Parser Statement
 iteration_statement =
@@ -123,9 +153,17 @@ iteration_statement =
                  (string "while" *> between_parens expression)
 
     while :: As3Parser Statement
-    while = liftM2 While
+    {-while = liftM2 While
               (string "while" *> between_parens expression)
-              (statement)
+              (statement)-}
+    while = do
+      e <- (string "while" *> {-with_scope PS_Expression-} (between_parens expression))
+      p$ "while"
+      p$ "\texp " ++ show e
+      pxy
+      s <- (statement)
+      p$ "\tsmt " ++ show s
+      return $ While e s
 
     for :: As3Parser Statement
     for = liftM4 For

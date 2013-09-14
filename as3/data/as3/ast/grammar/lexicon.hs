@@ -3,6 +3,7 @@ module Data.AS3.AST.Grammar.Lexicon where
 import           Control.Monad.State
 import           Data.AS3.AST.Def
 import           Data.AS3.AST.Prims
+import           Data.AS3.AST.Scope
 import           Data.AS3.AST.Show
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
@@ -22,6 +23,22 @@ scope_id = do
   <?> "scope id"-}
 
 -- $7.6 Identifier Names and Identifiers
+
+scoped_identifier :: As3Parser Expression
+scoped_identifier = do
+  ps <- get_scope
+  p$ "scoped_identifier " ++ show ps
+  case ps of
+    -- OLD
+    {-PS_Class -> class_id
+    PS_Function -> function_body_id
+    PS_FunctionParams -> function_param_id
+    PS_Expression -> expression_id-}
+
+    -- NEW
+    PS_Class -> class_id
+    PS_Function -> expression_id
+    PS_FunctionParams -> function_param_id
 
 scope_mods :: As3Parser [ScopeMod]
 scope_mods = scope_mod `sepEndBy1` (many1 $ char ' ') <?> "scope modifiers"
@@ -60,37 +77,33 @@ as3_type =
   <|> try (string "Boolean" >> return T_Boolean)
   <|> try (string "String" >> return T_String)
   <|> try (string "Array" >> return T_Array)
+  <|> try (string "Object" >> return T_Object)
   <|>     (string "Vector.<" *> as3_type <* string ">" >>= return . T_Vector)
   <?> "type id"
 
 var_id :: As3Parser String
-var_id = many1 $ alphaNum <|> char '_'
-
-function_param_id :: As3Parser Expression
-function_param_id = liftM2 FnParamId var_id type_declaration
-
-function_body_id :: As3Parser Expression
-function_body_id = liftM3 FnId cv var_id type_declaration
+var_id = liftM2 (++) beg end
+  where
+    beg = many1 $ letter   <|> char '_'
+    end = many  $ alphaNum <|> char '_'
 
 class_id :: As3Parser Expression
 class_id = liftM4 ClassId scope_mods cv var_id type_declaration
 
-{-ident :: As3Parser Expression
-ident = liftM4 Ident scope_mods cv var_id -}
-{-ident = do
-  ast <- liftM4 Ident scope_mods cv var_id (ss *> char ':' *> ss *> as3_type <* ss)
-  p$ "ident " ++ show ast
-  return ast-}
+function_body_id :: As3Parser Expression
+function_body_id = liftM3 FnId cv var_id type_declaration
 
--- TODO classify class id, function id so there's no Maybe
+function_param_id :: As3Parser Expression
+function_param_id = liftM2 FnParamId var_id type_declaration
+
+expression_id :: As3Parser Expression
+expression_id = liftM ExpressionId var_id
+
 cv :: As3Parser CV
 cv = (string "var " >> return Var) <|> (string "const " >> return Const)
 
 type_declaration :: As3Parser Type
-type_declaration = option T_undefined $ ss *> char ':' *> ss *> as3_type
-
-identifier_name :: As3Parser Expression
-identifier_name = undefined
+type_declaration = ss *> char ':' *> ss *> as3_type
 
 
 
@@ -258,13 +271,16 @@ decimal_literal =
 decimal_integer_literal :: As3Parser String
 decimal_integer_literal =
       string "0"
-  <|> (non_zero_digit >> try decimal_digits)
+  <|> (liftM2 (++) non_zero_digits (option "" decimal_digits))
 
 decimal_digits :: As3Parser String
 decimal_digits = many1 decimal_digit
 
 decimal_digit :: As3Parser Char
 decimal_digit = char '0' <|> non_zero_digit
+
+non_zero_digits :: As3Parser String
+non_zero_digits = many1 non_zero_digit
 
 non_zero_digit :: As3Parser Char
 non_zero_digit =

@@ -85,14 +85,14 @@ instance Show CV where
 instance Show Statement where
   show EmptyS = ""
   show (Block sts) = "{\n" ++ unlines (map show sts) ++ "\n}"
-  show (Variable e me) = show e ++ maybe "" (\a -> " " ++ show a) me
-  show (Constant e me) = show e ++ maybe "" (\a -> " " ++ show a) me
+  show (Variable e) = "var " ++ intercalate ", " (map show e) ++ ";"
+  show (Constant e) = "const " ++ intercalate ", " (map show e) ++ ";"
   show (ExpressionStmt e) = show e
   show (If e (Block s)) = "if (" ++ show e ++ ")\n{\n" ++ show s ++ "\n}\n"
   show (If e s) = "if (" ++ show e ++ ") " ++ show s ++ ";"
   show (IfElse e s1 s2) = "IfElse"
   show (DoWhile s e) = "DoWhile"
-  show (While e s) = "While"
+  show (While e s) = "while (" ++ show e ++ ")\n" ++ show s
   show (For me1 me2 me3 s) = "For"
   show (ForIn e1 e2 s) = "ForIn"
   show (ForEach e1 e2 s) = "ForEach"
@@ -120,10 +120,12 @@ instance Show Statement where
 
 instance Show Expression where
   show (TODO_E a) = a
-  show (Identifier a) = a
-  show (ClassId ms cv n t) = intercalate " " (map show ms ++ [show cv, n]) ++ ":" ++ show t
+  show (ObjectLiteral kvps) = "{" ++ intercalate ", " (map show kvps) ++ "}"
+  show (KeyValue k v) = show k ++ ":" ++ show v
+  show (ClassId ms cv n t) = intercalate " " (map show ms ++ [show cv, n]) ++ ":" ++ show t ++ ";"
   show (FnId cv n t) = intercalate " " [show cv, n] ++ ":" ++ show t
   show (FnParamId n t) = n ++ ":" ++ show t
+  show (ExpressionId a) = a
   show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f
   show (RBinOp l op r) = intercalate " " [show l, show op, show r]
   show (LBinOp op l r) = intercalate " " [show l, show op, show r]

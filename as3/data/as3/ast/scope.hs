@@ -1,14 +1,16 @@
 module Data.AS3.AST.Scope (
   build_scope_tree
---, exit_fn
+, exit_fn
+, add_fn_id
+, function_ids
 --, get_scope
 --, get_scopes
---, push_fn_scope
 ) where
 
 import           Control.Monad (forM_, liftM)
 import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.State (modify, gets)
+import           Control.Monad.State (modify, get, gets)
+import           Control.Monad.Trans.Class (lift)
 import           Data.AS3.AST.Def
 import           Data.AS3.AST.Prims
 import           System.FilePath
@@ -18,6 +20,8 @@ import           Util.Misc (t31)
 import qualified Control.Applicative as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashTable.IO as H
+
+-- $Tree built as a pre-parse step in order to perform static analysis
 
 -- | { class:String => { id:String => scopeAndType:ScopeId }}
 build_scope_tree :: [FilePath] -> IO ScopeTree
@@ -52,11 +56,24 @@ build_scope_tree files = do
         type_info_p :: ParsecT String () IO [(String, ScopeId)]
         type_info_p = return $ [
             ("a", (InstanceId [Public] T_int))
+          , ("b", (InstanceId [Public] T_int))
           , ("_equipment", (InstanceId [Public] T_int))
           , ("_gadgets", (InstanceId [Public] T_int))
           , ("_actions", (InstanceId [Public] T_int))
           , ("STATIC", (ClassId2 [Public] T_String))
           ]
+
+-- TODO deprecated by build_scope_tree ?
+{-push_class_scope :: String -- ^ class
+                 -> String -- ^ identifier
+                 -> ScopeId
+                 -> As3Parser ()
+--push_class_scope new = modify $\(ts, (klass, func)) -> (ts, (new:klass, func))
+push_class_scope klass ident info = do
+  ht1 <- gets t31 >>= liftIO
+  ht2 <- liftIO $ H.lookup ht1 klass >>= maybe H.new return
+
+  return ()-}
 
 get_scope :: String -- ^ The class containing an identifier
           -> String -- ^ The public identifier (property or function) to fetch
@@ -72,7 +89,7 @@ get_scope klass ident = do
 get_scopes :: String -> As3Parser (Maybe [(String, ScopeId)])
 get_scopes klass = do
   ht1 <- gets t31 >>= liftIO
-  liftIO $do
+  liftIO $ do
     maybe_ht2 <- H.lookup ht1 klass
     case maybe_ht2 of
       Nothing -> return Nothing
@@ -89,22 +106,19 @@ match_scope_ids klass = do
     Just [] -> string ""
     Just (id0:ids) -> try $ foldl plusfold (string id0) ids
 
--- add function-level scope identifier
-push_fn_scope :: String -> As3Parser ()
-push_fn_scope new = modify $ \(a, b, func) -> (a, b, new:func)
+-- $Function scope to aid in parsing identifiers
 
--- remove function-level scope identifiers
+-- ^ add function-level scope identifier during parse
+add_fn_id :: String -> As3Parser ()
+add_fn_id new = modify $ \(a, b, func) -> (a, b, new:func)
+
+-- ^ remove function-level scope identifiers
 exit_fn :: As3Parser ()
 exit_fn = modify $ \(a, b, _) -> (a, b, [])
 
--- TODO deprecated by build_scope_tree ?
-push_class_scope :: String -- ^ class
-                 -> String -- ^ identifier
-                 -> ScopeId
-                 -> As3Parser ()
---push_class_scope new = modify $\(ts, (klass, func)) -> (ts, (new:klass, func))
-push_class_scope klass ident info = do
-  ht1 <- gets t31 >>= liftIO
-  ht2 <- liftIO $ H.lookup ht1 klass >>= maybe H.new return
-
-  return ()
+function_ids :: As3Parser String
+function_ids = do
+  (a, b, ids) <- lift get
+  case ids of
+    [] -> string "can't be empty"
+    (id0:ids) -> foldl plusfold (try $ string id0) ids

@@ -34,7 +34,7 @@ comma :: As3Parser Char
 comma = tok $ char ','
 
 plusfold :: As3Parser String -> String -> As3Parser String
-plusfold acc str = acc `parserPlus` string str
+plusfold acc str = acc `parserPlus` (try $ string str)
 
 csv :: As3Parser a -> As3Parser [a]
 csv a = a `sepBy` (ss *> char ',' <* ss)

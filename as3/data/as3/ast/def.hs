@@ -3,11 +3,20 @@ module Data.AS3.AST.Def where
 import           Control.Monad.State
 import           Data.Foldable
 import           Prelude hiding (foldr)
-import           Text.Parsec (ParsecT)
+import           Text.Parsec (ParsecT, getPosition)
+import           Text.Parsec.Pos (sourceLine, sourceColumn)
 import qualified Data.HashTable.IO as H
 
 p :: String -> As3Parser ()
 p = liftIO . putStrLn
+
+xy :: As3Parser String
+xy = do
+  pos <- getPosition
+  return $ "(" ++ show (sourceLine pos) ++ ", " ++ show (sourceColumn pos) ++ ")"
+
+pxy :: As3Parser ()
+pxy = xy >>= p
 
 {- ([class-level identifiers], [function-level identifiers]) -}
 --type ScopeChain = ([String], [String])
@@ -31,7 +40,16 @@ type As3Parser = ParsecT String () M
 data ParseScope = PS_Class
                 | PS_Function
                 | PS_FunctionParams
-                deriving (Eq)
+                | PS_Expression
+                deriving (Eq, Show)
+
+with_scope :: ParseScope -> As3Parser a -> As3Parser a
+with_scope new_scope action = do
+  (a, old_scope, c) <- lift get
+  lift $ put (a, new_scope, c)
+  result <- action
+  lift $ put (a, old_scope, c)
+  return result
 
 set_scope :: ParseScope -> As3Parser ()
 set_scope new = do
@@ -142,8 +160,10 @@ everything else
 
 data Statement = EmptyS
                | Block [Statement]
-               | Variable Expression (Maybe Expression) -- ^ Ident Assignment, respectively
-               | Constant Expression (Maybe Expression) -- ^ Ident Assignment, respectively
+              -- | Variable Expression (Maybe Expression) -- ^ Ident Assignment, respectively
+              -- | Constant Expression (Maybe Expression) -- ^ Ident Assignment, respectively
+               | Variable [Expression]
+               | Constant [Expression]
                | ExpressionStmt Expression
                | If Expression Statement
                | IfElse Expression Statement Statement
@@ -172,8 +192,8 @@ data Expression = TODO_E String
                 | CommentBlock [String]
                 | Comma [Expression]
                 | ParenGroup Expression
-                | Identifier String
                 | ObjectLiteral [Expression]
+                | KeyValue Expression Expression
                 -- ^ "?" is implied since it's the only ternary operator
                 | TernOp Expression Expression Expression
                 | RBinOp Expression BinaryOp Expression -- ^ Right associative
@@ -184,6 +204,7 @@ data Expression = TODO_E String
                 | ClassId [ScopeMod] CV String Type
                 | FnId CV String Type
                 | FnParamId String Type
+                | ExpressionId String
 --                | Ident [ScopeMod] (Maybe CV) String Type
                 | Lit Literal
                 | Postfix Expression UnaryOp

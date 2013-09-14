@@ -4,8 +4,21 @@ import           Control.Monad
 import           Data.AS3.AST.Def
 import           Data.AS3.AST.Grammar.Lexicon
 import           Data.AS3.AST.Prims
+import           Data.AS3.AST.Scope
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
+
+-- $Helpers
+
+add_ids :: [Expression] -> As3Parser [Expression]
+add_ids exps = loop exps >> return exps where
+  loop :: [Expression] -> As3Parser ()
+  loop (ClassId _ _ id _:exps) = add_fn_id id >> loop exps
+  loop (FnId _ id _:exps) = add_fn_id id >> loop exps
+  loop (FnParamId id _:exps) = add_fn_id id >> loop exps
+  loop (ExpressionId id:exps) = add_fn_id id >> loop exps
+  loop (_:exps) = loop exps
+  loop [] = return ()
 
 -- $11.1 Primary Expressions
 
@@ -13,17 +26,30 @@ primary_expression :: As3Parser Expression
 primary_expression =
       (liftM TODO_E (try $ string "this"))
   <|> try scoped_identifier
+  {-
+    identifiers already captured in function params and local var/consts.
+    
+    this is at odds with the initial capture above (scoped_identifier)
+    making it more obvious i need a pre-parse step to pluck out identifiers
+    for the scope OR assume all identifiers are valid and deal with problems
+    in the AST.
+    I'M CONFUSING GRAMMATICAL CORRECTNESS AND PROGRAM CORRECTNESS
+    program correctness is verified by analyzing the very AST i'm trying to build
+    meaning there's no pre-parse step and i need to build my scope tree as i parse
+    so i have a useful tool with which to analyze the tree
+
+    statements, being a superset of expressions are allowed in fewer places.
+    i.e. it's not about where i can put expressions, it's about where i can't
+    put statements
+
+    commenting this out for now and letting all identifiers be valid
+  -}
+  <|> try (liftM ExpressionId function_ids)
   <|> try (liftM ParenGroup $ between_parens comma_expression)
-  <|> liftM TODO_E literal
+  <|> try (liftM TODO_E literal)
+  {-<|> liftM TODO_E array_literal-}
+  <|> try object_literal
   <?> "primary_expression"
-  where
-    scoped_identifier :: As3Parser Expression
-    scoped_identifier = do
-      ps <- get_scope
-      case ps of
-        PS_Class -> class_id
-        PS_Function -> function_body_id
-        PS_FunctionParams -> function_param_id
 
 array_literal :: As3Parser Expression
 array_literal = undefined
@@ -35,13 +61,15 @@ object_literal :: As3Parser Expression
 object_literal = liftM ObjectLiteral $ between_braces kvps where
   kvps :: As3Parser [Expression]
   kvps = property_assignment `sepBy` comma
-  
+
   property_assignment :: As3Parser Expression
-  property_assignment = undefined
+  property_assignment = liftM2 KeyValue
+    (property_name <* ss <* char ':' <* ss)
+    assignment_expression
 
   property_name :: As3Parser Expression
   property_name =
-        try identifier_name
+        try expression_id
     <|> try (liftM (Lit . L_String) string_literal)
     <|> try (liftM (Lit . L_Number) numeric_literal)
 
