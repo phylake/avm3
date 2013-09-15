@@ -124,7 +124,7 @@ instance Show Expression where
   show (KeyValue k v) = show k ++ ":" ++ show v
   show (ClassId ms cv n t) = intercalate " " (map show ms ++ [show cv, n]) ++ ":" ++ show t ++ ";"
   show (FnId cv n t) = intercalate " " [show cv, n] ++ ":" ++ show t
-  show (FnParamId n t) = n ++ ":" ++ show t
+  show (TypedId n t) = n ++ ":" ++ show t
   show (ExpressionId a) = a
   show (TernOp cond t f) = show cond ++ " ? " ++ show t ++ " : " ++ show f
   show (RBinOp l op r) = intercalate " " [show l, show op, show r]
@@ -132,3 +132,4 @@ instance Show Expression where
   show (Lit a) = show a
   show (Comma a) = intercalate ", " $ map show a
   show (ParenGroup a) = "(" ++ show a ++ ")"
+

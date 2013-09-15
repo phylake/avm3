@@ -11,34 +11,16 @@ import           Util.Misc (t31)
 import qualified Control.Applicative as A
 import qualified Data.HashTable.IO as H
 
-
-
-
-
-
-{-scope_id :: As3Parser String
-scope_id = do
-  (_, ((k:klasses), fns)) <- get
-  try $foldl plusfold (string k) (klasses ++ fns)
-  <?> "scope id"-}
-
 -- $7.6 Identifier Names and Identifiers
 
 scoped_identifier :: As3Parser Expression
 scoped_identifier = do
   ps <- get_scope
-  p$ "scoped_identifier " ++ show ps
+  --p$ "scoped_identifier " ++ show ps
   case ps of
-    -- OLD
-    {-PS_Class -> class_id
-    PS_Function -> function_body_id
-    PS_FunctionParams -> function_param_id
-    PS_Expression -> expression_id-}
-
-    -- NEW
     PS_Class -> class_id
     PS_Function -> expression_id
-    PS_FunctionParams -> function_param_id
+    PS_TypedIds -> typed_id
 
 scope_mods :: As3Parser [ScopeMod]
 scope_mods = scope_mod `sepEndBy1` (many1 $ char ' ') <?> "scope modifiers"
@@ -81,11 +63,18 @@ as3_type =
   <|>     (string "Vector.<" *> as3_type <* string ">" >>= return . T_Vector)
   <?> "type id"
 
+-- ^ identifiers can not start with a numeral
 var_id :: As3Parser String
 var_id = liftM2 (++) beg end
   where
     beg = many1 $ letter   <|> char '_'
     end = many  $ alphaNum <|> char '_'
+
+cv :: As3Parser CV
+cv = (string "var " >> return Var) <|> (string "const " >> return Const)
+
+type_declaration :: As3Parser Type
+type_declaration = ss *> char ':' *> ss *> as3_type
 
 class_id :: As3Parser Expression
 class_id = liftM4 ClassId scope_mods cv var_id type_declaration
@@ -93,17 +82,12 @@ class_id = liftM4 ClassId scope_mods cv var_id type_declaration
 function_body_id :: As3Parser Expression
 function_body_id = liftM3 FnId cv var_id type_declaration
 
-function_param_id :: As3Parser Expression
-function_param_id = liftM2 FnParamId var_id type_declaration
+-- ^ overlaps with variable_statement but as a special-case expression
+typed_id :: As3Parser Expression
+typed_id = liftM2 TypedId var_id type_declaration
 
 expression_id :: As3Parser Expression
 expression_id = liftM ExpressionId var_id
-
-cv :: As3Parser CV
-cv = (string "var " >> return Var) <|> (string "const " >> return Const)
-
-type_declaration :: As3Parser Type
-type_declaration = ss *> char ':' *> ss *> as3_type
 
 
 

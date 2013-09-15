@@ -39,8 +39,7 @@ type As3Parser = ParsecT String () M
 -- ^ Swapped during parsing to alter the underlying grammar
 data ParseScope = PS_Class
                 | PS_Function
-                | PS_FunctionParams
-                | PS_Expression
+                | PS_TypedIds -- ^ function params, var/const ...
                 deriving (Eq, Show)
 
 with_scope :: ParseScope -> As3Parser a -> As3Parser a
@@ -149,19 +148,8 @@ data ScopeMod = Public
               | Override
               | Static
 
-{-
-TODO start here
-global functions for translation
-keywords such as super
-some expressions such as a new regex /\w+/
-control flow statements
-everything else
--}
-
 data Statement = EmptyS
                | Block [Statement]
-              -- | Variable Expression (Maybe Expression) -- ^ Ident Assignment, respectively
-              -- | Constant Expression (Maybe Expression) -- ^ Ident Assignment, respectively
                | Variable [Expression]
                | Constant [Expression]
                | ExpressionStmt Expression
@@ -184,7 +172,7 @@ data Statement = EmptyS
                | Import String
                -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
                | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Statement]
-                -- ^ [public] <name> <params> <return> <body>
+               -- ^ [public] <name> <params> <return> <body>
                | FnDec [ScopeMod] String [Expression] Type [Statement]
 
 data Expression = TODO_E String
@@ -203,9 +191,8 @@ data Expression = TODO_E String
                 -- ^ is implicity Var
                 | ClassId [ScopeMod] CV String Type
                 | FnId CV String Type
-                | FnParamId String Type
+                | TypedId String Type
                 | ExpressionId String
---                | Ident [ScopeMod] (Maybe CV) String Type
                 | Lit Literal
                 | Postfix Expression UnaryOp
                 | New Expression

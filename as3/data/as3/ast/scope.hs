@@ -1,8 +1,8 @@
 module Data.AS3.AST.Scope (
   build_scope_tree
-, exit_fn
-, add_fn_id
-, function_ids
+--, exit_fn
+--, add_fn_id
+--, function_ids
 --, get_scope
 --, get_scopes
 ) where
@@ -105,20 +105,3 @@ match_scope_ids klass = do
     Nothing -> string ""
     Just [] -> string ""
     Just (id0:ids) -> try $ foldl plusfold (string id0) ids
-
--- $Function scope to aid in parsing identifiers
-
--- ^ add function-level scope identifier during parse
-add_fn_id :: String -> As3Parser ()
-add_fn_id new = modify $ \(a, b, func) -> (a, b, new:func)
-
--- ^ remove function-level scope identifiers
-exit_fn :: As3Parser ()
-exit_fn = modify $ \(a, b, _) -> (a, b, [])
-
-function_ids :: As3Parser String
-function_ids = do
-  (a, b, ids) <- lift get
-  case ids of
-    [] -> string "can't be empty"
-    (id0:ids) -> foldl plusfold (try $ string id0) ids

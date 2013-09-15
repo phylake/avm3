@@ -4,21 +4,8 @@ import           Control.Monad
 import           Data.AS3.AST.Def
 import           Data.AS3.AST.Grammar.Lexicon
 import           Data.AS3.AST.Prims
-import           Data.AS3.AST.Scope
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
-
--- $Helpers
-
-add_ids :: [Expression] -> As3Parser [Expression]
-add_ids exps = loop exps >> return exps where
-  loop :: [Expression] -> As3Parser ()
-  loop (ClassId _ _ id _:exps) = add_fn_id id >> loop exps
-  loop (FnId _ id _:exps) = add_fn_id id >> loop exps
-  loop (FnParamId id _:exps) = add_fn_id id >> loop exps
-  loop (ExpressionId id:exps) = add_fn_id id >> loop exps
-  loop (_:exps) = loop exps
-  loop [] = return ()
 
 -- $11.1 Primary Expressions
 
@@ -44,7 +31,7 @@ primary_expression =
 
     commenting this out for now and letting all identifiers be valid
   -}
-  <|> try (liftM ExpressionId function_ids)
+  {-<|> try (liftM ExpressionId function_ids)-}
   <|> try (liftM ParenGroup $ between_parens comma_expression)
   <|> try (liftM TODO_E literal)
   {-<|> liftM TODO_E array_literal-}
