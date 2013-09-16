@@ -61,13 +61,13 @@ statement =
   <|> try variable_statement
   <|> try constant_statement -- ^ ‡
   <|> try empty_statement
-  <|> try expression_statement
   <|> try if_statement
   <|> try iteration_statement
   <|> try continue_statement
   <|> try break_statement
   <|> try return_statement
   <|> try with_statement
+  <|> try expression_statement -- TODO this is capturing keywords. need to lock down identifiers
   {-<|> try switch_statement
   <|> try labelled_statement
   <|> try throw_statement

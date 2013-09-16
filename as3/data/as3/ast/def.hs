@@ -1,4 +1,24 @@
-module Data.AS3.AST.Def where
+module Data.AS3.AST.Def (
+  p
+, xy
+, pxy
+, with_scope
+, get_scope
+, ScopeId(..)
+, Identifiers
+, ScopeTree
+, M
+, As3Parser
+, ParseScope(..)
+, BinaryOp(..)
+, UnaryOp(..)
+, Type(..)
+, Literal(..)
+, CV(..)
+, ScopeMod(..)
+, Statement(..)
+, Expression(..)
+) where
 
 import           Control.Monad.State
 import           Data.Foldable
