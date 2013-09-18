@@ -65,7 +65,7 @@ as3_type =
 
 -- ^ identifiers can not start with a numeral
 var_id :: As3Parser String
-var_id = liftM2 (++) beg end
+var_id = notFollowedBy reserved_word >> liftM2 (++) beg end
   where
     beg = many1 $ letter   <|> char '_'
     end = many  $ alphaNum <|> char '_'
@@ -80,7 +80,7 @@ class_id :: As3Parser Expression
 class_id = liftM4 ClassId scope_mods cv var_id type_declaration
 
 function_body_id :: As3Parser Expression
-function_body_id = liftM3 FnId cv var_id type_declaration
+function_body_id = fail "function_body_id" >> liftM3 FnId cv var_id type_declaration
 
 -- ^ overlaps with variable_statement but as a special-case expression
 typed_id :: As3Parser Expression
@@ -123,54 +123,55 @@ as3Token =
 
 reserved_word :: As3Parser String
 reserved_word =
-      keyword
-  <|> null_literal
+      try keyword
+  <|> try null_literal
   <|> boolean_literal
 
 keyword :: As3Parser String
 keyword =
-    string "break"
- -- <|> string "do"
- -- <|> string "instanceof"
- -- <|> string "typeof"
-  <|> string "case"
-  <|> string "else"
-  <|> string "new"
-  <|> string "var"
-  <|> string "catch"
-  <|> string "finally"
-  <|> string "return"
-  <|> string "void"
-  <|> string "continue"
-  <|> string "for"
-  <|> string "switch"
-  <|> string "while"
-  <|> string "debugger"
-  <|> string "function"
-  <|> string "this"
-  <|> string "with"
-  <|> string "default"
-  <|> string "if"
-  <|> string "throw"
-  <|> string "delete"
-  <|> string "in"
-  <|> string "try"
-  <|> string "class"
-  <|> string "enum"
-  <|> string "extends"
-  <|> string "super"
-  <|> string "const"
- -- <|> string "export"
- -- <|> string "import"
- -- <|> string "implements"
- -- <|> string "let"
- -- <|> string "private"
- -- <|> string "public"
- -- <|> string "yield"
- -- <|> string "interface"
- -- <|> string "package"
- -- <|> string "protected"
- -- <|> string "static"
+      try (string "break")
+  <|> try (string "do")
+ -- <|> try (string "instanceof")
+ -- <|> try (string "typeof")
+  <|> try (string "case")
+  <|> try (string "else")
+  <|> try (string "new")
+  <|> try (string "var")
+  <|> try (string "catch")
+  <|> try (string "finally")
+  <|> try (string "return")
+  <|> try (string "void")
+  <|> try (string "continue")
+  <|> try (string "for")
+  <|> try (string "for each")
+  <|> try (string "switch")
+  <|> try (string "while")
+  <|> try (string "debugger")
+  <|> try (string "function")
+  <|> try (string "this")
+  <|> try (string "with")
+  <|> try (string "default")
+  <|> try (string "if")
+  <|> try (string "throw")
+  <|> try (string "delete")
+  <|> try (string "in")
+  <|> try (string "try")
+  <|> try (string "class")
+ -- <|> try (string "enum")
+  <|> try (string "extends")
+  <|> try (string "super")
+  <|> try (string "const")
+ -- <|> try (string "export")
+ -- <|> try (string "import")
+  <|> try (string "implements")
+ -- <|> try (string "let")
+  <|> try (string "private")
+  <|> try (string "public")
+ -- <|> try (string "yield")
+  <|> try (string "interface")
+  <|> try (string "package")
+  <|> try (string "protected")
+  <|> try (string "static")
   <?> "keyword"
 
 punctuator :: As3Parser String

@@ -2,7 +2,6 @@ module Data.AS3.AST.Scope (
   build_scope_tree
 --, exit_fn
 --, add_fn_id
---, function_ids
 --, get_scope
 --, get_scopes
 ) where

@@ -12,6 +12,12 @@ type M = ML.StateT Int ML.Id
 class PrettyAs a where
   toAs3 :: a -> M String
 
+instance Show Expression where
+  show = fst . ML.runId . ML.runStateT 0 . toAs3
+
+instance Show Statement where
+  show = fst . ML.runId . ML.runStateT 0 . toAs3
+
 inBlock :: (PrettyAs a) => [a] -> M String
 inBlock action = do
   open <- p "{"

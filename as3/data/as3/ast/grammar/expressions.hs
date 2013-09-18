@@ -13,25 +13,6 @@ primary_expression :: As3Parser Expression
 primary_expression =
       (liftM TODO_E (try $ string "this"))
   <|> try scoped_identifier
-  {-
-    identifiers already captured in function params and local var/consts.
-    
-    this is at odds with the initial capture above (scoped_identifier)
-    making it more obvious i need a pre-parse step to pluck out identifiers
-    for the scope OR assume all identifiers are valid and deal with problems
-    in the AST.
-    I'M CONFUSING GRAMMATICAL CORRECTNESS AND PROGRAM CORRECTNESS
-    program correctness is verified by analyzing the very AST i'm trying to build
-    meaning there's no pre-parse step and i need to build my scope tree as i parse
-    so i have a useful tool with which to analyze the tree
-
-    statements, being a superset of expressions are allowed in fewer places.
-    i.e. it's not about where i can put expressions, it's about where i can't
-    put statements
-
-    commenting this out for now and letting all identifiers be valid
-  -}
-  {-<|> try (liftM ExpressionId function_ids)-}
   <|> try (liftM ParenGroup $ between_parens comma_expression)
   <|> try (liftM TODO_E literal)
   {-<|> liftM TODO_E array_literal-}
@@ -118,8 +99,8 @@ unary_expression =
           (string "delete" >> return Delete)
       <|> (string "void" >> return Void)
       <|> (string "typeof" >> return TypeOf)
-      <|> (string "++" >> return Increment)
-      <|> (string "--" >> return Decrement)
+      <|> try (string "++" >> return Increment)
+      <|> try (string "--" >> return Decrement)
       <|> (string "+" >> return Positive)
       <|> (string "-" >> return Negative)
       <|> (string "~" >> return BitwiseNOT)

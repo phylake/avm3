@@ -4,8 +4,10 @@ import           Control.Monad
 import           Data.AS3.AST.Def
 import           Data.AS3.AST.Grammar.Expressions
 import           Data.AS3.AST.Grammar.Lexicon
+import           Data.AS3.AST.Pretty
 import           Data.AS3.AST.Prims
 import           Data.AS3.AST.Scope
+import           Data.AS3.AST.Show
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
 
@@ -121,12 +123,13 @@ iteration_statement =
 
     for :: As3Parser Statement
     for = liftM4 For
-            (forward *> optionMaybe expressionNoIn <* tok semi)
+            --(forward *> optionMaybe expressionNoIn <* tok semi) TODO
+            (forward *> optionMaybe variable_statement <* tok semi)
             (optionMaybe expression <* tok semi)
             (optionMaybe expression <* epilogue)
             (statement)
           where
-            forward = string "for" *> ss *> char '('
+            forward = tok (string "for") *> tok (char '(')
 
     for_in :: As3Parser Statement
     for_in = liftM3 ForIn
@@ -134,7 +137,7 @@ iteration_statement =
                (expression <* epilogue)
                (statement)
              where
-               forward = string "for" *> ss *> char '('
+               forward = tok (string "for") *> tok (char '(')
 
     for_each :: As3Parser Statement
     for_each = liftM3 ForEach
