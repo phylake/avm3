@@ -7,6 +7,8 @@ import           Data.AS3.AST.Prims
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
 
+import Data.AS3.AST.Show
+
 -- $11.1 Primary Expressions
 
 primary_expression :: As3Parser Expression
