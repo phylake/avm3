@@ -149,9 +149,7 @@ instance PrettyAs Expression where
     return $ a' ++ "[" ++ b' ++ "]"
   toAs3 (Call a b) = do
     a' <- toAs3 a
-    b' <- toAs3 b
-    return $ a' ++ "." ++ b'
-
+    return $ a' ++ "." ++ b
 
 instance Show BinaryOp where
   show Addition = "+"

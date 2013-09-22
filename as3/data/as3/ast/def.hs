@@ -220,8 +220,8 @@ data Expression = TODO_E String
                 | New Expression
                 -- ^ caller[expression]
                 | ArrayAccess Expression Expression
-                -- ^ caller.expression
-                | Call Expression Expression
+                -- ^ caller.identifier
+                | Call Expression String
                 -- ^ 
 --                | FnExp (Maybe Expression) [Expression] [Statement]
 

@@ -59,12 +59,12 @@ member_expression = subexpressions >>= loop
 
     call :: Expression -> As3Parser Expression
     call l = do
-      r <- char '.' *> member_expression
+      r <- char '.' *> var_id
       loop $ Call l r
 
     array_access :: Expression -> As3Parser Expression
     array_access l = do
-      r <- between_brackets member_expression
+      r <- between_brackets expression
       loop $ ArrayAccess l r
 
 function_expression :: As3Parser Expression
