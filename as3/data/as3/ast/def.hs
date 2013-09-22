@@ -212,11 +212,16 @@ data Expression = TODO_E String
                 -- ^ is implicity Var
                 | ClassId [ScopeMod] CV String Type
                 | FnId CV String Type
+                -- ^ identifier:Type
                 | TypedId String Type
                 | ExpressionId String
                 | Lit Literal
                 | Postfix Expression UnaryOp
                 | New Expression
+                -- ^ caller[expression]
+                | ArrayAccess Expression Expression
+                -- ^ caller.expression
+                | Call Expression Expression
                 -- ^ 
 --                | FnExp (Maybe Expression) [Expression] [Statement]
 

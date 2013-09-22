@@ -143,6 +143,15 @@ instance PrettyAs Expression where
   toAs3 (ExpressionId a) = return a
   toAs3 (Lit a) = return $ show a
   toAs3 (Postfix e op) = liftM2 (++) (toAs3 e) (return $ show op)
+  toAs3 (ArrayAccess a b) = do
+    a' <- toAs3 a
+    b' <- toAs3 b
+    return $ a' ++ "[" ++ b' ++ "]"
+  toAs3 (Call a b) = do
+    a' <- toAs3 a
+    b' <- toAs3 b
+    return $ a' ++ "." ++ b'
+
 
 instance Show BinaryOp where
   show Addition = "+"
@@ -217,6 +226,7 @@ instance Show Type where
   show T_Number = "Number"
   show T_Boolean = "Boolean"
   show T_String = "String"
+  show T_Array = "Array"
   show T_Object = "Object"
   show (T_Vector t) = "Vector.<" ++ show t ++ ">"
   show (T_UserDefined t) = t

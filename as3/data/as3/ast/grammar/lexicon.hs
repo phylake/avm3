@@ -27,12 +27,12 @@ scope_mods = scope_mod `sepEndBy1` (many1 $ char ' ') <?> "scope modifiers"
   where
     scope_mod :: As3Parser ScopeMod
     scope_mod =
-          try (string "public"    >> return Public)
-      <|> try (string "protected" >> return Protected)
-      <|> try (string "private"   >> return Private)
-      <|> try (string "final"     >> return Final)
-      <|> try (string "override"  >> return Override)
-      <|>     (string "static"    >> return Static) <?> "scope modifier"
+          try (symR Public)
+      <|> try (symR Protected)
+      <|> try (symR Private)
+      <|> try (symR Final)
+      <|> try (symR Override)
+      <|>     (symR Static) <?> "scope modifier"
 
 user_defined_type :: As3Parser String
 user_defined_type = do
@@ -50,16 +50,16 @@ implementable_type = user_defined_type
 as3_type :: As3Parser Type
 as3_type =
       try (liftM T_UserDefined user_defined_type)
-  <|> try (string "int" >> return T_int)
-  <|> try (string "uint" >> return T_uint)
-  <|> try (string "void" >> return T_void)
-  <|> try (string "*" >> return T_undefined)
-  <|> try (string "undefined" >> return T_undefined)
-  <|> try (string "Number" >> return T_Number)
-  <|> try (string "Boolean" >> return T_Boolean)
-  <|> try (string "String" >> return T_String)
-  <|> try (string "Array" >> return T_Array)
-  <|> try (string "Object" >> return T_Object)
+  <|> try (symR T_int)
+  <|> try (symR T_uint)
+  <|> try (symR T_void)
+  <|> try (symR T_undefined)
+  <|> try (symR T_undefined)
+  <|> try (symR T_Number)
+  <|> try (symR T_Boolean)
+  <|> try (symR T_String)
+  <|> try (symR T_Array)
+  <|> try (symR T_Object)
   <|>     (string "Vector.<" *> as3_type <* string ">" >>= return . T_Vector)
   <?> "type id"
 

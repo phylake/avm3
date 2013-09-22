@@ -46,9 +46,26 @@ object_literal = liftM ObjectLiteral $ between_braces kvps where
 -- $11.2 Left-Hand-Side Expressions
 
 member_expression :: As3Parser Expression
-member_expression =
-      try primary_expression
-  {-<|> try function_expression-}
+member_expression = subexpressions >>= loop
+  where
+    subexpressions :: As3Parser Expression
+    subexpressions = try primary_expression {-<|> function_expression-}
+    
+    loop :: Expression -> As3Parser Expression
+    loop e =
+          try (call e)
+      <|> try (array_access e)
+      <|> return e
+
+    call :: Expression -> As3Parser Expression
+    call l = do
+      r <- char '.' *> member_expression
+      loop $ Call l r
+
+    array_access :: Expression -> As3Parser Expression
+    array_access l = do
+      r <- between_brackets member_expression
+      loop $ ArrayAccess l r
 
 function_expression :: As3Parser Expression
 function_expression = undefined
@@ -85,8 +102,8 @@ postfix_expression =
   where
     unary_expression_post :: As3Parser UnaryOp
     unary_expression_post =
-          (string "++" >> return Increment)
-      <|> (string "--" >> return Decrement)
+          symR Increment
+      <|> symR Decrement
       <?> "unary POSTFIX op"
 
 -- $11.4 Unary Operators
@@ -98,16 +115,15 @@ unary_expression =
   where
     unary_expression_pre :: As3Parser UnaryOp
     unary_expression_pre =
-          (string "delete" >> return Delete)
-      <|> (string "void" >> return Void)
-      <|> (string "typeof" >> return TypeOf)
-      <|> try (string "++" >> return Increment)
-      <|> try (string "--" >> return Decrement)
-      <|> (string "+" >> return Positive)
-      <|> (string "-" >> return Negative)
-      <|> (string "~" >> return BitwiseNOT)
-      <|> (string "!" >> return LogicalNOT)
-     -- <|> (string "^" >> return BitwiseXOR)
+          (symR Delete)
+      <|> (symR Void)
+      <|> (symR TypeOf)
+      <|> try (symR Increment)
+      <|> try (symR Decrement)
+      <|> (symR Positive)
+      <|> (symR Negative)
+      <|> (symR BitwiseNOT)
+      <|> (symR LogicalNOT)
       <?> "unary PREFIX op"
 
 -- $11.5 Multiplicative Operators
@@ -250,18 +266,18 @@ assignment_expression =
   where
     assignment_op :: As3Parser BinaryOp
     assignment_op =
-          (string (show Assignment) >> return Assignment)
-      <|> (string (show PlusAssignment) >> return PlusAssignment)
-      <|> (string (show MinusAssignment) >> return MinusAssignment)
-      <|> (string (show MultiplicationAssignment) >> return MultiplicationAssignment)
-      <|> (string (show DivisionAssignment) >> return DivisionAssignment)
-      <|> (string (show ModuloAssignment) >> return ModuloAssignment)
-      <|> (string (show LShiftAssignment) >> return LShiftAssignment)
-      <|> (string (show RShiftAssignment) >> return RShiftAssignment)
-      <|> (string (show URShiftAssignment) >> return URShiftAssignment)
-      <|> (string (show BitwiseANDAssignment) >> return BitwiseANDAssignment)
-      <|> (string (show BitwiseORAssignment) >> return BitwiseORAssignment)
-      <|> (string (show BitwiseXORAssignment) >> return BitwiseXORAssignment)
+          symR Assignment
+      <|> symR PlusAssignment
+      <|> symR MinusAssignment
+      <|> symR MultiplicationAssignment
+      <|> symR DivisionAssignment
+      <|> symR ModuloAssignment
+      <|> symR LShiftAssignment
+      <|> symR RShiftAssignment
+      <|> symR URShiftAssignment
+      <|> symR BitwiseANDAssignment
+      <|> symR BitwiseORAssignment
+      <|> symR BitwiseXORAssignment
       <?> "assignment operator"
 
 -- $11.14 Comma Operator
@@ -287,6 +303,6 @@ linkL = linkCommon LBinOp
 linkCommon :: (BinaryOp -> Expression -> Expression -> Expression)
            -> BinaryOp
            -> As3Parser (Expression -> Expression -> Expression)
-linkCommon f op = try $ tok pop >> notFollowedBy pop >> return (f op)
+linkCommon f op = try $ tok lop >> notFollowedBy lop >> return (f op)
   where
-    pop = string (show op)
+    lop = sym op

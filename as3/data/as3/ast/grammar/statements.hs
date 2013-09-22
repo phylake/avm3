@@ -124,13 +124,13 @@ iteration_statement =
     for :: As3Parser Statement
     for = liftM4 For
             --(forward *> optionMaybe expressionNoIn <* tok semi) TODO
-            (forward *> optionMaybe (tok variable_statement) <* skipSemi)
-            (optionMaybe expression <* skipSemi)
+            (forward *> optionMaybe (tok variable_statement) <* optSemi)
+            (optionMaybe expression <* optSemi)
             (optionMaybe expression <* epilogue)
             (statement)
           where
             forward = tok (string "for") *> tok (char '(')
-            skipSemi = tok $ optional semi
+            optSemi = optional semi
 
     for_in :: As3Parser Statement
     for_in = liftM3 ForIn
