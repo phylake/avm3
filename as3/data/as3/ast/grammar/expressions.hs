@@ -289,8 +289,8 @@ comma_expression = liftM Comma (assignment_expression `sepBy1` comma)
 expression :: As3Parser Expression
 expression = comma_expression
 
-expressionNoIn :: As3Parser Expression
-expressionNoIn = expression -- TODO
+expression_no_in :: As3Parser Expression
+expression_no_in = expression -- TODO
 
 -- $Chain links
 

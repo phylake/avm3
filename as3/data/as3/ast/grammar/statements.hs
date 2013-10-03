@@ -106,7 +106,8 @@ iteration_statement :: As3Parser Statement
 iteration_statement =
       try do_while
   <|> try while
-  <|> try for
+  <|> try forE
+  <|> try forS
   <|> try for_in
   <|>     for_each
   <?> "iteration stmt"
@@ -121,10 +122,19 @@ iteration_statement =
               (string "while" *> between_parens expression)
               (statement)
 
-    for :: As3Parser Statement
-    for = liftM4 For
-            --(forward *> optionMaybe expressionNoIn <* tok semi) TODO
+    forS :: As3Parser Statement
+    forS = liftM4 ForS
             (forward *> optionMaybe (tok variable_statement) <* optSemi)
+            (optionMaybe expression <* optSemi)
+            (optionMaybe expression <* epilogue)
+            (statement)
+          where
+            forward = tok (string "for") *> tok (char '(')
+            optSemi = optional semi
+
+    forE :: As3Parser Statement
+    forE = liftM4 ForE
+            (forward *> optionMaybe expression_no_in <* tok semi)
             (optionMaybe expression <* optSemi)
             (optionMaybe expression <* epilogue)
             (statement)

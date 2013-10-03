@@ -177,8 +177,8 @@ data Statement = EmptyS
                | IfElse Expression Statement Statement
                | DoWhile Statement Expression
                | While Expression Statement
-              -- | For (Maybe Expression) (Maybe Expression) (Maybe Expression) Statement
-               | For (Maybe Statement) (Maybe Expression) (Maybe Expression) Statement
+               | ForE (Maybe Expression) (Maybe Expression) (Maybe Expression) Statement
+               | ForS (Maybe Statement) (Maybe Expression) (Maybe Expression) Statement
                | ForIn Expression Expression Statement
                | ForEach Expression Expression Statement
                | Continue (Maybe Expression)

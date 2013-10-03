@@ -65,21 +65,36 @@ instance PrettyAs Statement where
     p $ "if (" ++ exp ++ ")\n" ++ body
   toAs3 (If e s) = do
     e' <- toAs3 e
-    e' <- toAs3 s
-    p $ "if (" ++ e' ++ ") " ++ e' ++ ";"
+    s' <- toAs3 s
+    p $ "if (" ++ e' ++ ") " ++ s' ++ ";"
   toAs3 (IfElse e s1 s2) = return "IfElse"
   toAs3 (DoWhile s e) = return "DoWhile"
   toAs3 (While e s) = do
     e' <- toAs3 e
     s' <- toAs3 s
     p $ "while (" ++ e' ++ ")\n" ++ s'
-  toAs3 (For me1 me2 me3 s) = do
+  toAs3 (ForE me1 me2 me3 s) = do
+    me1' <- maybe (return "") (withNoIndent . toAs3) me1
+    me2' <- maybe (return "") toAs3 me2
+    me3' <- maybe (return "") toAs3 me3
+    s' <- toAs3 s
+    case s of
+      Block _ -> do
+        for <- p $ "for (" ++ me1' ++ ";" ++ me2' ++ "; " ++ me3' ++ ")"
+        return $ unlines [for, s']
+      otherwise ->
+        p $ "for (" ++ me1' ++ ";" ++ me2' ++ "; " ++ me3' ++ ") " ++ s' ++ ";"
+  toAs3 (ForS me1 me2 me3 s) = do
     me1' <- maybe (return ";") (withNoIndent . toAs3) me1
     me2' <- maybe (return "") toAs3 me2
     me3' <- maybe (return "") toAs3 me3
     s' <- toAs3 s
-    for <- p $ "for (" ++ me1' ++ me2' ++ "; " ++ me3' ++ ")"
-    return $ unlines [for, s']
+    case s of
+      Block _ -> do
+        for <- p $ "for (" ++ me1' ++ me2' ++ "; " ++ me3' ++ ")"
+        return $ unlines [for, s']
+      otherwise ->
+        p $ "for (" ++ me1' ++ me2' ++ "; " ++ me3' ++ ") " ++ s'
   toAs3 (ForIn e1 e2 s) = return "ForIn"
   toAs3 (ForEach e1 e2 s) = return "ForEach"
   toAs3 (Continue me) = return "Continue"
