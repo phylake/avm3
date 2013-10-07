@@ -45,6 +45,14 @@ object_literal = liftM ObjectLiteral $ between_braces kvps where
 
 -- $11.2 Left-Hand-Side Expressions
 
+{-
+MemberExpression:
+    PrimaryExpression
+    FunctionExpression
+    MemberExpression [ Expression ]
+    MemberExpression . IdentifierName
+    new MemberExpression Arguments
+-}
 member_expression :: As3Parser Expression
 member_expression = subexpressions >>= loop
   where
@@ -53,19 +61,9 @@ member_expression = subexpressions >>= loop
     
     loop :: Expression -> As3Parser Expression
     loop e =
-          try (call e)
-      <|> try (array_access e)
+          try (call loop e)
+      <|> try (array_access loop e)
       <|> return e
-
-    call :: Expression -> As3Parser Expression
-    call l = do
-      r <- char '.' *> var_id
-      loop $ Call l r
-
-    array_access :: Expression -> As3Parser Expression
-    array_access l = do
-      r <- between_brackets expression
-      loop $ ArrayAccess l r
 
 function_expression :: As3Parser Expression
 function_expression = undefined
@@ -80,8 +78,30 @@ new_expression =
   <|> member_expression
   <?> "new expression"
 
+{-
+CallExpression:
+    MemberExpression Arguments
+    CallExpression Arguments
+    CallExpression [ Expression ]
+    CallExpression . IdentifierName
+-}
 call_expression :: As3Parser Expression
-call_expression = fail "call_expression"
+call_expression = subexpressions >>= loop
+  where
+    subexpressions :: As3Parser Expression
+    subexpressions = liftM2 CallEMember member_expression arguments
+    
+    loop :: Expression -> As3Parser Expression
+    loop e =
+          try (call_arguments e)
+      <|> try (call loop e)
+      <|> try (array_access loop e)
+      <|> return e
+
+    call_arguments :: Expression -> As3Parser Expression
+    call_arguments l = do
+      r <- arguments
+      loop $ CallEArguments l r
 
 arguments :: As3Parser [Expression]
 arguments = between_parens argument_list
@@ -306,3 +326,15 @@ linkCommon :: (BinaryOp -> Expression -> Expression -> Expression)
 linkCommon f op = try $ tok lop >> notFollowedBy lop >> return (f op)
   where
     lop = sym op
+
+-- $Helpers
+
+call :: (Expression -> As3Parser Expression) -> Expression -> As3Parser Expression
+call loop l = do
+  r <- char '.' *> var_id
+  loop $ Call l r
+
+array_access :: (Expression -> As3Parser Expression) -> Expression -> As3Parser Expression
+array_access loop l = do
+  r <- between_brackets expression
+  loop $ ArrayAccess l r

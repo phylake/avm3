@@ -222,6 +222,9 @@ data Expression = TODO_E String
                 | ArrayAccess Expression Expression
                 -- ^ caller.identifier
                 | Call Expression String
+                | CallEMember Expression [Expression]
+                | CallEArguments Expression [Expression]
+
                 -- ^ 
 --                | FnExp (Maybe Expression) [Expression] [Statement]
 
