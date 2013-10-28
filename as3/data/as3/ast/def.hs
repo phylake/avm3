@@ -170,11 +170,12 @@ data ScopeMod = Public
 
 data Statement = EmptyS
                | Block [Statement]
-               | Variable [Expression]
-               | Constant [Expression]
+               | Variable Expression -- expected to be Comma
+               | Constant Expression -- expected to be Comma
                | ExpressionStmt Expression
-               | If Expression Statement
-               | IfElse Expression Statement Statement
+               | If Expression Statement [Statement]
+               | ElseIf Expression Statement
+               | Else Statement
                | DoWhile Statement Expression
                | While Expression Statement
                | ForE (Maybe Expression) (Maybe Expression) (Maybe Expression) Statement
@@ -197,6 +198,7 @@ data Statement = EmptyS
                | FnDec [ScopeMod] String [Expression] Type [Statement]
 
 data Expression = TODO_E String
+                | This
                 | CommentSingle String
                 | CommentBlock [String]
                 | Comma [Expression]

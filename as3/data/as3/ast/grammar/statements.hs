@@ -69,7 +69,7 @@ statement =
   <|> try break_statement
   <|> try return_statement
   <|> try with_statement
-  <|> try expression_statement -- TODO this is capturing keywords. need to lock down identifiers
+  <|> try expression_statement
   {-<|> try switch_statement
   <|> try labelled_statement
   <|> try throw_statement
@@ -81,12 +81,12 @@ block_statement = liftM Block $ between_braces $ many tstatement
 variable_statement :: As3Parser Statement
 variable_statement =
   string "var " *> with_scope PS_TypedIds idents <* optional semi where
-    idents = liftM Variable $ assignment_expression `sepBy1` comma
+    idents = liftM Variable comma_expression
 
 constant_statement :: As3Parser Statement
 constant_statement =
   string "const " *> with_scope PS_TypedIds idents <* optional semi where
-    idents = liftM Constant $ assignment_expression `sepBy1` comma
+    idents = liftM Constant comma_expression
 
 empty_statement :: As3Parser Statement
 empty_statement = semi *> return EmptyS
@@ -98,9 +98,17 @@ expression_statement = do
   liftM ExpressionStmt expression <* optional semi
 
 if_statement :: As3Parser Statement
-if_statement = liftM2 If
+if_statement = liftM3 If
   (string "if" *> between_parens expression)
   tstatement
+  (many $ try elif <|> el) where
+    elif :: As3Parser Statement
+    elif = liftM2 ElseIf
+      (string "else if" *> between_parens expression)
+      tstatement
+    
+    el :: As3Parser Statement
+    el = liftM Else (tok (string "else") *> tstatement)
 
 iteration_statement :: As3Parser Statement
 iteration_statement =

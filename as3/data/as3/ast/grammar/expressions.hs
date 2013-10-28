@@ -13,7 +13,7 @@ import Data.AS3.AST.Show
 
 primary_expression :: As3Parser Expression
 primary_expression =
-      (liftM TODO_E (try $ string "this"))
+      ((try $ string "this") >> return This)
   <|> try scoped_identifier
   <|> try (liftM ParenGroup $ between_parens comma_expression)
   <|> try (liftM TODO_E literal)

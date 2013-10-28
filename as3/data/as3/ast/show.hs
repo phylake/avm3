@@ -21,7 +21,7 @@ inBlock :: (PrettyAs a) => [a] -> M String
 inBlock action = do
   open <- p "{"
   body <- withIndent $ mapM toAs3 action
-  close <- p "}\n"
+  close <- p "}"
   return $ unlines $ [open] ++ body ++ [close]
 
 withIndent :: M a -> M a
@@ -52,22 +52,36 @@ instance PrettyAs Statement where
   toAs3 EmptyS = return ""
   toAs3 (Block sts) = inBlock sts
   toAs3 (Variable e) = do
-    exps <- mapM toAs3 e
-    p $ "var " ++ intercalate ", " exps ++ ";"
-  toAs3 (Constant e) = do
-    exps <- mapM toAs3 e
-    p $ "const " ++ intercalate ", " exps ++ ";"
-  toAs3 (ExpressionStmt e) = toAs3 e
-  --toAs3 (ExpressionStmt e) = liftM2 (++) (return "ExpressionStmt: ") (toAs3 e)
-  toAs3 (If e s@(Block _)) = do
-    exp <- withNoIndent $ toAs3 e
-    body <- toAs3 s
-    p $ "if (" ++ exp ++ ")\n" ++ body
-  toAs3 (If e s) = do
     e' <- toAs3 e
+    p $ "var " ++ e' ++ ";"
+  toAs3 (Constant e) = do
+    e' <- toAs3 e
+    p $ "const " ++ e' ++ ";"
+  toAs3 (ExpressionStmt e) = toAs3 e >>= p >>= return . (++";")
+  toAs3 (If e s@(Block _) elifs) = do
+    e' <- withNoIndent $ toAs3 e
     s' <- toAs3 s
-    p $ "if (" ++ e' ++ ") " ++ s' ++ ";"
-  toAs3 (IfElse e s1 s2) = return "IfElse"
+    elifs' <- mapM toAs3 elifs
+    p $ "if (" ++ e' ++ ")\n" ++ s' ++ unlines elifs'
+  toAs3 (If e s elifs) = do
+    e' <- withNoIndent $ toAs3 e
+    s' <- inBlock [s]
+    elifs' <- mapM toAs3 elifs
+    p $ "if (" ++ e' ++ ")\n" ++ s' ++ concat elifs'
+  toAs3 (ElseIf e s@(Block _)) = do
+    e' <- withNoIndent $ toAs3 e
+    s' <- toAs3 s
+    p $ "else if (" ++ e' ++ ")\n" ++ s'
+  toAs3 (ElseIf e s) = do
+    e' <- withNoIndent $ toAs3 e
+    s' <- inBlock [s]
+    p $ "else if (" ++ e' ++ ")\n" ++ s'
+  toAs3 (Else s@(Block _)) = do
+    s' <- toAs3 s
+    p $ "else\n" ++ s'
+  toAs3 (Else s) = do
+    s' <- inBlock [s]
+    p $ "else\n" ++ s'
   toAs3 (DoWhile s e) = return "DoWhile"
   toAs3 (While e s) = do
     e' <- toAs3 e
@@ -97,9 +111,18 @@ instance PrettyAs Statement where
         p $ "for (" ++ me1' ++ me2' ++ "; " ++ me3' ++ ") " ++ s'
   toAs3 (ForIn e1 e2 s) = return "ForIn"
   toAs3 (ForEach e1 e2 s) = return "ForEach"
-  toAs3 (Continue me) = return "Continue"
-  toAs3 (Break me) = return "Break"
-  toAs3 (Return me) = return "Return"
+  toAs3 (Continue Nothing) = p "continue;"
+  toAs3 (Continue (Just e)) = do
+    e' <- toAs3 e
+    p $ "continue " ++ e' ++ ";"
+  toAs3 (Break Nothing) = p "break;"
+  toAs3 (Break (Just e)) = do
+    e' <- toAs3 e
+    p $ "break " ++ e' ++ ";"
+  toAs3 (Return Nothing) = p "return;"
+  toAs3 (Return (Just e)) = do
+    e' <- toAs3 e
+    p $ "return " ++ e' ++ ";"
   toAs3 (With e s) = return "With"
   toAs3 (Switch e s) = return "Switch"
   toAs3 (Case e ms) = return "Case"
@@ -125,6 +148,7 @@ instance PrettyAs Statement where
 
 instance PrettyAs Expression where
   toAs3 (TODO_E a) = return $ "TODO[" ++ a ++ "]"
+  toAs3 This = return "this"
   toAs3 (Comma a) = liftM (intercalate ", ") $ mapM toAs3 a
   toAs3 (ParenGroup a) = do
     a' <- toAs3 a
