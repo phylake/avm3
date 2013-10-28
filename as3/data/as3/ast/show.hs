@@ -155,7 +155,7 @@ instance PrettyAs Expression where
     intercalate " " (map show ms ++ [show cv, n]) ++ ":" ++ show t ++ ";"
   toAs3 (FnId cv n t) = return $ intercalate " " [show cv, n] ++ ":" ++ show t
   toAs3 (TypedId n t) = return $ n ++ ":" ++ show t
-  toAs3 (ExpressionId a) = return a
+  toAs3 (UntypedId a) = return a
   toAs3 (Lit a) = return $ show a
   toAs3 (Postfix e op) = liftM2 (++) (toAs3 e) (return $ show op)
   toAs3 (ArrayAccess a b) = do

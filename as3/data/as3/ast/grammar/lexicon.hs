@@ -19,7 +19,7 @@ scoped_identifier = do
   --p$ "scoped_identifier " ++ show ps
   case ps of
     PS_Class -> class_id
-    PS_Function -> expression_id
+    PS_UntypedIds -> untyped_id
     PS_TypedIds -> typed_id
 
 scope_mods :: As3Parser [ScopeMod]
@@ -86,8 +86,8 @@ function_body_id = fail "function_body_id" >> liftM3 FnId cv var_id type_declara
 typed_id :: As3Parser Expression
 typed_id = liftM2 TypedId var_id type_declaration
 
-expression_id :: As3Parser Expression
-expression_id = liftM ExpressionId var_id
+untyped_id :: As3Parser Expression
+untyped_id = liftM UntypedId var_id
 
 
 

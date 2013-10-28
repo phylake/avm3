@@ -58,8 +58,8 @@ type As3Parser = ParsecT String () M
 
 -- ^ Swapped during parsing to alter the underlying grammar
 data ParseScope = PS_Class
-                | PS_Function
-                | PS_TypedIds -- ^ function params, var/const ...
+                | PS_UntypedIds -- ^ e.g. right hand side expressions
+                | PS_TypedIds -- ^ e.g. function params, var/const ...
                 deriving (Eq, Show)
 
 with_scope :: ParseScope -> As3Parser a -> As3Parser a
@@ -214,7 +214,7 @@ data Expression = TODO_E String
                 | FnId CV String Type
                 -- ^ identifier:Type
                 | TypedId String Type
-                | ExpressionId String
+                | UntypedId String
                 | Lit Literal
                 | Postfix Expression UnaryOp
                 | New Expression

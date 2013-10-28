@@ -39,7 +39,7 @@ object_literal = liftM ObjectLiteral $ between_braces kvps where
 
   property_name :: As3Parser Expression
   property_name =
-        try expression_id
+        try untyped_id
     <|> try (liftM (Lit . L_String) string_literal)
     <|> try (liftM (Lit . L_Number) numeric_literal)
 
@@ -280,7 +280,7 @@ assignment_expression =
   try (liftM3 RBinOp
          (tok lhs_expression)
          (tok assignment_op)
-         assignment_expression)
+         with_scope PS_UntypedIds assignment_expression)
   <|> conditional_expression
   <?> "assignment expression"
   where

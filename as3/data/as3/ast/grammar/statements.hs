@@ -51,7 +51,7 @@ function_declaration = do
   name <- var_id
   params <- with_scope PS_TypedIds $ between_parens $ assignment_expression `sepBy` comma
   returnType <- type_declaration
-  body <- with_scope PS_Function $ between_braces $ many tstatement
+  body <- with_scope PS_UntypedIds $ between_braces $ many tstatement
   return $ FnDec mods name params returnType body
 
 tstatement :: As3Parser Statement
