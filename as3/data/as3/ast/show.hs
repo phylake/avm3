@@ -165,6 +165,14 @@ instance PrettyAs Expression where
   toAs3 (Call a b) = do
     a' <- toAs3 a
     return $ a' ++ "." ++ b
+  toAs3 (CallEMember a b) = do
+    a' <- toAs3 a
+    b' <- mapM toAs3 b
+    return $ a' ++ "(" ++ intercalate ", " b' ++ ")"
+  toAs3 (CallEArguments a b) = do
+    a' <- toAs3 a
+    b' <- mapM toAs3 b
+    return $ a' ++ "(" ++ intercalate ", " b' ++ ")"
 
 instance Show BinaryOp where
   show Addition = "+"
