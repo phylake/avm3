@@ -280,7 +280,7 @@ assignment_expression =
   try (liftM3 RBinOp
          (tok lhs_expression)
          (tok assignment_op)
-         with_scope PS_UntypedIds assignment_expression)
+         (with_scope PS_UntypedIds assignment_expression))
   <|> conditional_expression
   <?> "assignment expression"
   where
