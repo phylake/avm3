@@ -182,9 +182,9 @@ shift_expression =
   where
     shift_op :: As3Parser (Expression -> Expression -> Expression)
     shift_op =
-          (linkL LShift)
+          (linkL URShift) -- >>> before >>
       <|> (linkL RShift)
-      <|> (linkL URShift)
+      <|> (linkL LShift)
       <?> "bitwise shift operator"
 
 -- $11.8 Relational Operators
