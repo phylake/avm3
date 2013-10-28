@@ -198,11 +198,11 @@ relational_expression =
   where
     relational_op :: As3Parser (Expression -> Expression -> Expression)
     relational_op =
-          (linkL LessThan)
+          (linkL LessThanEq) -- <= before <
+      <|> (linkL LessThan)
+      <|> (linkL GreaterThanEq) -- >= before >
       <|> (linkL GreaterThan)
-      <|> (linkL LessThanEq)
-      <|> (linkL GreaterThanEq)
-      <|> (linkL InstanceOf)
+      <|> (linkL InstanceOf) -- instanceof before in
       <|> (linkL In)
       <?> "relational operator"
 
@@ -214,10 +214,10 @@ equality_expression =
   where
     equality_op :: As3Parser (Expression -> Expression -> Expression)
     equality_op =
-          (linkL Equality)
-      <|> (linkL StrictEquality)
+          (linkL StrictEquality) -- === before ==
+      <|> (linkL Equality)
+      <|> (linkL StrictInEquality) -- !== before !=
       <|> (linkL InEquality)
-      <|> (linkL StrictInEquality)
       <?> "equality operator"
 
 -- $11.10 Binary Bitwise Operators
