@@ -110,7 +110,7 @@ argument_list :: As3Parser [Expression]
 argument_list = csv assignment_expression
 
 lhs_expression :: As3Parser Expression
-lhs_expression = try new_expression <|> call_expression <?> "lhs_expression"
+lhs_expression = try call_expression <|> new_expression <?> "lhs_expression"
 
 -- $11.3 Postfix Expressions
 
