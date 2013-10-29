@@ -15,7 +15,7 @@ import           Data.AS3.AST.Prims
 import           System.FilePath
 import           Text.Parsec
 import           Util.File (recurseDirs)
-import           Util.Misc (t31)
+import           Util.Misc (t41)
 import qualified Control.Applicative as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashTable.IO as H
@@ -69,7 +69,7 @@ build_scope_tree files = do
                  -> As3Parser ()
 --push_class_scope new = modify $\(ts, (klass, func)) -> (ts, (new:klass, func))
 push_class_scope klass ident info = do
-  ht1 <- gets t31 >>= liftIO
+  ht1 <- gets t41 >>= liftIO
   ht2 <- liftIO $ H.lookup ht1 klass >>= maybe H.new return
 
   return ()-}
@@ -78,7 +78,7 @@ get_scope :: String -- ^ The class containing an identifier
           -> String -- ^ The public identifier (property or function) to fetch
           -> As3Parser (Maybe ScopeId)
 get_scope klass ident = do
-  ht1 <- gets t31 >>= liftIO
+  ht1 <- gets t41 >>= liftIO
   liftIO $ do
     maybe_ht2 <- H.lookup ht1 klass
     case maybe_ht2 of
@@ -87,7 +87,7 @@ get_scope klass ident = do
 
 get_scopes :: String -> As3Parser (Maybe [(String, ScopeId)])
 get_scopes klass = do
-  ht1 <- gets t31 >>= liftIO
+  ht1 <- gets t41 >>= liftIO
   liftIO $ do
     maybe_ht2 <- H.lookup ht1 klass
     case maybe_ht2 of

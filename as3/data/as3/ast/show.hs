@@ -57,7 +57,7 @@ instance PrettyAs Statement where
   toAs3 (Constant e) = do
     e' <- toAs3 e
     p $ "const " ++ e' ++ ";"
-  toAs3 (ExpressionStmt e) = toAs3 e >>= p >>= return . (++";")
+  toAs3 (ExpressionStmt e) = toAs3 e >>= p >>= return . (++";/*exp stmt*/")
   toAs3 (If e s@(Block _) elifs) = do
     e' <- withNoIndent $ toAs3 e
     s' <- toAs3 s
@@ -87,30 +87,37 @@ instance PrettyAs Statement where
     e' <- toAs3 e
     s' <- toAs3 s
     p $ "while (" ++ e' ++ ")\n" ++ s'
-  toAs3 (ForE me1 me2 me3 s) = do
-    me1' <- maybe (return "") (withNoIndent . toAs3) me1
+  toAs3 (For ms me1 me2 s) = do
+    ms' <- maybe (return "") (withNoIndent . toAs3) ms
+    me1' <- maybe (return "") toAs3 me1
     me2' <- maybe (return "") toAs3 me2
-    me3' <- maybe (return "") toAs3 me3
     s' <- toAs3 s
     case s of
       Block _ -> do
-        for <- p $ "for (" ++ me1' ++ ";" ++ me2' ++ "; " ++ me3' ++ ")"
+        for <- p $ "for (" ++ ms' ++ ";" ++ me1' ++ "; " ++ me2' ++ ")"
         return $ unlines [for, s']
       otherwise ->
-        p $ "for (" ++ me1' ++ ";" ++ me2' ++ "; " ++ me3' ++ ") " ++ s' ++ ";"
-  toAs3 (ForS me1 me2 me3 s) = do
-    me1' <- maybe (return ";") (withNoIndent . toAs3) me1
-    me2' <- maybe (return "") toAs3 me2
-    me3' <- maybe (return "") toAs3 me3
-    s' <- toAs3 s
-    case s of
-      Block _ -> do
-        for <- p $ "for (" ++ me1' ++ me2' ++ "; " ++ me3' ++ ")"
-        return $ unlines [for, s']
-      otherwise ->
-        p $ "for (" ++ me1' ++ me2' ++ "; " ++ me3' ++ ") " ++ s'
-  toAs3 (ForIn e1 e2 s) = return "ForIn"
-  toAs3 (ForEach e1 e2 s) = return "ForEach"
+        p $ "for (" ++ ms' ++ ";" ++ me1' ++ "; " ++ me2' ++ ") " ++ s' ++ ";"
+  toAs3 (ForIn s e body) = do
+    s' <- withNoIndent $ case s of
+      ExpressionStmt e -> toAs3 e
+      Variable _ -> toAs3 s >>= return . reverse . drop 1 . reverse
+      otherwise -> toAs3 s
+    e' <- toAs3 e
+    body' <- case body of
+      Block _ -> toAs3 body
+      otherwise -> inBlock [body]
+    p $ "for (" ++ s' ++ " in " ++ e' ++ ")\n" ++ body'
+  toAs3 (ForEach s e body) = do
+    s' <- withNoIndent $ case s of
+      ExpressionStmt e -> toAs3 e
+      Variable _ -> toAs3 s >>= return . reverse . drop 1 . reverse
+      otherwise -> toAs3 s
+    e' <- toAs3 e
+    body' <- case body of
+      Block _ -> toAs3 body
+      otherwise -> inBlock [body]
+    p $ "for each (" ++ s' ++ " in " ++ e' ++ ")\n" ++ body'
   toAs3 (Continue Nothing) = p "continue;"
   toAs3 (Continue (Just e)) = do
     e' <- toAs3 e
@@ -123,7 +130,14 @@ instance PrettyAs Statement where
   toAs3 (Return (Just e)) = do
     e' <- toAs3 e
     p $ "return " ++ e' ++ ";"
-  toAs3 (With e s) = return "With"
+  toAs3 (With e s@(Block _)) = do
+    e' <- withNoIndent $ toAs3 e
+    s' <- toAs3 s
+    p $ "with (" ++ e' ++ ")\n" ++ s'
+  toAs3 (With e s) = do
+    e' <- withNoIndent $ toAs3 e
+    s' <- inBlock [s]
+    p $ "with (" ++ e' ++ ")\n" ++ s'
   toAs3 (Switch e s) = return "Switch"
   toAs3 (Case e ms) = return "Case"
   toAs3 (Default ms) = return "Default"
@@ -175,8 +189,8 @@ instance PrettyAs Expression where
     r' <- toAs3 r
     return $ intercalate " " [l', show op, r']
   toAs3 (Unary op e) = liftM2 (++) (return $ show op) (toAs3 e)
-  toAs3 (ClassId ms cv n t) = p $
-    intercalate " " (map show ms ++ [show cv, n]) ++ ":" ++ show t ++ ";"
+  toAs3 (ClassId ms cv n t) = return $
+    intercalate " " (map show ms ++ [show cv, n]) ++ ":" ++ show t
   toAs3 (FnId cv n t) = return $ intercalate " " [show cv, n] ++ ":" ++ show t
   toAs3 (TypedId n t) = return $ n ++ ":" ++ show t
   toAs3 (UntypedId a) = return a

@@ -114,10 +114,9 @@ iteration_statement :: As3Parser Statement
 iteration_statement =
       try do_while
   <|> try while
-  <|> try forE
-  <|> try forS
-  <|> try for_in
-  <|>     for_each
+  <|> try for
+  <|> try forIn
+  <|>     forEach
   <?> "iteration stmt"
   where
     do_while :: As3Parser Statement
@@ -130,44 +129,40 @@ iteration_statement =
               (string "while" *> between_parens expression)
               (statement)
 
-    forS :: As3Parser Statement
-    forS = liftM4 ForS
-            (forward *> optionMaybe (tok variable_statement) <* optSemi)
-            (optionMaybe expression <* optSemi)
-            (optionMaybe expression <* epilogue)
-            (statement)
-          where
-            forward = tok (string "for") *> tok (char '(')
-            optSemi = optional semi
+    for :: As3Parser Statement
+    for = do
+      tok (string "for") *> tok (char '(')
+      ms <- optionMaybe $ tok varOrExp
+      me1 <- optionMaybe expression <* optional semi
+      me2 <- optionMaybe expression <* closeParen
+      s <- statement
+      return $ For ms me1 me2 s
+      where
+        varOrExp :: As3Parser Statement
+        varOrExp = noin (try variable_statement <|> expression_statement)
 
-    forE :: As3Parser Statement
-    forE = liftM4 ForE
-            (forward *> optionMaybe expression_no_in <* tok semi)
-            (optionMaybe expression <* optSemi)
-            (optionMaybe expression <* epilogue)
-            (statement)
-          where
-            forward = tok (string "for") *> tok (char '(')
-            optSemi = optional semi
-
-    for_in :: As3Parser Statement
-    for_in = liftM3 ForIn
-               (forward *> lhs_expression <* string " in ")
-               (expression <* epilogue)
-               (statement)
-             where
-               forward = tok (string "for") *> tok (char '(')
-
-    for_each :: As3Parser Statement
-    for_each = liftM3 ForEach
-                 (forward *> lhs_expression <* string " in ")
-                 (expression <* epilogue)
-                 (statement)
-               where
-                 forward = tok (string "for each") >> tok (char '(')
+    forIn :: As3Parser Statement
+    forIn = forCommon "for" ForIn
     
-    epilogue :: As3Parser String
-    epilogue = spaces *> string ")" <* spaces
+    forEach :: As3Parser Statement
+    forEach = forCommon "for each" ForEach
+    
+    forCommon :: String
+              -> (Statement -> Expression -> Statement -> Statement)
+              -> As3Parser Statement
+    forCommon preamble ctor = do
+      tok (string preamble) *> tok (char '(')
+      s <- tok lhsOrExp
+      tok $ string "in"
+      e <- expression <* closeParen
+      body <- statement
+      return $ ctor s e body
+      where
+        lhsOrExp :: As3Parser Statement
+        lhsOrExp = noin (try variable_statement <|> liftM ExpressionStmt lhs_expression)
+
+    closeParen :: As3Parser String
+    closeParen = spaces *> string ")" <* spaces
 
 continue_statement :: As3Parser Statement
 continue_statement = liftM Continue

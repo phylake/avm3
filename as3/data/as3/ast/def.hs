@@ -2,6 +2,8 @@ module Data.AS3.AST.Def (
   p
 , xy
 , pxy
+, noin
+, usein
 , with_scope
 , get_scope
 , ScopeId(..)
@@ -51,7 +53,7 @@ data ScopeId = ClassId2 [ScopeMod] Type
 type Identifiers = H.BasicHashTable String ScopeId
 type ScopeTree = H.BasicHashTable String Identifiers
 
-type M = StateT (IO ScopeTree, ParseScope, [String]) IO
+type M = StateT (IO ScopeTree, ParseScope, [String], Bool) IO
 
 --type ScopeIdParser = ParsecT String () IO [ScopeId]
 type As3Parser = ParsecT String () M
@@ -62,22 +64,35 @@ data ParseScope = PS_Class
                 | PS_TypedIds -- ^ e.g. function params, var/const ...
                 deriving (Eq, Show)
 
+noin :: As3Parser a -> As3Parser a
+noin action = do
+  (a, b, c, d) <- lift get
+  lift $ put (a, b, c, False)
+  result <- action
+  lift $ put (a, b, c, d)
+  return result
+
+usein :: As3Parser Bool
+usein = do
+  (_, _, _, a) <- lift get
+  return a
+
 with_scope :: ParseScope -> As3Parser a -> As3Parser a
 with_scope new_scope action = do
-  (a, old_scope, c) <- lift get
-  lift $ put (a, new_scope, c)
+  (a, old_scope, c, d) <- lift get
+  lift $ put (a, new_scope, c, d)
   result <- action
-  lift $ put (a, old_scope, c)
+  lift $ put (a, old_scope, c, d)
   return result
 
 set_scope :: ParseScope -> As3Parser ()
 set_scope new = do
-  (a, _, c) <- lift get
-  lift $ put (a, new, c)
+  (a, _, c, d) <- lift get
+  lift $ put (a, new, c, d)
 
 get_scope :: As3Parser ParseScope
 get_scope = do
-  (a, b, c) <- lift get
+  (a, b, c, d) <- lift get
   return b
 
 is_scope :: ParseScope -> As3Parser Bool
@@ -178,10 +193,9 @@ data Statement = EmptyS
                | Else Statement
                | DoWhile Statement Expression
                | While Expression Statement
-               | ForE (Maybe Expression) (Maybe Expression) (Maybe Expression) Statement
-               | ForS (Maybe Statement) (Maybe Expression) (Maybe Expression) Statement
-               | ForIn Expression Expression Statement
-               | ForEach Expression Expression Statement
+               | For (Maybe Statement) (Maybe Expression) (Maybe Expression) Statement
+               | ForIn Statement Expression Statement
+               | ForEach Statement Expression Statement
                | Continue (Maybe Expression)
                | Break (Maybe Expression)
                | Return (Maybe Expression)

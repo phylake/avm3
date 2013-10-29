@@ -7,7 +7,7 @@ import           Data.AS3.AST.Scope
 import           Data.AS3.AST.Show
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
-import           Util.Misc (t31)
+import           Util.Misc (t41)
 import qualified Control.Applicative as A
 import qualified Data.HashTable.IO as H
 
@@ -36,7 +36,7 @@ scope_mods = scope_mod `sepEndBy1` (many1 $ char ' ') <?> "scope modifiers"
 
 user_defined_type :: As3Parser String
 user_defined_type = do
-  ht <- gets t31 >>= liftIO
+  ht <- gets t41 >>= liftIO
   list <- map fst A.<$> (liftIO $ H.toList ht)
   --p$ "user_defined_type\n" ++ show list
   foldl plusfold (string $ head list) (drop 1 list)

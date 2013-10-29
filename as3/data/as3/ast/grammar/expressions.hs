@@ -189,15 +189,16 @@ shift_expression =
 
 -- $11.8 Relational Operators
 
-{- TODO ...NoIn
-   relational_expression :: Bool -> As3Parser Expression -}
-
 relational_expression :: As3Parser Expression
 relational_expression =
   chainl1 (tok shift_expression) relational_op <?> "relational expression"
   where
     relational_op :: As3Parser (Expression -> Expression -> Expression)
-    relational_op =
+    relational_op = do
+      true <- usein
+      if true then relational_op_in else relational_op_noin 
+    relational_op_in :: As3Parser (Expression -> Expression -> Expression)
+    relational_op_in =
           (linkL LessThanEq) -- <= before <
       <|> (linkL LessThan)
       <|> (linkL GreaterThanEq) -- >= before >
@@ -205,6 +206,14 @@ relational_expression =
       <|> (linkL InstanceOf) -- instanceof before in
       <|> (linkL In)
       <?> "relational operator"
+    relational_op_noin :: As3Parser (Expression -> Expression -> Expression)
+    relational_op_noin =
+          (linkL LessThanEq) -- <= before <
+      <|> (linkL LessThan)
+      <|> (linkL GreaterThanEq) -- >= before >
+      <|> (linkL GreaterThan)
+      <|> (linkL InstanceOf) -- instanceof before in
+      <?> "relational operator NO IN"
 
 -- $11.9 Equality Operators
 
