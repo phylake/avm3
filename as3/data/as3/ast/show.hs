@@ -82,7 +82,11 @@ instance PrettyAs Statement where
   toAs3 (Else s) = do
     s' <- inBlock [s]
     p $ "else\n" ++ s'
-  toAs3 (DoWhile s e) = return "DoWhile"
+  toAs3 (DoWhile s e) = do
+    s' <- toAs3 s
+    e' <- toAs3 e
+    while <- p $ "while (" ++ e' ++ ");"
+    p $ "do\n" ++ s' ++ while
   toAs3 (While e s) = do
     e' <- toAs3 e
     s' <- toAs3 s

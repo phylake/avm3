@@ -3,11 +3,10 @@ module Data.AS3.AST.Grammar.Lexicon where
 import           Control.Monad.State
 import           Data.AS3.AST.Def
 import           Data.AS3.AST.Prims
-import           Data.AS3.AST.Scope
 import           Data.AS3.AST.Show
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
-import           Util.Misc (t41)
+import           Util.Misc (t31)
 import qualified Control.Applicative as A
 import qualified Data.HashTable.IO as H
 
@@ -35,11 +34,7 @@ scope_mods = scope_mod `sepEndBy1` (many1 $ char ' ') <?> "scope modifiers"
       <|>     (symR Static) <?> "scope modifier"
 
 user_defined_type :: As3Parser String
-user_defined_type = do
-  ht <- gets t41 >>= liftIO
-  list <- map fst A.<$> (liftIO $ H.toList ht)
-  --p$ "user_defined_type\n" ++ show list
-  foldl plusfold (string $ head list) (drop 1 list)
+user_defined_type = liftM2 (:) upper (many alphaNum)
 
 extendable_type :: As3Parser String
 extendable_type = user_defined_type
@@ -49,18 +44,17 @@ implementable_type = user_defined_type
 
 as3_type :: As3Parser Type
 as3_type =
-      try (liftM T_UserDefined user_defined_type)
-  <|> try (symR T_int)
+      try (symR T_int)
   <|> try (symR T_uint)
   <|> try (symR T_void)
-  <|> try (symR T_undefined)
   <|> try (symR T_undefined)
   <|> try (symR T_Number)
   <|> try (symR T_Boolean)
   <|> try (symR T_String)
   <|> try (symR T_Array)
   <|> try (symR T_Object)
-  <|>     (string "Vector.<" *> as3_type <* string ">" >>= return . T_Vector)
+  <|> try (string "Vector.<" *> as3_type <* string ">" >>= return . T_Vector)
+  <|>     (liftM T_UserDefined user_defined_type)
   <?> "type id"
 
 -- ^ identifiers can not start with a numeral

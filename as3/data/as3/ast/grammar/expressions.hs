@@ -14,11 +14,11 @@ import Data.AS3.AST.Show
 primary_expression :: As3Parser Expression
 primary_expression =
       ((try $ string "this") >> return This)
-  <|> try scoped_identifier
   <|> try (liftM ParenGroup $ between_parens comma_expression)
   <|> try (liftM TODO_E literal)
   {-<|> liftM TODO_E array_literal-}
   <|> try object_literal
+  <|> try scoped_identifier
   <?> "primary_expression"
 
 array_literal :: As3Parser Expression

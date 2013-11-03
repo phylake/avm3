@@ -5,7 +5,6 @@ import           Data.AS3.AST.Def
 import           Data.AS3.AST.Grammar.Expressions
 import           Data.AS3.AST.Grammar.Lexicon
 import           Data.AS3.AST.Prims
-import           Data.AS3.AST.Scope
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
 
@@ -70,10 +69,11 @@ statement =
   <|> try return_statement
   <|> try with_statement
   <|> try expression_statement
-  {-<|> try switch_statement
+  <|> try switch_statement
   <|> try labelled_statement
   <|> try throw_statement
-  <|>     try_statement-}
+  <|>     try_statement
+  <?> "statement"
 
 block_statement :: As3Parser Statement
 block_statement = liftM Block $ between_braces $ many tstatement
@@ -115,14 +115,14 @@ iteration_statement =
       try do_while
   <|> try while
   <|> try for
-  <|> try forIn
-  <|>     forEach
+  <|> try for_in
+  <|>     for_each
   <?> "iteration stmt"
   where
     do_while :: As3Parser Statement
     do_while = liftM2 DoWhile
-                 (string "do" *> tok statement)
-                 (string "while" *> between_parens expression)
+                 (tok (string "do") *> tok statement)
+                 (tok (string "while") *> between_parens expression)
 
     while :: As3Parser Statement
     while = liftM2 While
@@ -141,11 +141,11 @@ iteration_statement =
         varOrExp :: As3Parser Statement
         varOrExp = noin (try variable_statement <|> expression_statement)
 
-    forIn :: As3Parser Statement
-    forIn = forCommon "for" ForIn
+    for_in :: As3Parser Statement
+    for_in = forCommon "for" ForIn
     
-    forEach :: As3Parser Statement
-    forEach = forCommon "for each" ForEach
+    for_each :: As3Parser Statement
+    for_each = forCommon "for each" ForEach
     
     forCommon :: String
               -> (Statement -> Expression -> Statement -> Statement)

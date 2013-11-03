@@ -6,9 +6,6 @@ module Data.AS3.AST.Def (
 , usein
 , with_scope
 , get_scope
-, ScopeId(..)
-, Identifiers
-, ScopeTree
 , M
 , As3Parser
 , ParseScope(..)
@@ -27,7 +24,6 @@ import           Data.Foldable
 import           Prelude hiding (foldr)
 import           Text.Parsec (ParsecT, getPosition)
 import           Text.Parsec.Pos (sourceLine, sourceColumn)
-import qualified Data.HashTable.IO as H
 
 p :: String -> As3Parser ()
 p = liftIO . putStrLn
@@ -40,22 +36,8 @@ xy = do
 pxy :: As3Parser ()
 pxy = xy >>= p
 
-{- ([class-level identifiers], [function-level identifiers]) -}
---type ScopeChain = ([String], [String])
---type M = StateT ([String], ScopeChain) IO
---type M = StateT ([ClassInterface], ScopeChain) IO
+type M = StateT (ParseScope, [String], Bool) IO
 
-{- (params, type) -}
-data ScopeId = ClassId2 [ScopeMod] Type
-             | ClassFn [ScopeMod] [Type] Type -- ^ scopes, params, return
-             | InstanceId [ScopeMod] Type
-             | InstanceFn [ScopeMod] [Type] Type -- ^ scopes, params, return
-type Identifiers = H.BasicHashTable String ScopeId
-type ScopeTree = H.BasicHashTable String Identifiers
-
-type M = StateT (IO ScopeTree, ParseScope, [String], Bool) IO
-
---type ScopeIdParser = ParsecT String () IO [ScopeId]
 type As3Parser = ParsecT String () M
 
 -- ^ Swapped during parsing to alter the underlying grammar
@@ -66,34 +48,34 @@ data ParseScope = PS_Class
 
 noin :: As3Parser a -> As3Parser a
 noin action = do
-  (a, b, c, d) <- lift get
-  lift $ put (a, b, c, False)
+  (a, b, c) <- lift get
+  lift $ put (a, b, False)
   result <- action
-  lift $ put (a, b, c, d)
+  lift $ put (a, b, c)
   return result
 
 usein :: As3Parser Bool
 usein = do
-  (_, _, _, a) <- lift get
+  (_, _, a) <- lift get
   return a
 
 with_scope :: ParseScope -> As3Parser a -> As3Parser a
 with_scope new_scope action = do
-  (a, old_scope, c, d) <- lift get
-  lift $ put (a, new_scope, c, d)
+  (old_scope, b, c) <- lift get
+  lift $ put (new_scope, b, c)
   result <- action
-  lift $ put (a, old_scope, c, d)
+  lift $ put (old_scope, b, c)
   return result
 
 set_scope :: ParseScope -> As3Parser ()
 set_scope new = do
-  (a, _, c, d) <- lift get
-  lift $ put (a, new, c, d)
+  (_, b, c) <- lift get
+  lift $ put (new, b, c)
 
 get_scope :: As3Parser ParseScope
 get_scope = do
-  (a, b, c, d) <- lift get
-  return b
+  (a, b, c) <- lift get
+  return a
 
 is_scope :: ParseScope -> As3Parser Bool
 is_scope ps2 = do
@@ -200,7 +182,7 @@ data Statement = EmptyS
                | Break (Maybe Expression)
                | Return (Maybe Expression)
                | With Expression Statement
-               | Switch Expression Statement
+               | Switch Expression [Statement]
                | Case Expression (Maybe Statement)
                | Default (Maybe Statement)
                
