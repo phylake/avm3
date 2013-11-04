@@ -184,9 +184,9 @@ data Statement = EmptyS
                | Return (Maybe Expression)
                | With Expression Statement
                | Switch Expression [SwitchBody]
+               | Labeled String Statement
                | Package (Maybe String) [Statement]
                | Import String
-               | Labeled String Statement
                -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
                | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Statement]
                -- ^ [public] <name> <params> <return> <body>
@@ -203,6 +203,7 @@ data Expression = TODO_E String
                 | Comma [Expression]
                 | ParenGroup Expression
                 | ObjectLiteral [Expression]
+                | ArrayLiteral [Expression]
                 | KeyValue Expression Expression
                 -- ^ "?" is implied since it's the only ternary operator
                 | TernOp Expression Expression Expression

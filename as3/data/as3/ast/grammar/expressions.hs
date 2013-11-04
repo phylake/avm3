@@ -16,13 +16,13 @@ primary_expression =
       ((try $ string "this") >> return This)
   <|> try (liftM ParenGroup $ between_parens comma_expression)
   <|> try (liftM TODO_E literal)
-  {-<|> liftM TODO_E array_literal-}
+  <|> try array_literal
   <|> try object_literal
-  <|> try scoped_identifier
+  <|> try scoped_identifier -- check last because it fails slower
   <?> "primary_expression"
 
 array_literal :: As3Parser Expression
-array_literal = undefined
+array_literal = liftM ArrayLiteral $ between_brackets $ many expression
 
 element_list :: As3Parser Expression
 element_list = undefined

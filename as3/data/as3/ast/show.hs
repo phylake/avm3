@@ -192,8 +192,10 @@ instance PrettyAs Expression where
     return $ "(" ++ a' ++ ")"
   toAs3 (ObjectLiteral kvps) = do
     kvps <- mapM toAs3 kvps
-    close <- p "}"
-    return $ "{" ++ intercalate ", " kvps ++ close
+    return $ "{" ++ intercalate ", " kvps ++ "}"
+  toAs3 (ArrayLiteral kvps) = do
+    kvps <- mapM toAs3 kvps
+    return $ "[" ++ intercalate ", " kvps ++ "]"
   toAs3 (KeyValue k v) = do
     k <- toAs3 k
     v <- toAs3 v
