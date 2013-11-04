@@ -14,23 +14,26 @@ import Data.AS3.AST.Show
 primary_expression :: As3Parser Expression
 primary_expression =
       ((try $ string "this") >> return This)
-  <|> try (liftM ParenGroup $ between_parens comma_expression)
+  <|> try paren_group
   <|> try (liftM TODO_E literal)
   <|> try array_literal
   <|> try object_literal
   <|> try scoped_identifier -- check last because it fails slower
   <?> "primary_expression"
 
+paren_group :: As3Parser Expression
+paren_group = liftM ParenGroup $ between_parens comma_expression
+
 array_literal :: As3Parser Expression
-array_literal = liftM ArrayLiteral $ between_brackets $ many expression
+array_literal = liftM ArrayLiteral $ between_brackets comma_expression
 
 element_list :: As3Parser Expression
 element_list = undefined
 
 object_literal :: As3Parser Expression
 object_literal = liftM ObjectLiteral $ between_braces kvps where
-  kvps :: As3Parser [Expression]
-  kvps = property_assignment `sepBy` comma
+  kvps :: As3Parser Expression
+  kvps = liftM Comma $ property_assignment `sepBy` comma
 
   property_assignment :: As3Parser Expression
   property_assignment = liftM2 KeyValue
@@ -103,11 +106,9 @@ call_expression = subexpressions >>= loop
       r <- arguments
       loop $ CallEArguments l r
 
-arguments :: As3Parser [Expression]
-arguments = between_parens argument_list
-
-argument_list :: As3Parser [Expression]
-argument_list = csv assignment_expression
+    arguments :: As3Parser Expression
+    arguments = liftM Comma $
+                between_parens $ assignment_expression `sepBy` comma
 
 lhs_expression :: As3Parser Expression
 lhs_expression = try call_expression <|> new_expression <?> "lhs_expression"
@@ -311,7 +312,7 @@ assignment_expression =
 
 -- $11.14 Comma Operator
 
--- TODO Expression == ArgumentList. resolve this
+-- sepBy1. compare to other uses of Comma
 comma_expression :: As3Parser Expression
 comma_expression = liftM Comma (assignment_expression `sepBy1` comma)
 
@@ -319,7 +320,7 @@ expression :: As3Parser Expression
 expression = comma_expression
 
 expression_no_in :: As3Parser Expression
-expression_no_in = expression -- TODO
+expression_no_in = noin expression
 
 -- $Chain links
 

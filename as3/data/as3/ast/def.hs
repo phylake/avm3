@@ -201,9 +201,9 @@ data Expression = TODO_E String
                 | CommentBlock [String]
                 | CommentAsdoc [AsDoc]
                 | Comma [Expression]
-                | ParenGroup Expression
-                | ObjectLiteral [Expression]
-                | ArrayLiteral [Expression]
+                | ParenGroup Expression -- Comma
+                | ObjectLiteral Expression -- Comma
+                | ArrayLiteral Expression -- Comma
                 | KeyValue Expression Expression
                 -- ^ "?" is implied since it's the only ternary operator
                 | TernOp Expression Expression Expression
@@ -224,8 +224,8 @@ data Expression = TODO_E String
                 | ArrayAccess Expression Expression
                 -- ^ caller.identifier
                 | Call Expression String
-                | CallEMember Expression [Expression]
-                | CallEArguments Expression [Expression]
+                | CallEMember Expression Expression
+                | CallEArguments Expression Expression
 
                 -- ^ 
 --                | FnExp (Maybe Expression) [Expression] [Statement]

@@ -190,12 +190,12 @@ instance PrettyAs Expression where
   toAs3 (ParenGroup a) = do
     a' <- toAs3 a
     return $ "(" ++ a' ++ ")"
-  toAs3 (ObjectLiteral kvps) = do
-    kvps <- mapM toAs3 kvps
-    return $ "{" ++ intercalate ", " kvps ++ "}"
-  toAs3 (ArrayLiteral kvps) = do
-    kvps <- mapM toAs3 kvps
-    return $ "[" ++ intercalate ", " kvps ++ "]"
+  toAs3 (ObjectLiteral e) = do
+    e' <- toAs3 e
+    return $ "{" ++ e' ++ "}"
+  toAs3 (ArrayLiteral e) = do
+    e' <- toAs3 e
+    return $ "[" ++ e' ++ "]"
   toAs3 (KeyValue k v) = do
     k <- toAs3 k
     v <- toAs3 v
@@ -230,12 +230,12 @@ instance PrettyAs Expression where
     return $ a' ++ "." ++ b
   toAs3 (CallEMember a b) = do
     a' <- toAs3 a
-    b' <- mapM toAs3 b
-    return $ a' ++ "(" ++ intercalate ", " b' ++ ")"
+    b' <- toAs3 b
+    return $ a' ++ "(" ++ b' ++ ")"
   toAs3 (CallEArguments a b) = do
     a' <- toAs3 a
-    b' <- mapM toAs3 b
-    return $ a' ++ "(" ++ intercalate ", " b' ++ ")"
+    b' <- toAs3 b
+    return $ a' ++ "(" ++ b' ++ ")"
 
 instance Show BinaryOp where
   show Addition = "+"
