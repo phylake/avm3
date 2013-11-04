@@ -66,10 +66,10 @@ statement =
   <|> try break_statement
   <|> try return_statement
   <|> try with_statement
+  <|> try labelled_statement -- before expression_statement
   <|> try expression_statement
   <|> try switch_statement
-  {-<|> try labelled_statement
-  <|> try throw_statement
+  {-<|> try throw_statement
   <|>     try_statement-}
   <?> "statement"
 
@@ -201,7 +201,11 @@ switch_statement = do
       liftM Default $ many tstatement
 
 labelled_statement :: As3Parser Statement
-labelled_statement = undefined
+labelled_statement = do
+  ident <- var_id
+  tok $ char ':'
+  s <- tstatement
+  return $ Labeled ident s
 
 throw_statement :: As3Parser Statement
 throw_statement = undefined

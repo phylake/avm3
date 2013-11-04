@@ -186,6 +186,7 @@ data Statement = EmptyS
                | Switch Expression [SwitchBody]
                | Package (Maybe String) [Statement]
                | Import String
+               | Labeled String Statement
                -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
                | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Statement]
                -- ^ [public] <name> <params> <return> <body>
@@ -198,6 +199,7 @@ data Expression = TODO_E String
                 | This
                 | CommentSingle String
                 | CommentBlock [String]
+                | CommentAsdoc [AsDoc]
                 | Comma [Expression]
                 | ParenGroup Expression
                 | ObjectLiteral [Expression]
@@ -226,6 +228,9 @@ data Expression = TODO_E String
 
                 -- ^ 
 --                | FnExp (Maybe Expression) [Expression] [Statement]
+
+data AsDoc = Comment String
+           | AtSee String
 
 {-type Expression = Tree NodeData
 

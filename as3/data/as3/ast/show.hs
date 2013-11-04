@@ -40,10 +40,16 @@ withNoIndent action = do
   ML.set orig
   return ret
 
+indentChar :: Char
+indentChar = '\t'
+
 spaces :: M String
 spaces = do
   i <- ML.get
-  return $ replicate i '\t'
+  return $ replicate i indentChar
+
+trimL :: String -> String
+trimL = dropWhile (==indentChar)
 
 p :: String -> M String
 p = liftM2 (++) spaces . return
@@ -146,6 +152,9 @@ instance PrettyAs Statement where
     e' <- toAs3 e
     bs' <- inBlock bs
     p $ "switch (" ++ e' ++ ")\n" ++ bs'
+  toAs3 (Labeled ident s) = do
+    s' <- toAs3 s
+    p $ ident ++ ": " ++ trimL s'
   toAs3 (Package a body) = do
     body <- inBlock body
     return $ unlines ["package" ++ maybe "" ((++)" ") a, body]
