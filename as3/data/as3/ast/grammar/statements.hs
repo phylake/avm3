@@ -8,8 +8,6 @@ import           Data.AS3.AST.Prims
 import           Data.AS3.AST.ThirdParty
 import           Text.Parsec
 
-import Data.AS3.AST.Show
-
 -- $Package-level
 
 package_id :: As3Parser String
@@ -70,9 +68,9 @@ statement =
   <|> try with_statement
   <|> try expression_statement
   <|> try switch_statement
-  <|> try labelled_statement
+  {-<|> try labelled_statement
   <|> try throw_statement
-  <|>     try_statement
+  <|>     try_statement-}
   <?> "statement"
 
 block_statement :: As3Parser Statement
@@ -151,7 +149,8 @@ iteration_statement =
               -> (Statement -> Expression -> Statement -> Statement)
               -> As3Parser Statement
     forCommon preamble ctor = do
-      tok (string preamble) *> tok (char '(')
+      tok $ string preamble
+      tok $ char '('
       s <- tok lhsOrExp
       tok $ string "in"
       e <- expression <* closeParen
@@ -182,7 +181,24 @@ with_statement = liftM2 With
                   (statement)
 
 switch_statement :: As3Parser Statement
-switch_statement = undefined
+switch_statement = do
+  string "switch"
+  e <- between_parens expression
+  ss <- between_braces $ many (case_statement <|> default_statement)
+  return $ Switch e ss
+  where
+    case_statement :: As3Parser SwitchBody
+    case_statement = do
+      string "case "
+      e <- expression
+      tok $ char ':'
+      ss <- many tstatement
+      return $ Case e ss
+
+    default_statement :: As3Parser SwitchBody
+    default_statement = do
+      tok $ string "default:"
+      liftM Default $ many tstatement
 
 labelled_statement :: As3Parser Statement
 labelled_statement = undefined

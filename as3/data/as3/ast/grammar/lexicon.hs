@@ -274,9 +274,10 @@ non_zero_digit =
   <|> char '9'
 
 hex_integer_literal :: As3Parser String
-hex_integer_literal =
-      (string "0x" >> many1 hex_digit)
-  <|> (string "0X" >> many1 hex_digit)
+hex_integer_literal = do
+  char '0'
+  char 'x' <|> char 'X'
+  many1 hex_digit
 
 hex_digit :: As3Parser Char
 hex_digit =

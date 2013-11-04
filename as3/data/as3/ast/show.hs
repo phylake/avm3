@@ -104,8 +104,8 @@ instance PrettyAs Statement where
         p $ "for (" ++ ms' ++ ";" ++ me1' ++ "; " ++ me2' ++ ") " ++ s' ++ ";"
   toAs3 (ForIn s e body) = do
     s' <- withNoIndent $ case s of
-      ExpressionStmt e -> toAs3 e
-      Variable _ -> toAs3 s >>= return . reverse . drop 1 . reverse
+      ExpressionStmt es -> toAs3 es
+      Variable ve -> toAs3 ve >>= p . ("var "++)
       otherwise -> toAs3 s
     e' <- toAs3 e
     body' <- case body of
@@ -114,8 +114,8 @@ instance PrettyAs Statement where
     p $ "for (" ++ s' ++ " in " ++ e' ++ ")\n" ++ body'
   toAs3 (ForEach s e body) = do
     s' <- withNoIndent $ case s of
-      ExpressionStmt e -> toAs3 e
-      Variable _ -> toAs3 s >>= return . reverse . drop 1 . reverse
+      ExpressionStmt es -> toAs3 es
+      Variable ve -> toAs3 ve >>= p . ("var "++)
       otherwise -> toAs3 s
     e' <- toAs3 e
     body' <- case body of
@@ -142,9 +142,10 @@ instance PrettyAs Statement where
     e' <- withNoIndent $ toAs3 e
     s' <- inBlock [s]
     p $ "with (" ++ e' ++ ")\n" ++ s'
-  toAs3 (Switch e s) = return "Switch"
-  toAs3 (Case e ms) = return "Case"
-  toAs3 (Default ms) = return "Default"
+  toAs3 (Switch e bs) = do
+    e' <- toAs3 e
+    bs' <- inBlock bs
+    p $ "switch (" ++ e' ++ ")\n" ++ bs'
   toAs3 (Package a body) = do
     body <- inBlock body
     return $ unlines ["package" ++ maybe "" ((++)" ") a, body]
@@ -163,6 +164,15 @@ instance PrettyAs Statement where
       intercalate " " (map show scopes) ++ " function " ++ name
       ++ "(" ++ intercalate ", " params ++ "):" ++ show t ++ "\n"
       ++ "\t\t{\n" ++ unlines body ++ "\n\t\t}"
+
+instance PrettyAs SwitchBody where
+  toAs3 (Case e ms) = do
+    e' <- toAs3 e
+    ms' <- withIndent $ mapM toAs3 ms
+    p $ "case " ++ e' ++ ":\n" ++ unlines ms'
+  toAs3 (Default ms) = do
+    ms' <- withIndent $ mapM toAs3 ms
+    p $ "default:\n" ++ unlines ms'
 
 instance PrettyAs Expression where
   toAs3 (TODO_E a) = return $ "TODO[" ++ a ++ "]"

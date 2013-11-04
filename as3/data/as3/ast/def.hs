@@ -16,6 +16,7 @@ module Data.AS3.AST.Def (
 , CV(..)
 , ScopeMod(..)
 , Statement(..)
+, SwitchBody(..)
 , Expression(..)
 ) where
 
@@ -182,16 +183,16 @@ data Statement = EmptyS
                | Break (Maybe Expression)
                | Return (Maybe Expression)
                | With Expression Statement
-               | Switch Expression [Statement]
-               | Case Expression (Maybe Statement)
-               | Default (Maybe Statement)
-               
+               | Switch Expression [SwitchBody]
                | Package (Maybe String) [Statement]
                | Import String
                -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
                | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Statement]
                -- ^ [public] <name> <params> <return> <body>
                | FnDec [ScopeMod] String [Expression] Type [Statement]
+
+data SwitchBody = Default [Statement]
+                | Case Expression [Statement]
 
 data Expression = TODO_E String
                 | This
