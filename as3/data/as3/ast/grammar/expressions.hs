@@ -156,9 +156,9 @@ multiplicative_expression =
   where
     multiplicative_op :: As3Parser (Expression -> Expression -> Expression)
     multiplicative_op =
-          (linkL Multiplication)
-      <|> (linkL Division)
-      <|> (linkL Modulo)
+          linkL Multiplication
+      <|> linkL Division
+      <|> linkL Modulo
       <?> "multiplicative operator"
 
 -- $11.6 Additive Operators
@@ -170,8 +170,8 @@ additive_expression =
   where
     additive_op :: As3Parser (Expression -> Expression -> Expression)
     additive_op =
-          (linkL Addition)
-      <|> (linkL Subtraction)
+          linkL Addition
+      <|> linkL Subtraction
       <?> "additive operator"
 
 -- $11.7 Bitwise Shift Operators
@@ -183,9 +183,9 @@ shift_expression =
   where
     shift_op :: As3Parser (Expression -> Expression -> Expression)
     shift_op =
-          (linkL URShift) -- >>> before >>
-      <|> (linkL RShift)
-      <|> (linkL LShift)
+          linkL URShift -- >>> before >>
+      <|> linkL RShift
+      <|> linkL LShift
       <?> "bitwise shift operator"
 
 -- $11.8 Relational Operators
@@ -200,20 +200,20 @@ relational_expression =
       if true then relational_op_in else relational_op_noin 
     relational_op_in :: As3Parser (Expression -> Expression -> Expression)
     relational_op_in =
-          (linkL LessThanEq) -- <= before <
-      <|> (linkL LessThan)
-      <|> (linkL GreaterThanEq) -- >= before >
-      <|> (linkL GreaterThan)
-      <|> (linkL InstanceOf) -- instanceof before in
-      <|> (linkL In)
+          linkL LessThanEq -- <= before <
+      <|> linkL LessThan
+      <|> linkL GreaterThanEq -- >= before >
+      <|> linkL GreaterThan
+      <|> linkL InstanceOf -- instanceof before in
+      <|> linkL In
       <?> "relational operator"
     relational_op_noin :: As3Parser (Expression -> Expression -> Expression)
     relational_op_noin =
-          (linkL LessThanEq) -- <= before <
-      <|> (linkL LessThan)
-      <|> (linkL GreaterThanEq) -- >= before >
-      <|> (linkL GreaterThan)
-      <|> (linkL InstanceOf) -- instanceof before in
+          linkL LessThanEq -- <= before <
+      <|> linkL LessThan
+      <|> linkL GreaterThanEq -- >= before >
+      <|> linkL GreaterThan
+      <|> linkL InstanceOf -- instanceof before in
       <?> "relational operator NO IN"
 
 -- $11.9 Equality Operators
@@ -224,10 +224,10 @@ equality_expression =
   where
     equality_op :: As3Parser (Expression -> Expression -> Expression)
     equality_op =
-          (linkL StrictEquality) -- === before ==
-      <|> (linkL Equality)
-      <|> (linkL StrictInEquality) -- !== before !=
-      <|> (linkL InEquality)
+          linkL StrictEquality -- === before ==
+      <|> linkL Equality
+      <|> linkL StrictInEquality -- !== before !=
+      <|> linkL InEquality
       <?> "equality operator"
 
 -- $11.10 Binary Bitwise Operators
