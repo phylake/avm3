@@ -15,8 +15,9 @@ module Data.AS3.AST.Def (
 , Literal(..)
 , CV(..)
 , ScopeMod(..)
-, Statement(..)
 , SwitchBody(..)
+, Accessor(..)
+, Statement(..)
 , Expression(..)
 ) where
 
@@ -166,6 +167,12 @@ data ScopeMod = Public
               | Override
               | Static
 
+data SwitchBody = Default [Statement]
+                | Case Expression [Statement]
+
+data Accessor = Get
+              | Set
+
 data Statement = EmptyS
                | Block [Statement]
                | Variable Expression -- expected to be Comma
@@ -187,13 +194,10 @@ data Statement = EmptyS
                | Labeled String Statement
                | Package (Maybe String) [Statement]
                | Import String
-               -- ^ [public] FooClass [extends Bar] [implements Baz] [body]
+               -- ^ [public|private] FooClass [extends Bar] [implements Baz] [body]
                | Class [ScopeMod] String (Maybe String) (Maybe [String]) [Statement]
-               -- ^ [public] <name> <params> <return> <body>
-               | FnDec [ScopeMod] String [Expression] Type [Statement]
-
-data SwitchBody = Default [Statement]
-                | Case Expression [Statement]
+               -- ^ [public|private] [get|set] <name> <params> <return> <body>
+               | FnDec [ScopeMod] (Maybe Accessor) String [Expression] Type [Statement]
 
 data Expression = TODO_E String
                 | This

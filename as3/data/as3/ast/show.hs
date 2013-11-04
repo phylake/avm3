@@ -1,4 +1,4 @@
-module Data.AS3.AST.Show (PrettyAs(..)) where
+module Data.AS3.AST.Show () where
 
 import           Control.Monad (liftM, liftM2)
 import           Data.AS3.AST.Def hiding (M,p)
@@ -54,6 +54,19 @@ trimL = dropWhile (==indentChar)
 p :: String -> M String
 p = liftM2 (++) spaces . return
 
+instance PrettyAs SwitchBody where
+  toAs3 (Case e ms) = do
+    e' <- toAs3 e
+    ms' <- withIndent $ mapM toAs3 ms
+    p $ "case " ++ e' ++ ":\n" ++ unlines ms'
+  toAs3 (Default ms) = do
+    ms' <- withIndent $ mapM toAs3 ms
+    p $ "default:\n" ++ unlines ms'
+
+instance Show Accessor where
+  show Get = "get"
+  show Set = "set"
+
 instance PrettyAs Statement where
   toAs3 EmptyS = return ""
   toAs3 (Block sts) = inBlock sts
@@ -88,11 +101,13 @@ instance PrettyAs Statement where
   toAs3 (Else s) = do
     s' <- inBlock [s]
     p $ "else\n" ++ s'
-  toAs3 (DoWhile s e) = do
-    s' <- toAs3 s
+  toAs3 (DoWhile s@(Block ss) e) = do
     e' <- toAs3 e
-    while <- p $ "while (" ++ e' ++ ");"
-    p $ "do\n" ++ s' ++ while
+    open <- p "do {"
+    body <- withIndent $ mapM toAs3 ss
+    close <- p $ "} while (" ++ e' ++ ");"
+    return $ unlines $ [open] ++ body ++ [close]
+  toAs3 (DoWhile s e) = toAs3 $ DoWhile (Block [s]) e
   toAs3 (While e s) = do
     e' <- toAs3 e
     s' <- toAs3 s
@@ -166,22 +181,14 @@ instance PrettyAs Statement where
                ++ "\n"
     body' <- inBlock body
     return $ dec ++ body'
-  toAs3 (FnDec scopes name params t body) = do
+  toAs3 (FnDec scopes mAccessor name params t body) = do
     body <- withIndent $ mapM toAs3 body
     params <- withNoIndent $ mapM toAs3 params
     p $
       intercalate " " (map show scopes) ++ " function " ++ name
+      ++ maybe "" show mAccessor
       ++ "(" ++ intercalate ", " params ++ "):" ++ show t ++ "\n"
       ++ "\t\t{\n" ++ unlines body ++ "\n\t\t}"
-
-instance PrettyAs SwitchBody where
-  toAs3 (Case e ms) = do
-    e' <- toAs3 e
-    ms' <- withIndent $ mapM toAs3 ms
-    p $ "case " ++ e' ++ ":\n" ++ unlines ms'
-  toAs3 (Default ms) = do
-    ms' <- withIndent $ mapM toAs3 ms
-    p $ "default:\n" ++ unlines ms'
 
 instance PrettyAs Expression where
   toAs3 (TODO_E a) = return $ "TODO[" ++ a ++ "]"

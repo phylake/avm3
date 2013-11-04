@@ -45,11 +45,15 @@ source_element = try tstatement <|> function_declaration
 function_declaration :: As3Parser Statement
 function_declaration = do
   mods <- scope_mods <* string "function "
+  mAccessor <- optionMaybe accessor
   name <- var_id
   params <- with_scope PS_TypedIds $ between_parens $ assignment_expression `sepBy` comma
   returnType <- type_declaration
   body <- with_scope PS_UntypedIds $ between_braces $ many tstatement
-  return $ FnDec mods name params returnType body
+  return $ FnDec mods mAccessor name params returnType body
+  where
+    accessor :: As3Parser Accessor
+    accessor = (string "get " >> return Get) <|> (string "set " >> return Set)
 
 tstatement :: As3Parser Statement
 tstatement = tok (statement <* optional semi)
