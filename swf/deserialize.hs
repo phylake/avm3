@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Swf.Deserialize (deserialize, deserializeBs) where
 
@@ -146,16 +147,7 @@ parse_colorxform alpha = parse_common max_bytes $ cxform_parser alpha
                         (rv_w16 nbits2)
                       else return (0,0,0)
       aA <- if alpha then liftM Just (rv_w16 nbits2) else return Nothing
-      return ColorXForm {
-        rM = rM
-      , gM = gM
-      , bM = bM
-      , aM = aM
-      , rA = rA
-      , gA = gA
-      , bA = bA
-      , aA = aA
-      }
+      return ColorXForm {..}
 
 parse_common :: Int64 -> BitParser a -> Parser a
 parse_common max_bytes parser =
