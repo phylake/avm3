@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Swf.Util (
+module Data.Swf.Util (
     takeWords
   , readU8
   , readU16LE
@@ -24,9 +24,9 @@ import           Data.Conduit
 import           Data.Conduit.Binary as CB
 import           Data.Conduit.List as CL
 import           Data.Int
+import           Data.Swf.Def
 import           Data.Void
 import           Data.Word
-import           Swf.Def
 import           Util.Misc
 import           Util.Words
 import qualified Data.ByteString as B

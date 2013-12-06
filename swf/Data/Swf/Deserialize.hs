@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Swf.Deserialize (deserialize, deserializeBs) where
+module Data.Swf.Deserialize (deserialize, deserializeBs) where
 
 import           Control.Monad
 import           Control.Monad.IO.Class (liftIO)
@@ -11,9 +11,9 @@ import           Data.Conduit.List as CL
 import           Data.Conduit.Zlib
 import           Data.Int (Int64)
 import           Data.Maybe (listToMaybe)
+import           Data.Swf.Def
+import           Data.Swf.Util
 import           Data.Word
-import           Swf.Def
-import           Swf.Util
 import           System.Environment (getArgs)
 import           Util.Misc
 import qualified Data.ByteString as B

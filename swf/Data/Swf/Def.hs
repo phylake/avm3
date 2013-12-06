@@ -1,4 +1,4 @@
-module Swf.Def where
+module Data.Swf.Def where
 
 import           Data.Conduit
 import           Data.Int
