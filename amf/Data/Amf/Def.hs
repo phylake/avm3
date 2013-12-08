@@ -28,6 +28,7 @@ type U8 = Word8
 type U30 = Word32
 type U32 = Word32
 type S24 = Int32
+-- | Variable length integer
 type U29 = Int
 type Assoc_Value = (UTF_8_vr, Amf)
 
@@ -134,13 +135,10 @@ instance AmfReference Amf where
   toValue t (AmfVecObject a) = AmfVecObject $ map (toValue t) a
   toValue t (AmfDictionary a) = AmfDictionary $ map (toValue t) a
 
-{-
-    AmfByteArray
-
-    U29O-ref |
-    U29B-value U8*
--}
-
+-- | AmfByteArray
+-- 
+-- > U29O-ref |
+-- > U29B-value U8*
 data U29B = U29B_Ref U29
           | U29B_Value BL.ByteString
           deriving (Show, Eq)
@@ -149,27 +147,21 @@ instance NFData U29B where
   rnf (U29B_Ref a) = a `deepseq` ()
   rnf (U29B_Value a) = ()
 
-{-
-    AmfXml and AmfXmlDoc
-
-    U29O-ref |
-    U29X-value UTF8-char*
--}
-
+-- | AmfXml and AmfXmlDoc
+-- 
+-- > U29O-ref |
+-- > U29X-value UTF8-char*
 type U29X = UTF_8_vr
 
-{-
-    AmfObject
-
-    (
-        U29O-ref |
-        U29O-traits-ref |
-        U29O-traits-ext class-name U8* |
-        U29O-traits class-name UTF-8-vr*
-    )
-    value-type* dynamic-member*
--}
-
+-- | AmfObject
+-- 
+-- > (
+-- >     U29O-ref |
+-- >     U29O-traits-ref |
+-- >     U29O-traits-ext class-name U8* |
+-- >     U29O-traits class-name UTF-8-vr*
+-- > )
+-- > value-type* dynamic-member*
 data U29O = U29O_Ref U29
           | U29O_TraitsRef U29 [Amf] [Assoc_Value] -- ^ trait ref, fixed member values, dynamic member keys and values
           | U29O_TraitsExt UTF_8_vr [Word8] {-[Amf] [Assoc_Value]-} --TODO handle this
@@ -191,17 +183,14 @@ instance Show U29O where
     ++ show dynam
   show (U29O_TraitsExt _ _) = show "U29O-traits-ext"
 
-{-
-    AmfArray
-
-        U29O-ref |
-    (
-        U29A-value
-        (UTF-8-empty | assoc-value* UTF-8-empty)
-        value-type*
-    )
--}
-
+-- | AmfArray
+-- 
+-- >     U29O-ref |
+-- > (
+-- >     U29A-value
+-- >     (UTF-8-empty | assoc-value* UTF-8-empty)
+-- >     value-type*
+-- > )
 data U29A = U29A_Ref U29
           | U29A_Value [Assoc_Value] [Amf]
           deriving (Eq)
@@ -213,10 +202,6 @@ instance Show U29A where
 instance NFData U29A where
   rnf (U29A_Ref a) = a `deepseq` ()
   rnf (U29A_Value a b) = a `deepseq` b `deepseq` ()
-
-{-
-    Char
--}
 
 data UTF_8_vr = U29S_Ref U29
               | U29S_Value String

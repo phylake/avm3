@@ -1,5 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Data.Amf.Deserialize (deserialize, deserializeBs, toValues) where
+module Data.Amf.Deserialize (
+  deserialize
+, deserializeBs
+, toValues
+) where
 
 import           Control.Monad (replicateM, liftM, liftM2)
 import           Data.Amf.Def
@@ -23,13 +27,14 @@ toValues :: ([Amf], Tables) -> [Amf]
 toValues (amfs, tables) = Prelude.map (toValue tables) amfs
 
 deserialize :: FilePath
-            -> IO ([Amf], Tables) -- ^ A list of Amfs and the implicit dictionary that was built up
+            -> IO ([Amf], Tables)
+            -- ^ A list of Amf and the implicit dictionary that was built up
 deserialize file = (runResourceT $
-  CB.sourceFile file $$ ML.runStateT U.emptyTable parseAmf) >>= return .reverseAmfs
+  CB.sourceFile file $$ ML.runStateT U.emptyTable parseAmf) >>= return . reverseAmfs
 
 deserializeBs :: BL.ByteString -> IO ([Amf], Tables)
 deserializeBs lbs = (runResourceT $
-  CB.sourceLbs lbs $$ ML.runStateT U.emptyTable parseAmf) >>= return .reverseAmfs
+  CB.sourceLbs lbs $$ ML.runStateT U.emptyTable parseAmf) >>= return . reverseAmfs
 
 parseAmf :: Parser [Amf]
 parseAmf = do
@@ -65,12 +70,7 @@ instance AmfPrim Amf where
       | w == 0x11 = fail "AmfDictionary unsupported"
       | otherwise = fail "encountered unknown marker"
 
-{-
-  AmfByteArray
-
-  U29O-ref |
-  U29B-value U8*
--}
+-- AmfByteArray
 
 fromByteArray :: Parser Amf
 fromByteArray = refOrValue fromU29BRef fromU29BValue
@@ -82,12 +82,7 @@ fromU29BValue :: U29 -> Parser Amf
 fromU29BValue len =
   liftM (AmfByteArray . U29B_Value) $ U.take (fromIntegral len)
 
-{-
-  AmfXml and AmfXmlDoc
-
-  U29O-ref |
-  U29X-value UTF8-char*
--}
+-- AmfXml and AmfXmlDoc
 
 fromXmlType :: Parser Amf
 fromXmlType = fromCommonXml AmfXml
@@ -98,17 +93,7 @@ fromXmlDocType = fromCommonXml AmfXmlDoc
 fromCommonXml :: (U29X -> Amf) -> Parser Amf
 fromCommonXml = (flip liftM) fromAmf
 
-{-
-  AmfObject
-
-  (
-    U29O-ref |
-    U29O-traits-ref |
-    U29O-traits-ext class-name U8* |
-    U29O-traits class-name UTF-8-vr*
-  )
-  value-type* dynamic-member*
--}
+-- AmfObject
 
 fromObjectType :: Parser Amf
 fromObjectType = fromAmf >>= u29OFunc
@@ -121,11 +106,9 @@ u29OFunc u29
   | {- U29O-traits     -} u29 .&. 0x7 == 0x3 = fromU29OTraits u29
   | otherwise = fail$ "u29OFunc - unrecognized u29"
 
-{-
-  Doc correction:
-  - "The remaining 1 to 28 significant bits are used to encode an object reference index (an integer)."
-  + "The remaining 1 to 27 significant bits are used to encode an object reference index (an integer)."
--}
+-- | Doc correction:
+-- - "The remaining 1 to 28 significant bits are used to encode an object reference index (an integer)."
+-- + "The remaining 1 to 27 significant bits are used to encode an object reference index (an integer)."
 fromU29ORef :: U29 -> Parser Amf
 fromU29ORef = return . AmfObject . U29O_Ref . (`shiftR` 2)
 
@@ -174,16 +157,7 @@ fromU29OTraits u29 = do
         else return $ Prelude.zip props valueAmfs
 
 
-{-
-  AmfArray
-
-    U29O-ref |
-  (
-    U29A-value
-    (UTF-8-empty | assoc-value* UTF-8-empty)
-    value-type*
-  )
--}
+-- AmfArray
 
 fromArrayType :: Parser Amf
 fromArrayType = refOrValue fromU29ARef fromU29AValue
@@ -206,9 +180,7 @@ fromAssoc = do
       rest <- fromAssoc
       return $ (key, value):rest
 
-{-
-  Char
--}
+-- Char
 
 instance AmfPrim UTF_8_vr where
   fromAmf = do
@@ -227,9 +199,7 @@ fromStringType = liftM AmfString fromAmf
 utf8_empty :: String
 utf8_empty = ""
 
-{-
-  Double
--}
+-- Double
 
 instance AmfPrim Double where
   fromAmf = U.take 8 >>= return . wordToDouble . toWord64 . BL.unpack
@@ -237,9 +207,7 @@ instance AmfPrim Double where
 fromNumberType :: Parser Amf
 fromNumberType = liftM AmfNumber fromAmf
 
-{-
-  Int
--}
+-- Int
 
 instance AmfPrim Int32 where
   fromAmf = liftM2 BL.append (U.take 1) (U.takeWhile hasSignalBit) >>=
@@ -251,9 +219,7 @@ instance AmfPrim Int where
 fromIntType :: Parser Amf
 fromIntType = liftM AmfInt fromAmf
 
-{-
-  Util
--}
+-- Util
 
 refOrValue :: (Int -> Parser Amf) -- ^ ref
            -> (Int -> Parser Amf) -- ^ value
