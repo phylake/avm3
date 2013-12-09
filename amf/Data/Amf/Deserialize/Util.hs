@@ -75,9 +75,6 @@ getTT i = do
   (_, _, tt) <- ML.get
   return $ tt !! (length tt - i - 1)
 
-emptyTable :: Tables
-emptyTable = ([], [], [])
-
 {-
   Util
 -}

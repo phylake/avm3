@@ -30,11 +30,11 @@ deserialize :: FilePath
             -> IO ([Amf], Tables)
             -- ^ A list of Amf and the implicit dictionary that was built up
 deserialize file = (runResourceT $
-  CB.sourceFile file $$ ML.runStateT U.emptyTable parseAmf) >>= return . reverseAmfs
+  CB.sourceFile file $$ ML.runStateT emptyTables parseAmf) >>= return . reverseAmfs
 
 deserializeBs :: BL.ByteString -> IO ([Amf], Tables)
 deserializeBs lbs = (runResourceT $
-  CB.sourceLbs lbs $$ ML.runStateT U.emptyTable parseAmf) >>= return . reverseAmfs
+  CB.sourceLbs lbs $$ ML.runStateT emptyTables parseAmf) >>= return . reverseAmfs
 
 parseAmf :: Parser [Amf]
 parseAmf = do

@@ -6,6 +6,7 @@ module Data.Amf.Def (
 , U29
 , Assoc_Value
 , Tables
+, emptyTables
 , Traits
 , Amf(..)
 , U29B(..)
@@ -37,6 +38,9 @@ assocValue t (a,b) = (toValue t a, toValue t b)
 
 -- | (Strings, Complex Object, Traits)
 type Tables = ([String], [Amf], [Traits])
+
+emptyTables :: Tables
+emptyTables = ([], [], [])
 
 -- | (class name, [properties], dynamic)
 type Traits = (UTF_8_vr, [UTF_8_vr], Bool)
