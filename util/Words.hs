@@ -58,7 +58,7 @@ stringToHexRe :: String -> IO ()
 stringToHexRe str = putStrLn $ intercalate "\\s?" $ stringToHex str
 
 shuffle_bits :: (Bits a, Num a)
-             => Int --right shift
+             => Int -- ^ right shift
              -> [a]
              -> [a]
 shuffle_bits shift ws = map map_f $ zip (0:init ws) ws
@@ -153,14 +153,17 @@ varIntLenBS = (+1) . BS.length . BS.takeWhile hasSignalBit
 varIntLen :: [Word8] -> Int
 varIntLen = (+1) . length . takeWhile hasSignalBit
 
-u30Bytes :: Word32 -> Int
+-- | The number of bytes the input bits will occupy in a variable length
+-- int once serialized
+u30Bytes :: (Num a, Ord a, Num b) => a -> b
 u30Bytes u30
-  | u30 >= 0x00000000 && u30 <= 0x0000007F = 1
-  | u30 >= 0x00000080 && u30 <= 0x00003FFF = 2
-  | u30 >= 0x00004000 && u30 <= 0x001FFFFF = 3
-  | u30 >= 0x00200000 && u30 <= 0x3FFFFFFF = 4
+  | u30 >= 0x00000000 && u30 <= 0x0000007F =  1
+  | u30 >= 0x00000080 && u30 <= 0x00003FFF =  2
+  | u30 >= 0x00004000 && u30 <= 0x001FFFFF =  3
+  | u30 >= 0x00200000 && u30 <= 0x3FFFFFFF =  4
+  | otherwise                              = -1
 
-fromU29 :: (Bits a, Num a) => [a] -> a
+fromU29 :: (Bits a, Num a) => [a] {- ^ Big-endian -} -> a
 fromU29 (w1:[]) = lsb1
   where
     lsb1 =  w1 .&. 0x7f
@@ -179,3 +182,17 @@ fromU29 (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
     lsb3 = (w3 .&. 0x7f) `shiftL` 14
     lsb2 = (w2 .&. 0x7f) `shiftL` 7
     lsb1 =  w1 {- NO mask. see spec -}
+
+toU29 :: (Integral a, Num b, Bits a) => a -> [b] -- ^ Big-endian
+toU29 w32
+  | u30Bytes w32 == 1 = map fromIntegral [lsb1m]
+  | u30Bytes w32 == 2 = map fromIntegral [lsb2, lsb1m]
+  | u30Bytes w32 == 3 = map fromIntegral [lsb3, lsb2, lsb1m]
+  | u30Bytes w32 == 4 = map fromIntegral [lsb4, lsb3, lsb2, lsb1]
+  | otherwise         = []
+  where
+    lsb1m = w32 .&. 0x7F
+    lsb1  = w32
+    lsb2  = (w32 `shiftR`  7 .&. 0x7F) .|. 0x80 -- flag bit
+    lsb3  = (w32 `shiftR` 14 .&. 0x7F) .|. 0x80
+    lsb4  = (w32 `shiftR` 21 .&. 0x7F) .|. 0x80
