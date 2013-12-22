@@ -30,6 +30,7 @@ module Util.Words (
 , varIntLen
 , u30Bytes
 , fromU29
+, toU29
 ) where
 
 import Control.Applicative ((<$>))
@@ -163,7 +164,7 @@ u30Bytes u30
   | u30 >= 0x00200000 && u30 <= 0x3FFFFFFF =  4
   | otherwise                              = -1
 
-fromU29 :: (Bits a, Num a) => [a] {- ^ Big-endian -} -> a
+fromU29 :: [Word32] {- ^ Big-endian -} -> Word32
 fromU29 (w1:[]) = lsb1
   where
     lsb1 =  w1 .&. 0x7f
@@ -183,7 +184,7 @@ fromU29 (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
     lsb2 = (w2 .&. 0x7f) `shiftL` 7
     lsb1 =  w1 {- NO mask. see spec -}
 
-toU29 :: (Integral a, Num b, Bits a) => a -> [b] -- ^ Big-endian
+toU29 :: Word32 -> [Word8] -- ^ Big-endian
 toU29 w32
   | u30Bytes w32 == 1 = map fromIntegral [lsb1m]
   | u30Bytes w32 == 2 = map fromIntegral [lsb2, lsb1m]

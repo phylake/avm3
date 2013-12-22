@@ -210,8 +210,8 @@ fromNumberType = liftM AmfNumber fromAmf
 -- Int
 
 instance AmfPrim Int32 where
-  fromAmf = liftM2 BL.append (U.take 1) (U.takeWhile hasSignalBit) >>=
-    return . fromIntegral . fromU29 . BL.unpack
+  fromAmf = liftM2 BL.append (U.takeWhile hasSignalBit) (U.take 1) >>=
+    return . fromIntegral . fromU29 . Prelude.map fromIntegral . BL.unpack
 
 instance AmfPrim Int where
   fromAmf = do (i :: Int32) <- fromAmf; return (fromIntegral i)
