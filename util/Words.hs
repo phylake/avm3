@@ -138,13 +138,6 @@ foldWords acc w = (acc `shiftL` 8) .|. fromIntegral w
 foldVarLen :: (Integral a, Bits b, Num b) => b -> a -> b
 foldVarLen acc w = (acc `shiftL` 7) .|. (fromIntegral w .&. 0x7f)
 
-{-varLenInt :: Bits a => [a] -> (a, [a])
-varLenInt [] = (0, [])
-varLenInt ws =
-    let (foldThese, ws') = span hasSignalBit ws in
-    let vli = head ws' .|. foldl foldVarLen 0 foldThese `shiftL` 7 in
-    (vli, tail ws')-}
-
 hasSignalBit :: Word8 -> Bool
 hasSignalBit w = w .&. 0x80 == 0x80
 
@@ -164,25 +157,26 @@ u30Bytes u30
   | u30 >= 0x00200000 && u30 <= 0x3FFFFFFF =  4
   | otherwise                              = -1
 
-fromU29 :: [Word32] {- ^ Big-endian -} -> Word32
-fromU29 (w1:[]) = lsb1
-  where
-    lsb1 =  w1 .&. 0x7f
-fromU29 (w2:w1:[]) = lsb2 .|. lsb1
-  where
-    lsb2 = (w2 .&. 0x7f) `shiftL` 7
-    lsb1 =  w1 .&. 0x7f
-fromU29 (w3:w2:w1:[]) = lsb3 .|. lsb2 .|. lsb1
-  where
-    lsb3 = (w3 .&. 0x7f) `shiftL` 14
-    lsb2 = (w2 .&. 0x7f) `shiftL` 7
-    lsb1 =  w1 .&. 0x7f
-fromU29 (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
-  where
-    lsb4 = (w4 .&. 0x7f) `shiftL` 21
-    lsb3 = (w3 .&. 0x7f) `shiftL` 14
-    lsb2 = (w2 .&. 0x7f) `shiftL` 7
-    lsb1 =  w1 {- NO mask. see spec -}
+fromU29 :: [Word8] {- ^ Big-endian -} -> Word32
+fromU29 = fromU29_ . map fromIntegral where
+  fromU29_ (w1:[]) = lsb1
+    where
+      lsb1 =  w1 .&. 0x7f
+  fromU29_ (w2:w1:[]) = lsb2 .|. lsb1
+    where
+      lsb2 = (w2 .&. 0x7f) `shiftL` 7
+      lsb1 =  w1 .&. 0x7f
+  fromU29_ (w3:w2:w1:[]) = lsb3 .|. lsb2 .|. lsb1
+    where
+      lsb3 = (w3 .&. 0x7f) `shiftL` 14
+      lsb2 = (w2 .&. 0x7f) `shiftL` 7
+      lsb1 =  w1 .&. 0x7f
+  fromU29_ (w4:w3:w2:w1:[]) = lsb4 .|. lsb3 .|. lsb2 .|. lsb1
+    where
+      lsb4 = (w4 .&. 0x7f) `shiftL` 21
+      lsb3 = (w3 .&. 0x7f) `shiftL` 14
+      lsb2 = (w2 .&. 0x7f) `shiftL` 7
+      lsb1 =  w1 {- NO mask. see spec -}
 
 toU29 :: Word32 -> [Word8] -- ^ Big-endian
 toU29 w32
@@ -193,7 +187,7 @@ toU29 w32
   | otherwise         = []
   where
     lsb1m = w32 .&. 0x7F
-    lsb1  = w32
-    lsb2  = (w32 `shiftR`  7 .&. 0x7F) .|. 0x80 -- flag bit
+    lsb1  = w32 {- NO mask. see spec -}
+    lsb2  = (w32 `shiftR`  7 .&. 0x7F) .|. 0x80 -- signal bit
     lsb3  = (w32 `shiftR` 14 .&. 0x7F) .|. 0x80
     lsb4  = (w32 `shiftR` 21 .&. 0x7F) .|. 0x80

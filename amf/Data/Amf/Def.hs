@@ -196,7 +196,7 @@ instance Show U29O where
 -- >     value-type*
 -- > )
 data U29A = U29A_Ref U29
-          | U29A_Value [Assoc_Value] [Amf]
+          | U29A_Value [Assoc_Value] [Amf] -- ^ associative portion, dense portion
           deriving (Eq)
 
 instance Show U29A where

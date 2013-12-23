@@ -5,12 +5,12 @@ import           Control.Monad (replicateM, liftM2)
 import           Control.Monad.Trans.Class (MonadTrans (lift))
 import           Data.Amf.Def
 --import           Data.Amf.Util as U
-import           Data.Binary.IEEE754 (wordToDouble)
+import           Data.Binary.IEEE754 (doubleToWord)
 import           Data.Bits
 import           Data.Char (digitToInt, intToDigit)
 import           Data.Conduit
 import           Data.Conduit.Binary as CB
-import           Data.Word (Word8, Word32)
+import           Data.Word
 import           Data.Int (Int32)
 import           Util.Words
 import qualified Data.ByteString as B
@@ -25,36 +25,39 @@ serialize [] = return (BL.empty, emptyTables)
 serialize amfs = ML.runStateT emptyTables $ loop amfs
 
 loop :: [Amf] -> Serializer
-loop (AmfUndefined:amfs)          = amfWord8 0x00     >>= append (loop amfs)
-loop (AmfNull:amfs)               = amfWord8 0x01     >>= append (loop amfs)
-loop (AmfFalse:amfs)              = amfWord8 0x02     >>= append (loop amfs)
-loop (AmfTrue:amfs)               = amfWord8 0x03     >>= append (loop amfs)
-loop (amf@(AmfInt _):amfs)        = amfInt amf        >>= append (loop amfs)
-loop (amf@(AmfNumber _):amfs)     = amfNumber amf     >>= append (loop amfs)
-loop (amf@(AmfString _):amfs)     = amfString amf     >>= append (loop amfs)
-loop (amf@(AmfXmlDoc _):amfs)     = amfXmlDoc amf     >>= append (loop amfs)
-loop (amf@(AmfDate _):amfs)       = amfDate amf       >>= append (loop amfs)
-loop (amf@(AmfArray _):amfs)      = amfArray amf      >>= append (loop amfs)
-loop (amf@(AmfObject _):amfs)     = amfObject amf     >>= append (loop amfs)
-loop (amf@(AmfXml _):amfs)        = amfXml amf        >>= append (loop amfs)
-loop (amf@(AmfByteArray _):amfs)  = amfByteArray amf  >>= append (loop amfs)
-loop (amf@(AmfVecInt _):amfs)     = amfVecInt amf     >>= append (loop amfs)
-loop (amf@(AmfVecUInt _):amfs)    = amfVecUInt amf    >>= append (loop amfs)
-loop (amf@(AmfVecNumber _):amfs)  = amfVecNumber amf  >>= append (loop amfs)
-loop (amf@(AmfVecObject _):amfs)  = amfVecObject amf  >>= append (loop amfs)
-loop (amf@(AmfDictionary _):amfs) = amfDictionary amf >>= append (loop amfs)
+loop (AmfUndefined:amfs)          = return BL.empty   >>= append 0x00 (loop amfs)
+loop (AmfNull:amfs)               = return BL.empty   >>= append 0x01 (loop amfs)
+loop (AmfFalse:amfs)              = return BL.empty   >>= append 0x02 (loop amfs)
+loop (AmfTrue:amfs)               = return BL.empty   >>= append 0x03 (loop amfs)
+loop (amf@(AmfInt _):amfs)        = amfInt amf        >>= append 0x04 (loop amfs)
+loop (amf@(AmfNumber _):amfs)     = amfNumber amf     >>= append 0x05 (loop amfs)
+loop (amf@(AmfString _):amfs)     = amfString amf     >>= append 0x06 (loop amfs)
+loop (amf@(AmfXmlDoc _):amfs)     = amfXmlDoc amf     >>= append 0x07 (loop amfs)
+loop (amf@(AmfDate _):amfs)       = amfDate amf       >>= append 0x08 (loop amfs)
+loop (amf@(AmfArray _):amfs)      = amfArray amf      >>= append 0x09 (loop amfs)
+loop (amf@(AmfObject _):amfs)     = amfObject amf     >>= append 0x0A (loop amfs)
+loop (amf@(AmfXml _):amfs)        = amfXml amf        >>= append 0x0B (loop amfs)
+loop (amf@(AmfByteArray _):amfs)  = amfByteArray amf  >>= append 0x0C (loop amfs)
+loop (amf@(AmfVecInt _):amfs)     = amfVecInt amf     >>= append 0x0D (loop amfs)
+loop (amf@(AmfVecUInt _):amfs)    = amfVecUInt amf    >>= append 0x0E (loop amfs)
+loop (amf@(AmfVecNumber _):amfs)  = amfVecNumber amf  >>= append 0x0F (loop amfs)
+loop (amf@(AmfVecObject _):amfs)  = amfVecObject amf  >>= append 0x10 (loop amfs)
+loop (amf@(AmfDictionary _):amfs) = amfDictionary amf >>= append 0x11 (loop amfs)
+loop []                           = return BLC.empty
 
-append :: Serializer -> BLC.ByteString -> Serializer
-append s b = s >>= return . BL.append b
-
-amfWord8 :: Word8 -> Serializer
-amfWord8 = return . BL.singleton
+append :: Word8 -> Serializer -> BLC.ByteString -> Serializer
+append w s b = s >>= \sb -> return $ BL.concat [BL.singleton w, b, sb]
 
 amfInt :: Amf -> Serializer
-amfInt (AmfInt a) = undefined
+amfInt (AmfInt a) = return $ f a
+  where
+    f = BL.pack . Prelude.map fromIntegral . toU29 . fromIntegral
 
 amfNumber :: Amf -> Serializer
-amfNumber (AmfNumber a) = undefined
+amfNumber (AmfNumber a) = return $ BL.unfoldr f (doubleToWord a, 7)
+  where
+    f (_, -1) = Nothing
+    f (w, c) = Just (fromIntegral $ w `shiftR` (c*8), (w, c-1))
 
 amfString :: Amf -> Serializer
 amfString (AmfString a) = undefined
@@ -91,13 +94,3 @@ amfVecObject (AmfVecObject a) = undefined
 
 amfDictionary :: Amf -> Serializer
 amfDictionary (AmfDictionary a) = undefined
-
-{- the number of bytes an Int will occupy once serialized -}
---deserializedU29Length :: (Real a) => a -> Int
-deserializedU29Length :: Int32 -> Int
-deserializedU29Length x
-  | x >= 0x00000000 && x <= 0x0000007f = 1
-  | x >= 0x00000080 && x <= 0x00003fff = 2
-  | x >= 0x00004000 && x <= 0x001fffff = 3
-  | x >= 0x00200000 && x <= 0x3fffffff = 4
-  | otherwise                          = 0
